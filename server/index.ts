@@ -102,8 +102,16 @@ app.post('/api/login', (req: express.Request, res: express.Response) => {
 
   const valid = bcrypt.compareSync(password, user.password)
   if (!valid) {
-    res.status(401).json({ error: 'Sai tên đăng nhập hoặc mật khẩu' })
-    return
+    // Lazy migration: Check if password matches plain text
+    if (password === user.password) {
+      console.log(`Migrating password for user ${user.username} (Lazy)`)
+      user.password = bcrypt.hashSync(password, 10)
+      schedulePersist()
+      // Continue to login success...
+    } else {
+      res.status(401).json({ error: 'Sai tên đăng nhập hoặc mật khẩu' })
+      return
+    }
   }
 
   // Issue Token

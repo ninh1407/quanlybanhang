@@ -1,0 +1,1824 @@
+import { memo, useMemo, useState } from 'react'
+import { useAuth } from '../auth/auth'
+import type {
+  Customer,
+  Order,
+  OrderAttachment,
+  OrderAttachmentType,
+  OrderItem,
+  OrderPaymentMethod,
+  OrderSource,
+  OrderStatus,
+  OrderType,
+  ReconcileStatus,
+  Sku,
+} from '../domain/types'
+import { canTransitionOrderStatus, getAllowedNextOrderStatuses, orderStatusLabels } from '../domain/orderWorkflow'
+import { formatDateTime, nowIso } from '../lib/date'
+import { newId } from '../lib/id'
+import { formatVnd } from '../lib/money'
+import { exportCsv, exportXlsx } from '../lib/export'
+import { validateAttachmentFiles } from '../lib/attachments'
+import { useListView } from '../ui-kit/listing/useListView'
+import { Pagination } from '../ui-kit/listing/Pagination'
+import { SavedViewsBar } from '../ui-kit/listing/SavedViewsBar'
+import { useAppDispatch, useAppState } from '../state/Store'
+import { PageHeader } from '../ui-kit/PageHeader'
+import { useDialogs } from '../ui-kit/Dialogs'
+import { Layout, List, CheckCircle, Truck, Package, AlertCircle, Clock } from 'lucide-react'
+
+type ItemDraft = { skuId: string; qty: number; price: number }
+
+type OrdersFilters = {
+  status: 'all' | OrderStatus
+  source: 'all' | OrderSource
+  locationId: 'all' | string
+  carrierReconcile: 'all' | ReconcileStatus
+  supplierReconcile: 'all' | ReconcileStatus
+  from: string
+  to: string
+}
+
+function toMs(iso: string): number {
+  const t = new Date(iso).getTime()
+  return Number.isFinite(t) ? t : 0
+}
+
+function rangeMs(from: string, to: string): { startMs: number | null; endMs: number | null } {
+  const startMs = from ? toMs(`${from}T00:00:00.000Z`) : null
+  const endMs = to ? toMs(`${to}T23:59:59.999Z`) : null
+  return { startMs, endMs }
+}
+
+const allStatuses: { value: OrderStatus; label: string }[] = [
+  { value: 'draft', label: 'Nháp' },
+  { value: 'confirmed', label: 'Xác nhận' },
+  { value: 'paid', label: 'Đã thanh toán' },
+  { value: 'packed', label: 'Đóng gói' },
+  { value: 'shipped', label: 'Đang giao' },
+  { value: 'delivered', label: 'Đã giao' },
+  { value: 'returned', label: 'Hoàn' },
+  { value: 'cancelled', label: 'Hủy' },
+]
+
+const reconcileOptions: { value: ReconcileStatus; label: string }[] = [
+  { value: 'unreconciled', label: 'Chưa đối soát' },
+  { value: 'reconciled', label: 'Đã đối soát' },
+  { value: 'disputed', label: 'Lệch/Tranh chấp' },
+]
+
+const attachmentOptions: { value: OrderAttachmentType; label: string }[] = [
+  { value: 'vat', label: 'VAT đầu ra' },
+  { value: 'carrier', label: 'Bill vận chuyển' },
+  { value: 'warehouse', label: 'Đơn xuất kho' },
+  { value: 'delivery', label: 'Phiếu/lệnh vận chuyển' },
+  { value: 'signature', label: 'Chữ ký tài xế' },
+  { value: 'payment_bill', label: 'Bill thanh toán' },
+  { value: 'other_cost', label: 'Chứng từ chi phí khác' },
+  { value: 'other', label: 'Khác' },
+]
+
+function orderSubTotal(order: Order): number {
+  if (order.subTotalOverride != null) return Number(order.subTotalOverride) || 0
+  return order.items.reduce((acc, it) => acc + it.qty * it.price, 0)
+}
+
+function orderTotal(order: Order): number {
+  return (
+    orderSubTotal(order) -
+    (Number(order.discountAmount) || 0) +
+    (Number(order.shippingFee) || 0) +
+    (Number(order.vatAmount) || 0) +
+    (Number(order.otherFees) || 0)
+  )
+}
+
+function getSkuDisplayName(productsById: Map<string, string>, sku: Sku): string {
+  const productName = productsById.get(sku.productId) ?? sku.productId
+  const attrs = [sku.color.trim(), sku.size.trim()].filter(Boolean).join(' / ')
+  const kind = sku.kind === 'bundle' ? ' (Combo)' : ''
+  return `${productName}${attrs ? ` - ${attrs}` : ''}${kind}`
+}
+
+function toOrderItems(items: ItemDraft[]): OrderItem[] {
+  return items
+    .filter((it) => it.skuId && (Number(it.qty) || 0) > 0)
+    .map((it) => ({
+      skuId: it.skuId,
+      qty: Number(it.qty) || 0,
+      price: Number(it.price) || 0,
+    }))
+}
+
+function expandStockOut(sku: Sku, qty: number): { skuId: string; qty: number }[] {
+  if (sku.kind === 'single') return [{ skuId: sku.id, qty }]
+  return sku.components
+    .map((c) => ({ skuId: c.skuId, qty: qty * (Number(c.qty) || 0) }))
+    .filter((x) => x.skuId && x.qty > 0)
+}
+
+function expandStockIn(sku: Sku, qty: number): { skuId: string; qty: number }[] {
+  if (sku.kind === 'single') return [{ skuId: sku.id, qty }]
+  return sku.components
+    .map((c) => ({ skuId: c.skuId, qty: qty * (Number(c.qty) || 0) }))
+    .filter((x) => x.skuId && x.qty > 0)
+}
+
+function parseCodImport(text: string): Array<{
+  code: string
+  status: OrderStatus
+  amount: number
+  shippingFee: number
+  carrierName: string
+  trackingCode: string
+  note: string
+}> {
+  function isRecord(v: unknown): v is Record<string, unknown> {
+    return !!v && typeof v === 'object' && !Array.isArray(v)
+  }
+
+  const allowed = new Set(allStatuses.map((s) => s.value))
+  function normalizeStatus(v: unknown): OrderStatus {
+    const s = typeof v === 'string' ? v : ''
+    return (allowed.has(s as OrderStatus) ? (s as OrderStatus) : 'confirmed') as OrderStatus
+  }
+
+  const t = text.trim()
+  if (!t) return []
+  let parsed: unknown = null
+  try {
+    parsed = JSON.parse(t) as unknown
+  } catch {
+    parsed = null
+  }
+  if (Array.isArray(parsed)) {
+    return parsed.map((row) => {
+      const r = isRecord(row) ? row : {}
+      return {
+        code: typeof r.code === 'string' ? r.code : '',
+        status: normalizeStatus(r.status),
+        amount: Number(r.amount ?? 0) || 0,
+        shippingFee: Number(r.shippingFee ?? 0) || 0,
+        carrierName: typeof r.carrierName === 'string' ? r.carrierName : '',
+        trackingCode: typeof r.trackingCode === 'string' ? r.trackingCode : '',
+        note: typeof r.note === 'string' ? r.note : '',
+      }
+    })
+  }
+
+  return t
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split('\t').length >= 3 ? line.split('\t') : line.split(',')
+      const [code, amount, shippingFee, carrierName, trackingCode, status] = parts.map((p) => p?.trim() ?? '')
+      return {
+        code: code || '',
+        status: normalizeStatus(status),
+        amount: Number(amount) || 0,
+        shippingFee: Number(shippingFee) || 0,
+        carrierName: carrierName || '',
+        trackingCode: trackingCode || '',
+        note: '',
+      }
+    })
+}
+
+const OrderRow = memo(function OrderRow(props: {
+  order: Order
+  customer: Customer | null
+  locationLabel: string
+  canWrite: boolean
+  isAdmin: boolean
+  onSelect: (id: string) => void
+  onSetPaid: (o: Order) => void
+  onSetReturned: (o: Order) => void
+  onDelete: (o: Order) => void
+}) {
+  const { order, customer, locationLabel, canWrite, isAdmin, onSelect, onSetPaid, onSetReturned, onDelete } = props
+  return (
+    <tr>
+      <td>{order.code}</td>
+      <td>{order.source}</td>
+      <td>{customer ? customer.name : '-'}</td>
+      <td>{locationLabel}</td>
+      <td>{formatDateTime(order.createdAt)}</td>
+      <td>{allStatuses.find((s) => s.value === order.status)?.label ?? order.status}</td>
+      <td>{order.carrierName}</td>
+      <td>
+        {reconcileOptions.find((x) => x.value === order.isReconciledCarrier)?.label ?? order.isReconciledCarrier}
+      </td>
+      <td>
+        {reconcileOptions.find((x) => x.value === order.isReconciledSupplier)?.label ?? order.isReconciledSupplier}
+      </td>
+      <td>{formatVnd(orderTotal(order))}</td>
+      <td className="cell-actions">
+        <button className="btn btn-small" onClick={() => onSelect(order.id)}>
+          Chi tiết
+        </button>
+        {canWrite && order.status !== 'paid' ? (
+          <button className="btn btn-small btn-primary" onClick={() => onSetPaid(order)}>
+            Đánh dấu đã thu
+          </button>
+        ) : null}
+        {canWrite && order.status !== 'returned' ? (
+          <button className="btn btn-small btn-danger" onClick={() => onSetReturned(order)}>
+            Hoàn hàng
+          </button>
+        ) : null}
+        {isAdmin ? (
+          <button className="btn btn-small btn-danger" onClick={() => onDelete(order)}>
+            Xóa
+          </button>
+        ) : null}
+      </td>
+    </tr>
+  )
+})
+
+const KanbanCard = memo(function KanbanCard(props: {
+    order: Order
+    customer: Customer | null
+    onSelect: (id: string) => void
+}) {
+    const { order, customer, onSelect } = props
+    return (
+        <div 
+            className="card" 
+            style={{ padding: 12, marginBottom: 12, cursor: 'pointer', borderLeft: `4px solid var(--primary-500)` }}
+            onClick={() => onSelect(order.id)}
+        >
+            <div className="row-between" style={{ marginBottom: 8 }}>
+                <span style={{ fontWeight: 600 }}>{order.code}</span>
+                <span className="text-muted" style={{ fontSize: 12 }}>{formatDateTime(order.createdAt).split(' ')[1]}</span>
+            </div>
+            <div style={{ fontSize: 13, marginBottom: 8 }}>
+                {customer ? customer.name : 'Khách lẻ'}
+            </div>
+            <div className="row-between">
+                <span style={{ fontWeight: 600, color: 'var(--primary-600)' }}>{formatVnd(orderTotal(order))}</span>
+                {order.source === 'cod' && <span className="badge badge-neutral">COD</span>}
+            </div>
+        </div>
+    )
+})
+
+export function OrdersPage() {
+  const state = useAppState()
+  const dispatch = useAppDispatch()
+  const { can, user } = useAuth()
+  const canWrite = can('orders:write')
+  const isAdmin = user?.role === 'admin'
+  const dialogs = useDialogs()
+
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('kanban')
+
+  const [type, setType] = useState<OrderType>('internal')
+  const [source, setSource] = useState<OrderSource>('pos')
+  const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>('cod')
+  const [customerId, setCustomerId] = useState<string>('')
+  const [status, setStatus] = useState<OrderStatus>('paid')
+  const [fulfillmentLocationId, setFulfillmentLocationId] = useState<string>('')
+  const [note, setNote] = useState('')
+  const [shippingFee, setShippingFee] = useState<number>(0)
+  const [carrierName, setCarrierName] = useState('')
+  const [trackingCode, setTrackingCode] = useState('')
+  const [platformOrderId, setPlatformOrderId] = useState('')
+  const [dropshipBrand, setDropshipBrand] = useState('')
+  const [partnerVoucherCode, setPartnerVoucherCode] = useState('')
+  const [subTotalOverride, setSubTotalOverride] = useState<number>(0)
+  const [vatAmount, setVatAmount] = useState<number>(0)
+  const [otherFees, setOtherFees] = useState<number>(0)
+  const [otherFeesNote, setOtherFeesNote] = useState('')
+  const [items, setItems] = useState<ItemDraft[]>([{ skuId: '', qty: 1, price: 0 }])
+  const [discountPercentInput, setDiscountPercentInput] = useState<number>(0)
+  const [paymentBillFiles, setPaymentBillFiles] = useState<FileList | null>(null)
+  const [shippingProofFiles, setShippingProofFiles] = useState<FileList | null>(null)
+  const [codImport, setCodImport] = useState('')
+
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  const selectedOrder = useMemo(
+    () => (selectedOrderId ? state.orders.find((o) => o.id === selectedOrderId) ?? null : null),
+    [selectedOrderId, state.orders],
+  )
+  const selectedOrderHasStockTx = useMemo(() => {
+    if (!selectedOrder) return false
+    return state.stockTransactions.some((t) => t.refType === 'order' && t.refId === selectedOrder.id)
+  }, [selectedOrder, state.stockTransactions])
+
+  const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
+  const skusById = useMemo(() => new Map(state.skus.map((s) => [s.id, s])), [state.skus])
+  const skus = useMemo(() => {
+    const activeProducts = new Set(state.products.filter((p) => p.active && !p.isMaterial).map((p) => p.id))
+    return state.skus
+      .filter((s) => s.active && activeProducts.has(s.productId))
+      .slice()
+      .sort((a, b) => getSkuDisplayName(productsById, a).localeCompare(getSkuDisplayName(productsById, b)))
+  }, [productsById, state.products, state.skus])
+  const customers = useMemo(() => state.customers, [state.customers])
+  const customersById = useMemo(() => new Map(state.customers.map((c) => [c.id, c])), [state.customers])
+  const defaultLocationId = useMemo(
+    () => state.locations.find((l) => l.active)?.id ?? null,
+    [state.locations],
+  )
+  const locations = useMemo(
+    () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
+    [state.locations],
+  )
+  const locationsById = useMemo(() => new Map(state.locations.map((l) => [l.id, l])), [state.locations])
+  const usersById = useMemo(() => new Map(state.users.map((u) => [u.id, u])), [state.users])
+  const orders = useMemo(
+    () => state.orders.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [state.orders],
+  )
+
+  const customerStats = useMemo(() => {
+    const stats = new Map<string, { total: number; success: number }>()
+    state.orders.forEach((o) => {
+      if (!o.customerId) return
+      const s = stats.get(o.customerId) ?? { total: 0, success: 0 }
+      s.total++
+      if (o.status === 'delivered' || o.status === 'paid') {
+        s.success++
+      }
+      stats.set(o.customerId, s)
+    })
+    return stats
+  }, [state.orders])
+
+  const list = useListView<OrdersFilters>('orders', {
+    q: '',
+    sortKey: 'createdAt',
+    sortDir: 'desc',
+    page: 1,
+    pageSize: 20,
+    filters: {
+      status: 'all',
+      source: 'all',
+      locationId: 'all',
+      carrierReconcile: 'all',
+      supplierReconcile: 'all',
+      from: '',
+      to: '',
+    },
+  })
+
+  const filteredOrders = useMemo(() => {
+    const { startMs, endMs } = rangeMs(list.state.filters.from, list.state.filters.to)
+    const needle = list.state.q.trim().toLowerCase()
+    const withCustomer = orders.map((o) => ({
+      order: o,
+      customer: o.customerId ? customersById.get(o.customerId) ?? null : null,
+    }))
+
+    const filtered = withCustomer
+      .filter(({ order }) => {
+        if (list.state.filters.status !== 'all' && order.status !== list.state.filters.status) return false
+        if (list.state.filters.source !== 'all' && order.source !== list.state.filters.source) return false
+        if (list.state.filters.locationId !== 'all') {
+          const loc = order.fulfillmentLocationId ?? defaultLocationId ?? ''
+          if (loc !== list.state.filters.locationId) return false
+        }
+        if (
+          list.state.filters.carrierReconcile !== 'all' &&
+          order.isReconciledCarrier !== list.state.filters.carrierReconcile
+        )
+          return false
+        if (
+          list.state.filters.supplierReconcile !== 'all' &&
+          order.isReconciledSupplier !== list.state.filters.supplierReconcile
+        )
+          return false
+
+        const ms = toMs(order.createdAt)
+        if (startMs != null && ms < startMs) return false
+        if (endMs != null && ms > endMs) return false
+
+        if (!needle) return true
+        const total = orderTotal(order)
+        const locId = order.fulfillmentLocationId ?? defaultLocationId ?? ''
+        const locText = locId ? `${locationsById.get(locId)?.code ?? ''} ${locationsById.get(locId)?.name ?? ''}` : ''
+        const hay = [
+          order.code,
+          order.trackingCode,
+          order.carrierName,
+          order.note,
+          order.status,
+          order.source,
+          locText,
+          String(total),
+        ]
+          .concat(order.customerId ? [customersById.get(order.customerId)?.name ?? '', customersById.get(order.customerId)?.phone ?? ''] : [])
+          .join(' ')
+          .toLowerCase()
+        return hay.includes(needle)
+      })
+      .map(({ order, customer }) => ({ order, customer, total: orderTotal(order) }))
+
+    const sorted = filtered.sort((a, b) => {
+      const dir = list.state.sortDir === 'asc' ? 1 : -1
+      switch (list.state.sortKey) {
+        case 'code':
+          return dir * String(a.order.code).localeCompare(String(b.order.code))
+        case 'status':
+          return dir * String(a.order.status).localeCompare(String(b.order.status))
+        case 'total':
+          return dir * (a.total - b.total)
+        case 'createdAt':
+        default:
+          return dir * String(a.order.createdAt).localeCompare(String(b.order.createdAt))
+      }
+    })
+
+    return sorted
+  }, [customersById, defaultLocationId, list.state.filters, list.state.q, list.state.sortDir, list.state.sortKey, locationsById, orders])
+
+  const pagedOrders = useMemo(() => {
+    const start = (list.state.page - 1) * list.state.pageSize
+    const end = start + list.state.pageSize
+    return filteredOrders.slice(start, end)
+  }, [filteredOrders, list.state.page, list.state.pageSize])
+
+  function exportOrders(kind: 'csv' | 'xlsx') {
+    const rows = filteredOrders.map(({ order: o, customer }) => ({
+      'Mã đơn': o.code,
+      'Loại đơn': o.type === 'dropship' ? 'Dropship' : 'Nội bộ',
+      'Nguồn': o.source,
+      'Thanh toán': o.paymentMethod === 'cod' ? 'COD' : 'Chuyển khoản',
+      'Mã sàn': o.platformOrderId || '',
+      'Thương hiệu (Dropship)': o.dropshipBrand || '',
+      'Mã phiếu đối tác': o.partnerVoucherCode || '',
+      'Kho xử lý':
+        (o.fulfillmentLocationId
+          ? locationsById.get(o.fulfillmentLocationId)?.code
+          : defaultLocationId
+            ? locationsById.get(defaultLocationId)?.code
+            : '') ?? '',
+      'Trạng thái': o.status,
+      'Tổng tiền': orderTotal(o),
+      'Phí ship': o.shippingFee,
+      'VAT': o.vatAmount,
+      'Phí khác': o.otherFees,
+      'Chiết khấu': o.discountAmount,
+      'Khách': customer ? customer.name : 'Khách lẻ',
+      'SĐT': customer ? customer.phone : '',
+      'ĐVVC': o.carrierName,
+      'Vận đơn': o.trackingCode,
+      'Đối soát VC': o.isReconciledCarrier,
+      'Đối soát NCC': o.isReconciledSupplier,
+      'Kết quả đối soát': o.reconciliationResultAmount,
+      'Ghi chú': o.note,
+      'Ngày tạo': o.createdAt,
+    }))
+    const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+    if (kind === 'csv') exportCsv(`don-hang-${stamp}.csv`, rows)
+    else exportXlsx(`don-hang-${stamp}.xlsx`, 'DonHang', rows)
+  }
+
+  const stockQtyBySkuId = useMemo(() => {
+    const m = new Map<string, number>()
+    state.stockTransactions.forEach((t) => {
+      const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
+      m.set(t.skuId, (m.get(t.skuId) ?? 0) + delta)
+    })
+    return m
+  }, [state.stockTransactions])
+
+  const availableQtyBySkuId = useMemo(() => {
+    const m = new Map<string, number>()
+    state.skus.forEach((sku) => {
+      if (sku.kind === 'single') {
+        m.set(sku.id, stockQtyBySkuId.get(sku.id) ?? 0)
+        return
+      }
+      if (!sku.components.length) {
+        m.set(sku.id, 0)
+        return
+      }
+      let min = Infinity
+      sku.components.forEach((c) => {
+        const per = Number(c.qty) || 0
+        if (per <= 0) {
+          min = 0
+          return
+        }
+        const stock = stockQtyBySkuId.get(c.skuId) ?? 0
+        const can = Math.floor(stock / per)
+        if (can < min) min = can
+      })
+      m.set(sku.id, Number.isFinite(min) ? min : 0)
+    })
+    return m
+  }, [state.skus, stockQtyBySkuId])
+
+  const orderItems = useMemo(() => toOrderItems(items), [items])
+  const discountPercent = discountPercentInput
+  const subTotal = useMemo(() => {
+    if (source !== 'pos' && type !== 'dropship') return Number(subTotalOverride) || 0
+    return orderItems.reduce((acc, it) => acc + it.qty * it.price, 0)
+  }, [orderItems, source, subTotalOverride, type])
+  const discountAmount = useMemo(() => {
+    if (source !== 'pos' && type !== 'dropship') return 0
+    return Math.round((subTotal * (Number(discountPercent) || 0)) / 100)
+  }, [discountPercent, source, subTotal, type])
+  const total = useMemo(() => subTotal - discountAmount + (Number(shippingFee) || 0), [discountAmount, shippingFee, subTotal])
+
+  function setItem(idx: number, next: ItemDraft) {
+    const copy = items.slice()
+    copy[idx] = next
+    setItems(copy)
+  }
+
+  function addLine() {
+    setItems([...items, { skuId: '', qty: 1, price: 0 }])
+  }
+
+  function removeLine(idx: number) {
+    setItems(items.filter((_, i) => i !== idx))
+  }
+
+  function resetForm() {
+    setType('internal')
+    setSource('pos')
+    setPaymentMethod('cod')
+    setCustomerId('')
+    setStatus('paid')
+    setFulfillmentLocationId('')
+    setNote('')
+    setShippingFee(0)
+    setCarrierName('')
+    setTrackingCode('')
+    setPlatformOrderId('')
+    setDropshipBrand('')
+    setPartnerVoucherCode('')
+    setSubTotalOverride(0)
+    setVatAmount(0)
+    setOtherFees(0)
+    setOtherFeesNote('')
+    setItems([{ skuId: '', qty: 1, price: 0 }])
+    setDiscountPercentInput(0)
+    setPaymentBillFiles(null)
+    setShippingProofFiles(null)
+  }
+
+  function addFinanceIncome(order: Order) {
+    if (order.type === 'dropship') return
+    const createdAt = nowIso()
+    dispatch({
+      type: 'finance/add',
+      tx: {
+        id: newId('fin'),
+        code: '',
+        type: 'income',
+        amount: orderTotal(order),
+        category: 'Bán hàng',
+        note: `Thu từ đơn ${order.code}`,
+        createdAt,
+        refType: 'order',
+        refId: order.id,
+        attachments: [],
+      },
+    })
+  }
+
+  function addFinanceRefund(order: Order) {
+    if (order.type === 'dropship') return
+    const createdAt = nowIso()
+    dispatch({
+      type: 'finance/add',
+      tx: {
+        id: newId('fin'),
+        code: '',
+        type: 'expense',
+        amount: Math.max(0, orderTotal(order)),
+        category: 'Hoàn/Refund',
+        note: `Hoàn tiền đơn ${order.code}`,
+        createdAt,
+        refType: 'order',
+        refId: order.id,
+        attachments: [],
+      },
+    })
+  }
+
+  function addStockOut(order: Order) {
+    if (order.type === 'dropship') return
+    const createdAt = nowIso()
+    const locationId = order.fulfillmentLocationId ?? defaultLocationId
+    order.items.forEach((it) => {
+      const sku = skusById.get(it.skuId)
+      if (!sku) return
+      expandStockOut(sku, it.qty).forEach((out) => {
+        dispatch({
+          type: 'stock/add',
+          tx: {
+            id: newId('stk'),
+            code: '',
+            type: 'out',
+            skuId: out.skuId,
+            locationId,
+            qty: out.qty,
+            unitCost: null,
+            note: `Xuất kho theo đơn ${order.code}`,
+            createdAt,
+            refType: 'order',
+            refId: order.id,
+          },
+        })
+      })
+    })
+  }
+
+  function addStockIn(order: Order) {
+    if (order.type === 'dropship') return
+    const createdAt = nowIso()
+    const locationId = order.fulfillmentLocationId ?? defaultLocationId
+    order.items.forEach((it) => {
+      const sku = skusById.get(it.skuId)
+      if (!sku) return
+      expandStockIn(sku, it.qty).forEach((inn) => {
+        dispatch({
+          type: 'stock/add',
+          tx: {
+            id: newId('stk'),
+            code: '',
+            type: 'in',
+            skuId: inn.skuId,
+            locationId,
+            qty: inn.qty,
+            unitCost: null,
+            note: `Nhập lại do hoàn đơn ${order.code}`,
+            createdAt,
+            refType: 'order',
+            refId: order.id,
+          },
+        })
+      })
+    })
+  }
+
+  function recordDropshipProfit(order: Order) {
+    if (order.type !== 'dropship') return
+    const amount = order.reconciliationResultAmount
+    if (!amount) return
+
+    const isProfit = amount > 0
+    const createdAt = nowIso()
+    dispatch({
+      type: 'finance/add',
+      tx: {
+        id: newId('fin'),
+        code: '',
+        type: isProfit ? 'income' : 'expense',
+        amount: Math.abs(amount),
+        category: isProfit ? 'Lợi nhuận Dropship' : 'Chi phí Dropship',
+        note: `Đối soát đơn Dropship ${order.code}`,
+        createdAt,
+        refType: 'order',
+        refId: order.id,
+        attachments: [],
+      },
+    })
+    void dialogs.alert({ message: 'Đã ghi nhận giao dịch tài chính thành công.' })
+  }
+
+  async function readAttachments(files: FileList | null, type: OrderAttachmentType): Promise<OrderAttachment[]> {
+    const validated = validateAttachmentFiles(files)
+    if (!validated.ok) {
+      await dialogs.alert({ message: validated.error })
+      return []
+    }
+    if (!validated.files.length) return []
+    const createdAt = nowIso()
+
+    const readers = validated.files.map(
+      (f) =>
+        new Promise<OrderAttachment | null>((resolve) => {
+          const r = new FileReader()
+          r.onload = () => {
+            const dataUrl = typeof r.result === 'string' ? r.result : ''
+            if (!dataUrl) return resolve(null)
+            // Limit base64 size if needed, but for now allow
+            resolve({
+              id: newId('att'),
+              type,
+              name: f.name,
+              dataUrl,
+              createdAt,
+            })
+          }
+          r.onerror = () => resolve(null)
+          r.readAsDataURL(f)
+        }),
+    )
+
+    return (await Promise.all(readers)).filter(Boolean) as OrderAttachment[]
+  }
+
+  async function createOrder() {
+    if (!canWrite) return
+    if ((source === 'pos' || type === 'dropship') && orderItems.length === 0) return
+    if (source !== 'pos' && type !== 'dropship' && (Number(subTotalOverride) || 0) <= 0) return
+
+    const id = newId('ord')
+    const createdAt = nowIso()
+    const code = trackingCode.trim() && source === 'cod' ? `COD-${trackingCode.trim()}` : ''
+
+    // Read attachments
+    const attachments: OrderAttachment[] = []
+    if (paymentBillFiles) {
+        const atts = await readAttachments(paymentBillFiles, 'payment_bill')
+        attachments.push(...atts)
+    }
+    if (shippingProofFiles) {
+        const atts = await readAttachments(shippingProofFiles, 'delivery')
+        attachments.push(...atts)
+    }
+
+    const order: Order = {
+      id,
+      code,
+      type,
+      customerId: source === 'pos' || type === 'dropship' ? customerId || null : null,
+      fulfillmentLocationId: (fulfillmentLocationId || defaultLocationId) ?? null,
+      source,
+      paymentMethod,
+      status,
+      items: source === 'pos' || type === 'dropship' ? orderItems : [],
+      subTotalOverride: source !== 'pos' && type !== 'dropship' ? Number(subTotalOverride) || 0 : null,
+      shippingFee: Math.max(0, Number(shippingFee) || 0),
+      carrierName: carrierName.trim(),
+      trackingCode: trackingCode.trim(),
+      platformOrderId: platformOrderId.trim() || undefined,
+      dropshipBrand: type === 'dropship' ? dropshipBrand.trim() : undefined,
+      partnerVoucherCode: type === 'dropship' ? partnerVoucherCode.trim() : undefined,
+      discountPercent: Number(discountPercentInput) || 0,
+      discountAmount: source === 'pos' || type === 'dropship' ? discountAmount : 0,
+      vatAmount: Math.max(0, Number(vatAmount) || 0),
+      otherFees: Math.max(0, Number(otherFees) || 0),
+      otherFeesNote: otherFeesNote.trim() || undefined,
+      note: note.trim(),
+      isReconciledCarrier: 'unreconciled',
+      isReconciledSupplier: 'unreconciled',
+      attachments,
+      createdAt,
+      createdByUserId: user?.id,
+    }
+
+    dispatch({ type: 'orders/upsert', order })
+
+    if (order.status === 'paid') {
+      addFinanceIncome(order)
+      if (order.source === 'pos') addStockOut(order)
+    }
+
+    resetForm()
+  }
+
+  function updateOrder(order: Order, patch: Partial<Order>, metaReason?: string) {
+    const updates = { ...patch }
+    if ('status' in patch && patch.status) {
+      const nextStatus = patch.status
+      if (nextStatus !== order.status) {
+        if (!canTransitionOrderStatus(order.status, nextStatus)) {
+          void dialogs.alert({
+            message: `Không thể chuyển trạng thái từ "${orderStatusLabels[order.status]}" sang "${orderStatusLabels[nextStatus]}".`,
+          })
+          return
+        }
+        if (nextStatus === 'confirmed' && !order.confirmedByUserId) updates.confirmedByUserId = user?.id
+        if (nextStatus === 'packed' && !order.packedByUserId) updates.packedByUserId = user?.id
+        if (nextStatus === 'shipped' && !order.shippedByUserId) updates.shippedByUserId = user?.id
+        if (nextStatus === 'cancelled' && !order.cancelledByUserId) updates.cancelledByUserId = user?.id
+      }
+    }
+    const reason = metaReason?.trim() ? metaReason.trim() : undefined
+    dispatch({ type: 'orders/upsert', order: { ...order, ...updates }, meta: reason ? { reason } : undefined })
+  }
+
+  function setPaid(order: Order) {
+    if (!canWrite) return
+    if (order.status === 'paid') return
+    if (!canTransitionOrderStatus(order.status, 'paid')) {
+      void dialogs.alert({
+        message: `Không thể chuyển trạng thái từ "${orderStatusLabels[order.status]}" sang "${orderStatusLabels.paid}".`,
+      })
+      return
+    }
+    updateOrder(order, { status: 'paid' })
+    addFinanceIncome({ ...order, status: 'paid' })
+    if (order.source === 'pos') addStockOut(order)
+  }
+
+  function setReturned(order: Order) {
+    if (!canWrite) return
+    if (order.status === 'returned') return
+    if (!canTransitionOrderStatus(order.status, 'returned')) {
+      void dialogs.alert({
+        message: `Không thể chuyển trạng thái từ "${orderStatusLabels[order.status]}" sang "${orderStatusLabels.returned}".`,
+      })
+      return
+    }
+    updateOrder(order, { status: 'returned' })
+    addFinanceRefund({ ...order, status: 'returned' })
+    if (order.source === 'pos') addStockIn(order)
+  }
+
+  async function deleteOrder(order: Order) {
+    if (!isAdmin) return
+    if (order.status !== 'draft' && order.status !== 'cancelled') {
+      await dialogs.alert({ message: 'Chỉ cho phép xóa đơn ở trạng thái Nháp hoặc Hủy.' })
+      return
+    }
+    const reason = await dialogs.prompt({ message: 'Nhập lý do xóa đơn (bắt buộc):', required: true })
+    if (reason == null) return
+    if (!reason.trim()) {
+      await dialogs.alert({ message: 'Vui lòng nhập lý do xóa đơn.' })
+      return
+    }
+    const ok = await dialogs.confirm({ message: `Xóa đơn ${order.code}?`, dangerous: true })
+    if (!ok) return
+    dispatch({ type: 'orders/delete', id: order.id, meta: { reason: reason.trim() } })
+    if (selectedOrderId === order.id) setSelectedOrderId(null)
+  }
+
+  async function addAttachments(order: Order, type: OrderAttachmentType, files: FileList | null) {
+    const validated = validateAttachmentFiles(files)
+    if (!validated.ok) {
+      await dialogs.alert({ message: validated.error })
+      return
+    }
+    if (!validated.files.length) return
+    const createdAt = nowIso()
+
+    const readers = validated.files.map(
+      (f) =>
+        new Promise<OrderAttachment | null>((resolve) => {
+          const r = new FileReader()
+          r.onload = () => {
+            const dataUrl = typeof r.result === 'string' ? r.result : ''
+            if (!dataUrl) return resolve(null)
+            resolve({
+              id: newId('att'),
+              type,
+              name: f.name,
+              dataUrl,
+              createdAt,
+            })
+          }
+          r.onerror = () => resolve(null)
+          r.readAsDataURL(f)
+        }),
+    )
+
+    const next = (await Promise.all(readers)).filter(Boolean) as OrderAttachment[]
+    if (!next.length) return
+    updateOrder(order, { attachments: [...order.attachments, ...next] })
+  }
+
+  function removeAttachment(order: Order, attachmentId: string) {
+    updateOrder(order, { attachments: order.attachments.filter((a) => a.id !== attachmentId) })
+  }
+
+  function importCodOrders() {
+    if (!canWrite) return
+    const rows = parseCodImport(codImport).filter((r) => r.code && r.amount > 0)
+    if (!rows.length) return
+    const createdAt = nowIso()
+    rows.forEach((r) => {
+      const id = newId('ord')
+      const order: Order = {
+        id,
+        code: r.code || '',
+        customerId: null,
+        fulfillmentLocationId: defaultLocationId,
+        type: 'internal',
+        source: 'cod',
+        paymentMethod: 'cod',
+        status: r.status,
+        items: [],
+        subTotalOverride: r.amount,
+        shippingFee: Math.max(0, r.shippingFee),
+        carrierName: r.carrierName.trim(),
+        trackingCode: r.trackingCode.trim(),
+        discountPercent: 0,
+        discountAmount: 0,
+        vatAmount: 0,
+        otherFees: 0,
+        note: r.note.trim(),
+        isReconciledCarrier: 'unreconciled',
+        isReconciledSupplier: 'unreconciled',
+        attachments: [],
+        createdAt,
+      }
+      dispatch({ type: 'orders/upsert', order })
+      if (order.status === 'paid') addFinanceIncome(order)
+    })
+    setCodImport('')
+  }
+
+  const stats = useMemo(() => {
+    const total = state.orders.length
+    const returned = state.orders.filter((o) => o.status === 'returned').length
+    const shippedOrDelivered = state.orders.filter((o) => o.status === 'shipped' || o.status === 'delivered' || o.status === 'returned').length
+    const returnRate = shippedOrDelivered > 0 ? returned / shippedOrDelivered : 0
+    return { total, returned, shippedOrDelivered, returnRate }
+  }, [state.orders])
+
+  const kanbanColumns = useMemo(() => [
+      { id: 'new', label: 'Mới', statuses: ['draft', 'confirmed'] as OrderStatus[], icon: <Clock size={16} /> },
+      { id: 'processing', label: 'Đang xử lý', statuses: ['packed'] as OrderStatus[], icon: <Package size={16} /> },
+      { id: 'shipping', label: 'Đang giao', statuses: ['shipped'] as OrderStatus[], icon: <Truck size={16} /> },
+      { id: 'delivered', label: 'Đã giao / Thành công', statuses: ['delivered', 'paid'] as OrderStatus[], icon: <CheckCircle size={16} /> },
+      { id: 'returned', label: 'Hoàn', statuses: ['returned', 'cancelled'] as OrderStatus[], icon: <AlertCircle size={16} /> },
+  ], [])
+
+  return (
+    <div className="page">
+      <div className="row-between" style={{ marginBottom: 20 }}>
+          <PageHeader title="Quản lý đơn hàng" />
+          <div className="row">
+              <button className="btn" onClick={() => exportOrders('xlsx')}>
+                Xuất Excel
+              </button>
+              <button className="btn" onClick={() => exportOrders('csv')}>
+                Xuất CSV
+              </button>
+              <button 
+                className={`btn ${viewMode === 'kanban' ? 'btn-primary' : ''}`} 
+                onClick={() => setViewMode('kanban')}
+              >
+                  <Layout size={16} /> Kanban
+              </button>
+              <button 
+                className={`btn ${viewMode === 'table' ? 'btn-primary' : ''}`} 
+                onClick={() => setViewMode('table')}
+              >
+                  <List size={16} /> Danh sách
+              </button>
+          </div>
+      </div>
+
+      <div className="grid">
+        <div className="stat">
+          <div className="stat-label">Tổng đơn</div>
+          <div className="stat-value">{stats.total}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">Đơn hoàn</div>
+          <div className="stat-value">{stats.returned}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">Tỷ lệ hoàn</div>
+          <div className="stat-value">{(stats.returnRate * 100).toFixed(1)}%</div>
+        </div>
+      </div>
+
+      {canWrite ? (
+        <div className="card">
+          <div className="card-title">Tạo đơn thủ công</div>
+          <div className="grid-form">
+            <div className="field">
+              <label>Loại đơn</label>
+              <select value={type} onChange={(e) => setType(e.target.value as OrderType)}>
+                <option value="internal">Đơn nội bộ</option>
+                <option value="dropship">Dropshipping</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Nguồn</label>
+              <select value={source} onChange={(e) => setSource(e.target.value as OrderSource)}>
+                <option value="pos">POS</option>
+                <option value="cod">COD</option>
+                <option value="web">Web</option>
+                <option value="social">Social</option>
+                <option value="shopee">Shopee</option>
+                <option value="tiktok">Tiktok</option>
+                <option value="other">Khác</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Hình thức thanh toán</label>
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as OrderPaymentMethod)}>
+                <option value="cod">COD</option>
+                <option value="transfer">Chuyển khoản</option>
+              </select>
+            </div>
+            {paymentMethod === 'transfer' && (
+              <div className="field">
+                <label>Bill chuyển khoản</label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  onChange={(e) => setPaymentBillFiles(e.target.files)}
+                />
+              </div>
+            )}
+            <div className="field">
+              <label>Giảm giá (%)</label>
+              <input
+                type="number"
+                value={discountPercentInput}
+                onChange={(e) => setDiscountPercentInput(Number(e.target.value))}
+              />
+            </div>
+            <div className="field">
+              <label>Trạng thái</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as OrderStatus)}>
+                {allStatuses.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {type === 'internal' ? (
+              <div className="field">
+                <label>Kho xử lý</label>
+                <select value={fulfillmentLocationId} onChange={(e) => setFulfillmentLocationId(e.target.value)}>
+                  <option value="">(Mặc định)</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.code} - {l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <>
+                <div className="field">
+                  <label>Thương hiệu (Dropship)</label>
+                  <input value={dropshipBrand} onChange={(e) => setDropshipBrand(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>Mã phiếu đối tác</label>
+                  <input value={partnerVoucherCode} onChange={(e) => setPartnerVoucherCode(e.target.value)} />
+                </div>
+              </>
+            )}
+
+            <div className="field">
+              <label>Mã đơn sàn</label>
+              <input value={platformOrderId} onChange={(e) => setPlatformOrderId(e.target.value)} />
+            </div>
+
+            {source === 'pos' || type === 'dropship' ? (
+              <div className="field field-span-2">
+                <label>Khách hàng</label>
+                <select
+                  value={customerId}
+                  onChange={(e) => {
+                    const id = e.target.value
+                    setCustomerId(id)
+                    const c = customersById.get(id)
+                    setDiscountPercentInput(c ? c.discountPercent : 0)
+                  }}
+                >
+                  <option value="">Khách lẻ</option>
+                  {customers.map((c) => {
+                    const s = customerStats.get(c.id)
+                    const rate = s && s.total > 0 ? Math.round((s.success / s.total) * 100) : null
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.phone}) - CK {c.discountPercent}% {rate !== null ? `(${rate}%)` : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+                {customerId ? (
+                  <div className="hint" style={{ marginTop: 4 }}>
+                    Tỷ lệ thành công:{' '}
+                    {(() => {
+                      const s = customerStats.get(customerId)
+                      if (!s || s.total === 0) return 'Chưa có dữ liệu'
+                      const rate = Math.round((s.success / s.total) * 100)
+                      return (
+                        <span style={{ color: rate < 50 ? 'red' : rate < 80 ? 'orange' : 'green', fontWeight: 600 }}>
+                          {rate}% ({s.success}/{s.total} đơn)
+                        </span>
+                      )
+                    })()}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <div className="field">
+                  <label>Tổng tiền hàng</label>
+                  <input
+                    type="number"
+                    value={subTotalOverride}
+                    onChange={(e) => setSubTotalOverride(Number(e.target.value))}
+                  />
+                </div>
+                <div className="field">
+                  <label>Mã vận đơn</label>
+                  <input value={trackingCode} onChange={(e) => setTrackingCode(e.target.value)} />
+                </div>
+              </>
+            )}
+
+            <div className="field">
+              <label>Đơn vị vận chuyển</label>
+              <input value={carrierName} onChange={(e) => setCarrierName(e.target.value)} />
+            </div>
+            {carrierName.toLowerCase().includes('hỏa tốc') && (
+              <div className="field">
+                <label>Ảnh đặt ship / Bill</label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  onChange={(e) => setShippingProofFiles(e.target.files)}
+                />
+              </div>
+            )}
+            <div className="field">
+              <label>Phí ship</label>
+              <input type="number" value={shippingFee} onChange={(e) => setShippingFee(Number(e.target.value))} />
+            </div>
+            <div className="field">
+              <label>VAT (đ)</label>
+              <input type="number" value={vatAmount} onChange={(e) => setVatAmount(Number(e.target.value))} />
+            </div>
+            <div className="field">
+              <label>Phí khác (đ)</label>
+              <input type="number" value={otherFees} onChange={(e) => setOtherFees(Number(e.target.value))} />
+            </div>
+            <div className="field">
+              <label>Ghi chú phí khác</label>
+              <input value={otherFeesNote} onChange={(e) => setOtherFeesNote(e.target.value)} />
+            </div>
+            <div className="field field-span-2">
+              <label>Ghi chú</label>
+              <input value={note} onChange={(e) => setNote(e.target.value)} />
+            </div>
+          </div>
+
+          {source === 'pos' ? (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Số lượng</th>
+                    <th>Đơn giá</th>
+                    <th>Thành tiền</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it, idx) => {
+                    const sku = it.skuId ? skusById.get(it.skuId) : undefined
+                    const stock = sku ? (availableQtyBySkuId.get(sku.id) ?? 0) : 0
+                    return (
+                      <tr key={idx}>
+                        <td>
+                          <select
+                            value={it.skuId}
+                            onChange={(e) => {
+                              const sid = e.target.value
+                              const s = skusById.get(sid)
+                              setItem(idx, { ...it, skuId: sid, price: s ? s.price : 0 })
+                            }}
+                          >
+                            <option value="">Chọn SKU</option>
+                            {skus.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {getSkuDisplayName(productsById, s)} ({s.skuCode}) (Tồn:{' '}
+                                {availableQtyBySkuId.get(s.id) ?? 0})
+                              </option>
+                            ))}
+                          </select>
+                          {sku ? <div className="hint">Tồn kho hiện tại: {stock}</div> : null}
+                        </td>
+                        <td>
+                          <input type="number" value={it.qty} onChange={(e) => setItem(idx, { ...it, qty: Number(e.target.value) })} />
+                        </td>
+                        <td>
+                          <input type="number" value={it.price} onChange={(e) => setItem(idx, { ...it, price: Number(e.target.value) })} />
+                        </td>
+                        <td>{formatVnd((Number(it.qty) || 0) * (Number(it.price) || 0))}</td>
+                        <td className="cell-actions">
+                          <button className="btn btn-small btn-danger" onClick={() => removeLine(idx)}>
+                            Xóa
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          <div className="row row-between">
+            {source === 'pos' || type === 'dropship' ? (
+              <button className="btn" onClick={addLine}>
+                + Thêm dòng
+              </button>
+            ) : (
+              <div />
+            )}
+            <div className="total">
+              Tạm tính: {formatVnd(subTotal)} | CK: {formatVnd(discountAmount)} | Ship: {formatVnd(shippingFee)} | Tổng:{' '}
+              {formatVnd(total)}
+            </div>
+          </div>
+
+          <div className="row">
+            <button className="btn btn-primary" onClick={createOrder}>
+              Tạo đơn
+            </button>
+            <button className="btn" onClick={resetForm}>
+              Mới
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {canWrite ? (
+        <div className="card">
+          <div className="card-title">Đồng bộ đơn với web COD tay</div>
+          <div className="field">
+            <label>Dán JSON array hoặc CSV/TSV: code,amount,shippingFee,carrierName,trackingCode,status</label>
+            <textarea
+              value={codImport}
+              onChange={(e) => setCodImport(e.target.value)}
+              rows={6}
+            />
+          </div>
+          <div className="row">
+            <button className="btn btn-primary" onClick={importCodOrders}>
+              Nhập COD
+            </button>
+            <button className="btn" onClick={() => setCodImport('')}>
+              Xóa nội dung
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="card">
+        <div className="card-title">Tìm kiếm / lọc / sắp xếp</div>
+        <div className="grid-form">
+          <div className="field field-span-2">
+            <label>Tìm kiếm</label>
+            <input
+              value={list.state.q}
+              onChange={(e) => list.patch({ q: e.target.value })}
+              placeholder="Mã đơn, vận đơn, khách, SĐT, ghi chú…"
+            />
+          </div>
+          <div className="field">
+            <label>Trạng thái</label>
+            <select
+              value={list.state.filters.status}
+              onChange={(e) => list.patchFilters({ status: e.target.value as OrdersFilters['status'] })}
+            >
+              <option value="all">Tất cả</option>
+              {allStatuses.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Nguồn</label>
+            <select
+              value={list.state.filters.source}
+              onChange={(e) => list.patchFilters({ source: e.target.value as OrdersFilters['source'] })}
+            >
+              <option value="all">Tất cả</option>
+              <option value="pos">POS</option>
+              <option value="cod">COD</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Kho xử lý</label>
+            <select
+              value={list.state.filters.locationId}
+              onChange={(e) => list.patchFilters({ locationId: e.target.value as OrdersFilters['locationId'] })}
+            >
+              <option value="all">Tất cả</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.code} - {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Đối soát VC</label>
+            <select
+              value={list.state.filters.carrierReconcile}
+              onChange={(e) => list.patchFilters({ carrierReconcile: e.target.value as OrdersFilters['carrierReconcile'] })}
+            >
+              <option value="all">Tất cả</option>
+              {reconcileOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Đối soát NCC</label>
+            <select
+              value={list.state.filters.supplierReconcile}
+              onChange={(e) =>
+                list.patchFilters({ supplierReconcile: e.target.value as OrdersFilters['supplierReconcile'] })
+              }
+            >
+              <option value="all">Tất cả</option>
+              {reconcileOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Từ ngày</label>
+            <input
+              type="date"
+              value={list.state.filters.from}
+              onChange={(e) => list.patchFilters({ from: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label>Đến ngày</label>
+            <input type="date" value={list.state.filters.to} onChange={(e) => list.patchFilters({ to: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Sắp xếp</label>
+            <select value={list.state.sortKey} onChange={(e) => list.patch({ sortKey: e.target.value })}>
+              <option value="createdAt">Ngày tạo</option>
+              <option value="total">Tổng tiền</option>
+              <option value="code">Mã đơn</option>
+              <option value="status">Trạng thái</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Chiều</label>
+            <select
+              value={list.state.sortDir}
+              onChange={(e) => list.patch({ sortDir: e.target.value as 'asc' | 'desc' })}
+            >
+              <option value="desc">Giảm dần</option>
+              <option value="asc">Tăng dần</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="row row-between" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            Hiển thị {filteredOrders.length}/{orders.length} đơn
+          </div>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <SavedViewsBar
+              views={list.views}
+              onApply={list.applyView}
+              onSave={list.saveCurrentAs}
+              onDelete={list.deleteView}
+            />
+            <button className="btn btn-small" onClick={list.reset}>
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {viewMode === 'kanban' ? (
+          <div style={{ display: 'flex', gap: 16, overflowX: 'auto', height: 'calc(100vh - 300px)', paddingBottom: 16, marginBottom: 20 }}>
+              {kanbanColumns.map(col => (
+                  <div key={col.id} style={{ minWidth: 280, width: 280, background: 'var(--neutral-100)', borderRadius: 8, display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ padding: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--border-color)' }}>
+                          {col.icon} {col.label}
+                          <div className="badge badge-neutral" style={{ marginLeft: 'auto' }}>
+                              {filteredOrders.filter(({ order }) => col.statuses.includes(order.status)).length}
+                          </div>
+                      </div>
+                      <div style={{ padding: 12, overflowY: 'auto', flex: 1 }}>
+                          {filteredOrders
+                            .filter(({ order }) => col.statuses.includes(order.status))
+                            .map(({ order, customer }) => (
+                              <KanbanCard 
+                                key={order.id} 
+                                order={order} 
+                                customer={customer}
+                                onSelect={setSelectedOrderId}
+                              />
+                          ))}
+                      </div>
+                  </div>
+              ))}
+          </div>
+      ) : (
+          <div className="card">
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Nguồn</th>
+                    <th>Khách</th>
+                    <th>Kho</th>
+                    <th>Ngày</th>
+                    <th>Trạng thái</th>
+                    <th>ĐVVC</th>
+                    <th>Đối soát ĐVVC</th>
+                    <th>Đối soát NCC</th>
+                    <th>Tổng</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedOrders.map(({ order: o, customer }) => (
+                    <OrderRow
+                      key={o.id}
+                      order={o}
+                      customer={customer}
+                      locationLabel={
+                        (o.fulfillmentLocationId
+                          ? locationsById.get(o.fulfillmentLocationId)?.code
+                          : defaultLocationId
+                            ? locationsById.get(defaultLocationId)?.code
+                            : '') ?? ''
+                      }
+                      canWrite={canWrite}
+                      isAdmin={isAdmin}
+                      onSelect={setSelectedOrderId}
+                      onSetPaid={setPaid}
+                      onSetReturned={setReturned}
+                      onDelete={deleteOrder}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <Pagination
+              page={list.state.page}
+              pageSize={list.state.pageSize}
+              totalItems={filteredOrders.length}
+              onChangePage={(page) => list.patch({ page })}
+              onChangePageSize={(pageSize) => list.patch({ pageSize })}
+            />
+          </div>
+      )}
+
+      {selectedOrder && (
+          <div className="modal-overlay" onClick={() => setSelectedOrderId(null)}>
+              <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: 800, maxWidth: '90vw' }}>
+                 <div className="row-between" style={{ marginBottom: 16 }}>
+                    <h3>Chi tiết đơn: {selectedOrder.code}</h3>
+                    <div className="row">
+                      {selectedOrder.type === 'internal' && (
+                        <button className="btn" onClick={() => window.print()}>
+                          In phiếu xuất kho
+                        </button>
+                      )}
+                      <button className="btn" onClick={() => setSelectedOrderId(null)}>Đóng</button>
+                    </div>
+                 </div>
+
+                 <div className="grid-form">
+                    <div className="field">
+                       <label>Trạng thái</label>
+                       <select
+                         value={selectedOrder.status}
+                         onChange={(e) => updateOrder(selectedOrder, { status: e.target.value as OrderStatus })}
+                         disabled={!canWrite}
+                       >
+                          {getAllowedNextOrderStatuses(selectedOrder.status).map((st) => (
+                            <option key={st} value={st}>
+                              {orderStatusLabels[st]}
+                            </option>
+                          ))}
+                       </select>
+                    </div>
+                    <div className="field">
+                       <label>Loại đơn</label>
+                       <select
+                         value={selectedOrder.type}
+                         onChange={(e) => updateOrder(selectedOrder, { type: e.target.value as OrderType })}
+                         disabled={!canWrite}
+                       >
+                         <option value="internal">Đơn nội bộ</option>
+                         <option value="dropship">Dropshipping</option>
+                       </select>
+                    </div>
+
+                   <div className="form-section-title field-span-2" style={{ marginTop: 16, marginBottom: 8, fontWeight: 600, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
+                      Thông tin xử lý đơn hàng
+                   </div>
+
+                   {selectedOrder.type === 'internal' ? (
+                    <div className="field">
+                      <label>Kho xử lý</label>
+                      <select
+                        value={selectedOrder.fulfillmentLocationId ?? defaultLocationId ?? ''}
+                        onChange={(e) => {
+                          void (async () => {
+                            const nextId = e.target.value
+                            const currentId = selectedOrder.fulfillmentLocationId ?? defaultLocationId ?? ''
+                            if (nextId === currentId) return
+                            const canChange =
+                              canWrite &&
+                              !selectedOrderHasStockTx &&
+                              (selectedOrder.status === 'draft' || selectedOrder.status === 'confirmed' || selectedOrder.status === 'packed')
+                            if (!canChange) {
+                              await dialogs.alert({
+                                message: 'Chỉ cho phép điều chuyển kho khi đơn còn nháp/xác nhận/đóng gói và chưa phát sinh phiếu kho.',
+                              })
+                              return
+                            }
+                            const reason = await dialogs.prompt({ message: 'Nhập lý do điều chuyển kho xử lý (bắt buộc):', required: true })
+                            if (reason == null) return
+                            if (!reason.trim()) return
+                            updateOrder(selectedOrder, { fulfillmentLocationId: nextId || null }, reason.trim())
+                          })()
+                        }}
+                        disabled={
+                          !canWrite ||
+                          selectedOrderHasStockTx ||
+                          !(selectedOrder.status === 'draft' || selectedOrder.status === 'confirmed' || selectedOrder.status === 'packed')
+                        }
+                      >
+                        <option value="">(Mặc định)</option>
+                        {locations.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.code} - {l.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    ) : (
+                      <>
+                        <div className="field">
+                          <label>Thương hiệu (Dropship)</label>
+                          <input
+                            value={selectedOrder.dropshipBrand || ''}
+                            onChange={(e) => updateOrder(selectedOrder, { dropshipBrand: e.target.value })}
+                          />
+                        </div>
+                        <div className="field">
+                          <label>Mã phiếu đối tác</label>
+                          <input
+                            value={selectedOrder.partnerVoucherCode || ''}
+                            onChange={(e) => updateOrder(selectedOrder, { partnerVoucherCode: e.target.value })}
+                          />
+                        </div>
+                      </>
+                    )}
+                    <div className="field">
+                      <label>Nguồn</label>
+                      <select
+                        value={selectedOrder.source}
+                        onChange={(e) => updateOrder(selectedOrder, { source: e.target.value as OrderSource })}
+                      >
+                        <option value="pos">POS</option>
+                        <option value="cod">COD</option>
+                        <option value="web">Web</option>
+                        <option value="social">Social</option>
+                        <option value="shopee">Shopee</option>
+                        <option value="tiktok">Tiktok</option>
+                        <option value="other">Khác</option>
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Hình thức thanh toán</label>
+                      <select
+                        value={selectedOrder.paymentMethod}
+                        onChange={(e) => updateOrder(selectedOrder, { paymentMethod: e.target.value as OrderPaymentMethod })}
+                      >
+                        <option value="cod">COD</option>
+                        <option value="transfer">Chuyển khoản</option>
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Mã đơn sàn</label>
+                      <input
+                        value={selectedOrder.platformOrderId || ''}
+                        onChange={(e) => updateOrder(selectedOrder, { platformOrderId: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Đơn vị vận chuyển</label>
+                      <input
+                        value={selectedOrder.carrierName}
+                        onChange={(e) => updateOrder(selectedOrder, { carrierName: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Mã vận đơn</label>
+                      <input
+                        value={selectedOrder.trackingCode}
+                        onChange={(e) => updateOrder(selectedOrder, { trackingCode: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Phí ship</label>
+                      <input
+                        type="number"
+                        value={selectedOrder.shippingFee}
+                        onChange={(e) => updateOrder(selectedOrder, { shippingFee: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>VAT (đ)</label>
+                      <input
+                        type="number"
+                        value={selectedOrder.vatAmount}
+                        onChange={(e) => updateOrder(selectedOrder, { vatAmount: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Phí khác (đ)</label>
+                      <input
+                        type="number"
+                        value={selectedOrder.otherFees}
+                        onChange={(e) => updateOrder(selectedOrder, { otherFees: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Ghi chú phí khác</label>
+                      <input
+                        value={selectedOrder.otherFeesNote || ''}
+                        onChange={(e) => updateOrder(selectedOrder, { otherFeesNote: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Tiền hàng (override)</label>
+                      <input
+                        type="number"
+                        value={selectedOrder.subTotalOverride ?? 0}
+                        onChange={(e) =>
+                          updateOrder(selectedOrder, {
+                            subTotalOverride: selectedOrder.source === 'cod' ? Number(e.target.value) : null,
+                          })
+                        }
+                        disabled={selectedOrder.source !== 'cod'}
+                      />
+                    </div>
+                    <div className="field">
+                      <label>Đối soát ĐVVC</label>
+                      <select
+                        value={selectedOrder.isReconciledCarrier}
+                        onChange={(e) => updateOrder(selectedOrder, { isReconciledCarrier: e.target.value as ReconcileStatus })}
+                      >
+                        {reconcileOptions.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Đối soát NCC</label>
+                      <select
+                        value={selectedOrder.isReconciledSupplier}
+                        onChange={(e) => updateOrder(selectedOrder, { isReconciledSupplier: e.target.value as ReconcileStatus })}
+                      >
+                        {reconcileOptions.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Kết quả đối soát (đ)</label>
+                      <div className="row">
+                        <input
+                          type="number"
+                          style={{ flex: 1 }}
+                          value={selectedOrder.reconciliationResultAmount ?? 0}
+                          onChange={(e) => updateOrder(selectedOrder, { reconciliationResultAmount: Number(e.target.value) })}
+                        />
+                        {selectedOrder.type === 'dropship' && (selectedOrder.reconciliationResultAmount || 0) !== 0 && (
+                          <button
+                            className="btn btn-small btn-primary"
+                            onClick={() => recordDropshipProfit(selectedOrder)}
+                            title="Tạo giao dịch thu/chi tương ứng"
+                          >
+                            Ghi nhận
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="field field-span-2">
+                      <label>Ghi chú</label>
+                      <input value={selectedOrder.note} onChange={(e) => updateOrder(selectedOrder, { note: e.target.value })} />
+                    </div>
+
+                    <div className="field">
+                      <label>Người tạo đơn</label>
+                      <input value={usersById.get(selectedOrder.createdByUserId ?? '')?.fullName ?? 'Unknown'} disabled />
+                    </div>
+                    
+                    {selectedOrder.status === 'cancelled' && selectedOrder.cancelledByUserId && (
+                      <div className="field">
+                        <label>Người hủy đơn</label>
+                        <input value={usersById.get(selectedOrder.cancelledByUserId)?.fullName ?? 'Unknown'} disabled />
+                      </div>
+                    )}
+                    
+                    {(selectedOrder.packedByUserId || selectedOrder.shippedByUserId) && (
+                      <div className="field">
+                        <label>Người xuất kho</label>
+                        <input value={usersById.get(selectedOrder.shippedByUserId ?? selectedOrder.packedByUserId!)?.fullName ?? 'Unknown'} disabled />
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedOrder.type === 'dropship' && (
+                     <div className="card" style={{ marginBottom: 16, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                        <div className="card-title">Chứng từ Dropship</div>
+                        <div className="grid-form">
+                           <div className="field">
+                              <label>Mã phiếu xuất kho (Đối tác)</label>
+                              <input 
+                                value={selectedOrder.partnerVoucherCode ?? ''} 
+                                onChange={(e) => updateOrder(selectedOrder, { partnerVoucherCode: e.target.value })}
+                                placeholder="Nhập mã phiếu..."
+                              />
+                           </div>
+                           <div className="field">
+                              <label>Tải lên phiếu kho</label>
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                multiple
+                                onChange={(e) => {
+                                  addAttachments(selectedOrder, 'warehouse', e.target.files)
+                                  e.currentTarget.value = ''
+                                }}
+                              />
+                           </div>
+                        </div>
+                     </div>
+                  )}
+
+                  <div className="card" style={{ marginBottom: 0 }}>
+                    <div className="card-title">Ảnh bill / chứng từ</div>
+                    <div className="row">
+                      {attachmentOptions.map((opt) => (
+                        <label key={opt.value} className="btn btn-small">
+                          {opt.label}
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            multiple
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              addAttachments(selectedOrder, opt.value, e.target.files)
+                              e.currentTarget.value = ''
+                            }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="table-wrap" style={{ marginTop: 10 }}>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Loại</th>
+                            <th>Tên file</th>
+                            <th>Ngày</th>
+                            <th />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedOrder.attachments.map((a) => (
+                            <tr key={a.id}>
+                              <td>{attachmentOptions.find((x) => x.value === a.type)?.label ?? a.type}</td>
+                              <td>
+                                <a href={a.dataUrl} target="_blank" rel="noreferrer">
+                                  {a.name}
+                                </a>
+                              </td>
+                              <td>{formatDateTime(a.createdAt)}</td>
+                              <td className="cell-actions">
+                                <button className="btn btn-small btn-danger" onClick={() => removeAttachment(selectedOrder, a.id)}>
+                                  Xóa
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+              </div>
+          </div>
+      )}
+    </div>
+  )
+}

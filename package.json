@@ -1,0 +1,96 @@
+{
+  "name": "ung-dung-quan-ly-ban-hang",
+  "productName": "Ứng dụng quản lý bán hàng",
+  "description": "Phần mềm quản lý bán hàng đa kho",
+  "author": "Ninh <ninh1407@github.com>",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "main": "electron/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ninh1407/quanlybanhang.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "server": "tsx server/index.ts",
+    "gen:icon": "node scripts/generate-icon.mjs",
+    "update:server": "node scripts/update-server.mjs",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "desktop:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_RENDERER_URL=http://localhost:5173 electron .\"",
+    "desktop:build": "cross-env DESKTOP=true npm run build",
+    "desktop:dist": "npm run gen:icon && npm run desktop:build && electron-builder --win --x64 -p never"
+  },
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "date-fns": "^4.1.0",
+    "electron-updater": "^6.3.9",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.575.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.13.0",
+    "recharts": "^3.7.0",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "^37.4.0",
+    "electron-builder": "^26.0.13",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vite": "^7.3.1",
+    "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "com.dmxx.salesadmin",
+    "productName": "Ứng dụng quản lý bán hàng",
+    "artifactName": "UngDungQuanLyBanHang-Setup-${version}.${ext}",
+    "directories": {
+      "output": "release_v2"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ninh1407",
+        "repo": "quanlybanhang"
+      }
+    ],
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

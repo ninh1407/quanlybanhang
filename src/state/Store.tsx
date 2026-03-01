@@ -10,6 +10,7 @@ import type {
 import type { AppActionWithMeta as AppAction, AppState } from './types'
 import { createEmptyWarehouseState } from './seed'
 import { reducer as coreReducer, validateAction, createAuditLog, toAuditSnapshot } from './core'
+import { getServerUrl } from '../config'
 
 type Store = {
   state: AppState
@@ -71,16 +72,11 @@ export function StoreProvider(props: { children: ReactNode }) {
 
   // Initialize Socket.IO
   useEffect(() => {
-    // Determine Socket URL
-    // If running in Electron (file://), hostname is empty -> default to localhost
-    let hostname = window.location.hostname
-    if (!hostname) hostname = 'localhost'
-    
-    // Allow overriding via localStorage for VPS connection
-    const savedUrl = localStorage.getItem('server_url')
-    const socketUrl = savedUrl || `http://${hostname}:3000`
+    // USE CENTRAL CONFIG
+    const socketUrl = getServerUrl()
     
     // Get token
+// ... existing code ...
     const token = localStorage.getItem('auth_token')
 
     console.log('Connecting to socket:', socketUrl, token ? '(Authenticated)' : '(Guest)')

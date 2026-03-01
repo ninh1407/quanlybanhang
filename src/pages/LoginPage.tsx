@@ -5,6 +5,7 @@ import { useStore } from '../state/Store'
 import { useAuth } from '../auth/auth'
 import { accessibleLocations } from '../domain/warehouseAccess'
 import { Store, User, Lock, ArrowRight, Settings } from 'lucide-react'
+import { getServerUrl, getSavedIp, saveServerIp, DEFAULT_SERVER_IP } from '../config'
 
 export function LoginPage() {
   const { dispatch } = useStore()
@@ -17,10 +18,10 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [showConfig, setShowConfig] = useState(false)
-  const [serverUrl, setServerUrl] = useState(localStorage.getItem('server_url') || '')
+  const [serverIp, setServerIp] = useState(getSavedIp())
 
   function onSaveConfig() {
-    localStorage.setItem('server_url', serverUrl)
+    saveServerIp(serverIp)
     window.location.reload()
   }
 
@@ -29,9 +30,8 @@ export function LoginPage() {
     
     try {
       // API Login
-      const url = serverUrl || (window.location.hostname ? `http://${window.location.hostname}:3000` : 'http://localhost:3000')
-      
-      const res = await fetch(`${url}/api/login`, {
+      const serverUrl = getServerUrl()
+      const res = await fetch(`${serverUrl}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -159,27 +159,28 @@ export function LoginPage() {
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6
+              gap: 6,
+              opacity: 0.7
             }}
           >
             <Settings size={14} />
-            Cấu hình Server
+            Cấu hình IP Server
           </button>
         </div>
 
         {showConfig && (
           <div style={{ marginTop: 16, padding: 16, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
             <div className="field" style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 13, marginBottom: 4 }}>Địa chỉ Server (VPS)</label>
+              <label style={{ fontSize: 13, marginBottom: 4 }}>Địa chỉ IP VPS</label>
               <input 
                 type="text" 
-                value={serverUrl} 
-                onChange={(e) => setServerUrl(e.target.value)} 
-                placeholder="http://192.168.1.xxx:3000"
+                value={serverIp} 
+                onChange={(e) => setServerIp(e.target.value)} 
+                placeholder={DEFAULT_SERVER_IP}
                 style={{ fontSize: 13, padding: '8px 12px' }}
               />
               <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                Mặc định: http://localhost:3000
+                Mặc định: {DEFAULT_SERVER_IP}
               </p>
             </div>
             <button 

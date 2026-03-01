@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import bcrypt from 'bcryptjs'
 import { useAuth } from '../auth/auth'
 import { groupPermissions, rolePermissions } from '../domain/permissions'
 import type { Location, Role, User } from '../domain/types'
@@ -74,8 +75,13 @@ export function StaffPage() {
     const existing = editingId ? state.users.find((u) => u.id === editingId) : undefined
     
     let password = form.password
-    if (existing && !password) {
-        password = existing.password
+    if (password) {
+      password = bcrypt.hashSync(password, 10)
+    } else if (existing) {
+      password = existing.password
+    } else {
+      setError('Vui lòng nhập mật khẩu.')
+      return
     }
 
     const next: User = {

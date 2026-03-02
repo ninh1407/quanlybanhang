@@ -131,7 +131,7 @@ export function AdminLayout() {
       <aside className="sidebar">
         <div className="sidebar-title">
           <Store size={24} style={{ marginRight: 10, color: 'var(--primary-400)' }} />
-          DM Xanh Admin
+          Quản lý gia dụng
         </div>
         <nav className="nav">
           <RequirePermission permission="dashboard:read">

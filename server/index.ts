@@ -30,7 +30,7 @@ const io = new Server(httpServer, {
 
 // Web Access Restricted
 app.get('/', (req: express.Request, res: express.Response) => {
-  res.send('DM Xanh API Server. Web access is disabled.')
+  res.send('Quan Ly Gia Dung API Server. Web access is disabled.')
 })
 
 let state: AppState

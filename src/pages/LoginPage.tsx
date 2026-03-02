@@ -86,7 +86,7 @@ export function LoginPage() {
           }}>
             <Store size={40} />
           </div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'var(--text-main)' }}>DM Xanh Admin</h1>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'var(--text-main)' }}>Quản lý gia dụng</h1>
           <p style={{ margin: '8px 0 0', color: 'var(--text-muted)' }}>Đăng nhập để tiếp tục vào hệ thống quản lý</p>
         </div>
         

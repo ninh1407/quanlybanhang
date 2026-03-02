@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/auth'
 import type {
   Customer,
@@ -26,243 +26,199 @@ import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { Layout, List, CheckCircle, Truck, Package, AlertCircle, Clock } from 'lucide-react'
+import { printOrder } from '../lib/print'
 
-type ItemDraft = { skuId: string; qty: number; price: number }
+// --- Types & Constants ---
+
+type ItemDraft = {
+  skuId: string
+  qty: number
+  price: number
+}
 
 type OrdersFilters = {
-  status: 'all' | OrderStatus
-  source: 'all' | OrderSource
-  locationId: 'all' | string
-  carrierReconcile: 'all' | ReconcileStatus
-  supplierReconcile: 'all' | ReconcileStatus
+  status: OrderStatus | 'all'
+  source: OrderSource | 'all'
+  locationId: string | 'all'
+  carrierReconcile: ReconcileStatus | 'all'
+  supplierReconcile: ReconcileStatus | 'all'
   from: string
   to: string
 }
+
+const allStatuses: { value: OrderStatus; label: string }[] = [
+  { value: 'draft', label: 'Nháp' },
+  { value: 'confirmed', label: 'Đã xác nhận' },
+  { value: 'packed', label: 'Đã đóng gói' },
+  { value: 'shipped', label: 'Đang giao hàng' },
+  { value: 'delivered', label: 'Đã giao hàng' },
+  { value: 'paid', label: 'Đã thanh toán' },
+  { value: 'returned', label: 'Hoàn trả' },
+  { value: 'cancelled', label: 'Đã hủy' },
+]
+
+const reconcileOptions: { value: ReconcileStatus; label: string }[] = [
+  { value: 'unreconciled', label: 'Chưa đối soát' },
+  { value: 'reconciled', label: 'Đã đối soát' },
+  { value: 'disputed', label: 'Khiếu nại' },
+]
+
+const attachmentOptions: { value: OrderAttachmentType; label: string }[] = [
+  { value: 'payment_bill', label: 'Bill thanh toán' },
+  { value: 'delivery', label: 'Ảnh giao hàng' },
+  { value: 'warehouse', label: 'Phiếu kho' },
+  { value: 'vat', label: 'Hóa đơn VAT' },
+  { value: 'carrier', label: 'Chứng từ vận chuyển' },
+  { value: 'other_cost', label: 'Chi phí khác' },
+  { value: 'signature', label: 'Chữ ký' },
+  { value: 'other', label: 'Khác' },
+]
+
+// --- Helpers ---
 
 function toMs(iso: string): number {
   const t = new Date(iso).getTime()
   return Number.isFinite(t) ? t : 0
 }
 
-function rangeMs(from: string, to: string): { startMs: number | null; endMs: number | null } {
-  const startMs = from ? toMs(`${from}T00:00:00.000Z`) : null
-  const endMs = to ? toMs(`${to}T23:59:59.999Z`) : null
+function rangeMs(from: string, to: string) {
+  const startMs = from ? new Date(from).getTime() : null
+  const endMs = to ? new Date(to).getTime() + 86400000 : null
   return { startMs, endMs }
 }
 
-const allStatuses: { value: OrderStatus; label: string }[] = [
-  { value: 'draft', label: 'Nháp' },
-  { value: 'confirmed', label: 'Xác nhận' },
-  { value: 'paid', label: 'Đã thanh toán' },
-  { value: 'packed', label: 'Đóng gói' },
-  { value: 'shipped', label: 'Đang giao' },
-  { value: 'delivered', label: 'Đã giao' },
-  { value: 'returned', label: 'Hoàn' },
-  { value: 'cancelled', label: 'Hủy' },
-]
-
-const reconcileOptions: { value: ReconcileStatus; label: string }[] = [
-  { value: 'unreconciled', label: 'Chưa đối soát' },
-  { value: 'reconciled', label: 'Đã đối soát' },
-  { value: 'disputed', label: 'Lệch/Tranh chấp' },
-]
-
-const attachmentOptions: { value: OrderAttachmentType; label: string }[] = [
-  { value: 'vat', label: 'VAT đầu ra' },
-  { value: 'carrier', label: 'Bill vận chuyển' },
-  { value: 'warehouse', label: 'Đơn xuất kho' },
-  { value: 'delivery', label: 'Phiếu/lệnh vận chuyển' },
-  { value: 'signature', label: 'Chữ ký tài xế' },
-  { value: 'payment_bill', label: 'Bill thanh toán' },
-  { value: 'other_cost', label: 'Chứng từ chi phí khác' },
-  { value: 'other', label: 'Khác' },
-]
-
-function orderSubTotal(order: Order): number {
-  if (order.subTotalOverride != null) return Number(order.subTotalOverride) || 0
-  return order.items.reduce((acc, it) => acc + it.qty * it.price, 0)
-}
-
 function orderTotal(order: Order): number {
-  return (
-    orderSubTotal(order) -
-    (Number(order.discountAmount) || 0) +
-    (Number(order.shippingFee) || 0) +
-    (Number(order.vatAmount) || 0) +
-    (Number(order.otherFees) || 0)
-  )
+  let itemTotal = 0
+  if (order.subTotalOverride !== null) {
+    itemTotal = order.subTotalOverride
+  } else {
+    itemTotal = order.items.reduce((acc, it) => acc + it.qty * it.price, 0)
+  }
+  return itemTotal - (order.discountAmount || 0) + (order.shippingFee || 0) + (order.vatAmount || 0) + (order.otherFees || 0)
 }
 
 function getSkuDisplayName(productsById: Map<string, string>, sku: Sku): string {
-  const productName = productsById.get(sku.productId) ?? sku.productId
-  const attrs = [sku.color.trim(), sku.size.trim()].filter(Boolean).join(' / ')
-  const kind = sku.kind === 'bundle' ? ' (Combo)' : ''
-  return `${productName}${attrs ? ` - ${attrs}` : ''}${kind}`
+  const pName = productsById.get(sku.productId) || 'Unknown'
+  return `${pName} ${sku.skuCode} ${sku.color} ${sku.size}`
 }
 
 function toOrderItems(items: ItemDraft[]): OrderItem[] {
-  return items
-    .filter((it) => it.skuId && (Number(it.qty) || 0) > 0)
-    .map((it) => ({
-      skuId: it.skuId,
-      qty: Number(it.qty) || 0,
-      price: Number(it.price) || 0,
-    }))
+  return items.filter((it) => it.skuId).map((it) => ({ skuId: it.skuId, qty: it.qty, price: it.price }))
 }
 
 function expandStockOut(sku: Sku, qty: number): { skuId: string; qty: number }[] {
   if (sku.kind === 'single') return [{ skuId: sku.id, qty }]
-  return sku.components
-    .map((c) => ({ skuId: c.skuId, qty: qty * (Number(c.qty) || 0) }))
-    .filter((x) => x.skuId && x.qty > 0)
+  return sku.components.map((c) => ({ skuId: c.skuId, qty: c.qty * qty }))
 }
 
 function expandStockIn(sku: Sku, qty: number): { skuId: string; qty: number }[] {
   if (sku.kind === 'single') return [{ skuId: sku.id, qty }]
-  return sku.components
-    .map((c) => ({ skuId: c.skuId, qty: qty * (Number(c.qty) || 0) }))
-    .filter((x) => x.skuId && x.qty > 0)
+  return sku.components.map((c) => ({ skuId: c.skuId, qty: c.qty * qty }))
 }
 
-function parseCodImport(text: string): Array<{
-  code: string
-  status: OrderStatus
-  amount: number
-  shippingFee: number
-  carrierName: string
-  trackingCode: string
-  note: string
-}> {
-  function isRecord(v: unknown): v is Record<string, unknown> {
-    return !!v && typeof v === 'object' && !Array.isArray(v)
-  }
-
-  const allowed = new Set(allStatuses.map((s) => s.value))
-  function normalizeStatus(v: unknown): OrderStatus {
-    const s = typeof v === 'string' ? v : ''
-    return (allowed.has(s as OrderStatus) ? (s as OrderStatus) : 'confirmed') as OrderStatus
-  }
-
-  const t = text.trim()
-  if (!t) return []
-  let parsed: unknown = null
+function parseCodImport(text: string): any[] {
   try {
-    parsed = JSON.parse(t) as unknown
-  } catch {
-    parsed = null
+      const trimmed = text.trim()
+      if (trimmed.startsWith('[')) return JSON.parse(trimmed)
+      return trimmed.split('\n').map(line => {
+          const parts = line.split(',')
+          return {
+              code: parts[0]?.trim(),
+              amount: Number(parts[1]) || 0,
+              shippingFee: Number(parts[2]) || 0,
+              carrierName: parts[3]?.trim() || '',
+              trackingCode: parts[4]?.trim() || '',
+              status: parts[5]?.trim() || 'shipped'
+          }
+      })
+  } catch (e) {
+      return []
   }
-  if (Array.isArray(parsed)) {
-    return parsed.map((row) => {
-      const r = isRecord(row) ? row : {}
-      return {
-        code: typeof r.code === 'string' ? r.code : '',
-        status: normalizeStatus(r.status),
-        amount: Number(r.amount ?? 0) || 0,
-        shippingFee: Number(r.shippingFee ?? 0) || 0,
-        carrierName: typeof r.carrierName === 'string' ? r.carrierName : '',
-        trackingCode: typeof r.trackingCode === 'string' ? r.trackingCode : '',
-        note: typeof r.note === 'string' ? r.note : '',
-      }
-    })
-  }
-
-  return t
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split('\t').length >= 3 ? line.split('\t') : line.split(',')
-      const [code, amount, shippingFee, carrierName, trackingCode, status] = parts.map((p) => p?.trim() ?? '')
-      return {
-        code: code || '',
-        status: normalizeStatus(status),
-        amount: Number(amount) || 0,
-        shippingFee: Number(shippingFee) || 0,
-        carrierName: carrierName || '',
-        trackingCode: trackingCode || '',
-        note: '',
-      }
-    })
 }
 
-const OrderRow = memo(function OrderRow(props: {
-  order: Order
-  customer: Customer | null
-  locationLabel: string
-  canWrite: boolean
-  isAdmin: boolean
-  onSelect: (id: string) => void
-  onSetPaid: (o: Order) => void
-  onSetReturned: (o: Order) => void
-  onDelete: (o: Order) => void
-}) {
-  const { order, customer, locationLabel, canWrite, isAdmin, onSelect, onSetPaid, onSetReturned, onDelete } = props
-  return (
-    <tr>
-      <td>{order.code}</td>
-      <td>{order.source}</td>
-      <td>{customer ? customer.name : '-'}</td>
-      <td>{locationLabel}</td>
-      <td>{formatDateTime(order.createdAt)}</td>
-      <td>{allStatuses.find((s) => s.value === order.status)?.label ?? order.status}</td>
-      <td>{order.carrierName}</td>
-      <td>
-        {reconcileOptions.find((x) => x.value === order.isReconciledCarrier)?.label ?? order.isReconciledCarrier}
-      </td>
-      <td>
-        {reconcileOptions.find((x) => x.value === order.isReconciledSupplier)?.label ?? order.isReconciledSupplier}
-      </td>
-      <td>{formatVnd(orderTotal(order))}</td>
-      <td className="cell-actions">
-        <button className="btn btn-small" onClick={() => onSelect(order.id)}>
-          Chi tiết
-        </button>
-        {canWrite && order.status !== 'paid' ? (
-          <button className="btn btn-small btn-primary" onClick={() => onSetPaid(order)}>
-            Đánh dấu đã thu
-          </button>
-        ) : null}
-        {canWrite && order.status !== 'returned' ? (
-          <button className="btn btn-small btn-danger" onClick={() => onSetReturned(order)}>
-            Hoàn hàng
-          </button>
-        ) : null}
-        {isAdmin ? (
-          <button className="btn btn-small btn-danger" onClick={() => onDelete(order)}>
-            Xóa
-          </button>
-        ) : null}
-      </td>
-    </tr>
-  )
-})
+// --- Component ---
 
-const KanbanCard = memo(function KanbanCard(props: {
-    order: Order
-    customer: Customer | null
-    onSelect: (id: string) => void
-}) {
-    const { order, customer, onSelect } = props
+function KanbanCard({ order, customer, onSelect }: { order: Order, customer: Customer | null, onSelect: (id: string) => void }) {
     return (
         <div 
-            className="card" 
-            style={{ padding: 12, marginBottom: 12, cursor: 'pointer', borderLeft: `4px solid var(--primary-500)` }}
             onClick={() => onSelect(order.id)}
+            style={{ 
+                background: 'white', 
+                padding: 12, 
+                marginBottom: 12, 
+                borderRadius: 6, 
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                borderLeft: `4px solid ${order.status === 'paid' ? 'green' : order.status === 'cancelled' ? 'red' : 'blue'}`
+            }}
         >
-            <div className="row-between" style={{ marginBottom: 8 }}>
-                <span style={{ fontWeight: 600 }}>{order.code}</span>
-                <span className="text-muted" style={{ fontSize: 12 }}>{formatDateTime(order.createdAt).split(' ')[1]}</span>
+            <div className="row-between" style={{ marginBottom: 4 }}>
+                <div style={{ fontWeight: 600 }}>{order.code}</div>
+                <div style={{ fontSize: 12, color: '#666' }}>{formatDateTime(order.createdAt)}</div>
             </div>
-            <div style={{ fontSize: 13, marginBottom: 8 }}>
-                {customer ? customer.name : 'Khách lẻ'}
-            </div>
-            <div className="row-between">
-                <span style={{ fontWeight: 600, color: 'var(--primary-600)' }}>{formatVnd(orderTotal(order))}</span>
-                {order.source === 'cod' && <span className="badge badge-neutral">COD</span>}
+            <div style={{ fontSize: 13, marginBottom: 4 }}>{customer ? customer.name : 'Khách lẻ'}</div>
+            <div className="row-between" style={{ marginTop: 8 }}>
+                <div className="badge badge-neutral">{formatVnd(orderTotal(order))}</div>
+                <div style={{ fontSize: 12 }}>{order.trackingCode}</div>
             </div>
         </div>
     )
-})
+}
+
+function OrderRow({ order, customer, locationLabel, canWrite, isAdmin, onSelect, onSetPaid, onSetReturned, onDelete }: {
+    order: Order,
+    customer: Customer | null,
+    locationLabel: string,
+    canWrite: boolean,
+    isAdmin: boolean,
+    onSelect: (id: string) => void,
+    onSetPaid: (order: Order) => void,
+    onSetReturned: (order: Order) => void,
+    onDelete: (order: Order) => void
+}) {
+    const total = orderTotal(order)
+    return (
+        <tr onClick={() => onSelect(order.id)} style={{ cursor: 'pointer' }}>
+            <td>{order.code}</td>
+            <td>{order.source}</td>
+            <td>
+                <div>{customer ? customer.name : 'Khách lẻ'}</div>
+                <div style={{ fontSize: 11, color: '#666' }}>{customer?.phone}</div>
+            </td>
+            <td>{locationLabel}</td>
+            <td>{formatDateTime(order.createdAt)}</td>
+            <td>
+                <span className={`badge badge-${order.status === 'paid' ? 'success' : order.status === 'cancelled' ? 'danger' : 'neutral'}`}>
+                    {orderStatusLabels[order.status]}
+                </span>
+            </td>
+            <td>
+                <div>{order.carrierName}</div>
+                <div style={{ fontSize: 11 }}>{order.trackingCode}</div>
+            </td>
+            <td>{order.isReconciledCarrier === 'reconciled' ? 'Đã đối soát' : '-'}</td>
+            <td>{order.isReconciledSupplier === 'reconciled' ? 'Đã đối soát' : '-'}</td>
+            <td style={{ fontWeight: 600 }}>{formatVnd(total)}</td>
+            <td className="cell-actions" onClick={e => e.stopPropagation()}>
+                {canWrite && order.status !== 'paid' && order.status !== 'cancelled' && (
+                    <button className="btn btn-small btn-success" onClick={() => onSetPaid(order)}>
+                        TT
+                    </button>
+                )}
+                {canWrite && order.status === 'shipped' && (
+                    <button className="btn btn-small btn-warning" onClick={() => onSetReturned(order)}>
+                        Hoàn
+                    </button>
+                )}
+                {isAdmin && (order.status === 'draft' || order.status === 'cancelled') && (
+                    <button className="btn btn-small btn-danger" onClick={() => onDelete(order)}>
+                        Xóa
+                    </button>
+                )}
+            </td>
+        </tr>
+    )
+}
 
 export function OrdersPage() {
   const state = useAppState()
@@ -906,7 +862,7 @@ export function OrdersPage() {
         discountAmount: 0,
         vatAmount: 0,
         otherFees: 0,
-        note: r.note.trim(),
+        note: r.note?.trim() || '',
         isReconciledCarrier: 'unreconciled',
         isReconciledSupplier: 'unreconciled',
         attachments: [],
@@ -1479,7 +1435,22 @@ export function OrdersPage() {
                     <h3>Chi tiết đơn: {selectedOrder.code}</h3>
                     <div className="row">
                       {selectedOrder.type === 'internal' && (
-                        <button className="btn" onClick={() => window.print()}>
+                        <button className="btn" onClick={() => {
+                          const items = selectedOrder.items.map(it => {
+                             const sku = skusById.get(it.skuId)
+                             return {
+                               name: sku ? getSkuDisplayName(productsById, sku) : 'Unknown',
+                               unit: sku ? (sku.unit || 'Cái') : 'Cái',
+                               qty: it.qty,
+                               price: it.price,
+                               total: it.qty * it.price
+                             }
+                          })
+                          const customer = selectedOrder.customerId ? customersById.get(selectedOrder.customerId) ?? null : null
+                          const user = usersById.get(selectedOrder.createdByUserId ?? '') ?? null
+                          
+                          printOrder(selectedOrder, items, customer, user)
+                        }}>
                           In phiếu xuất kho
                         </button>
                       )}

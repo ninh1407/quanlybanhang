@@ -9,6 +9,9 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { autoUpdater } = require('electron-updater')
 
+// REMOVED: Local server logic
+// const server = require('../server/index.ts') // (Assuming it was imported like this or similar)
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 

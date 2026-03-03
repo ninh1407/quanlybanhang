@@ -30,7 +30,7 @@ export function OrderMonitoringPage() {
             issue: [] as Order[]
         }
 
-        state.orders.forEach(o => {
+        ;(state.orders || []).forEach(o => {
             // Filters
             if (filterChannel !== 'all') {
                 const channel = o.source === 'tiktok' ? 'tiktok' : 
@@ -85,10 +85,10 @@ export function OrderMonitoringPage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: 8 }}>
                     <div style={{ fontSize: 12, fontWeight: 600 }}>
-                        {order.items.length} items
+                        {(order.items || []).length} items
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-600)' }}>
-                        {(order.subTotalOverride || order.items.reduce((s, i) => s + i.price * i.qty, 0)).toLocaleString()}
+                        {(order.subTotalOverride || (order.items || []).reduce((s, i) => s + i.price * i.qty, 0)).toLocaleString()}
                     </div>
                 </div>
             </div>

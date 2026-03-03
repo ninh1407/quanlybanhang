@@ -61,7 +61,7 @@ export function PickingPackingPage() {
         // If Shipping, deduct stock if not already done (assuming stock deducted at 'shipped' or 'confirmed' based on policy)
         // In this system, let's assume stock is reserved at 'confirmed' but deducted from ledger at 'shipped'.
         if (nextStatus === 'shipped') {
-             order.items.forEach(item => {
+             (order.items || []).forEach(item => {
                  dispatch({
                      type: 'stock/add',
                      tx: {
@@ -131,7 +131,7 @@ export function PickingPackingPage() {
                                 <td>{state.customers.find(c => c.id === order.customerId)?.name || 'Khách lẻ'}</td>
                                 <td>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        {order.items.map(i => {
+                                        {(order.items || []).map(i => {
                                             const sku = state.skus.find(s => s.id === i.skuId)
                                             return (
                                                 <div key={i.skuId} style={{ fontSize: 12 }}>
@@ -141,7 +141,7 @@ export function PickingPackingPage() {
                                         })}
                                     </div>
                                 </td>
-                                <td>{order.items.reduce((sum, i) => sum + i.qty * i.price, 0).toLocaleString()}</td>
+                                <td>{(order.items || []).reduce((sum, i) => sum + i.qty * i.price, 0).toLocaleString()}</td>
                                 <td>{order.carrierName || '-'}</td>
                                 <td>
                                     {activeTab === 'pending' && (

@@ -16,7 +16,7 @@ export function soldQtyBySku(orders: Order[], start: Date, end: Date): Map<Id, n
     const t = new Date(o.createdAt).getTime()
     if (Number.isNaN(t)) return
     if (t < startMs || t >= endMs) return
-    o.items.forEach((it) => {
+    (o.items || []).forEach((it) => {
       map.set(it.skuId, (map.get(it.skuId) ?? 0) + it.qty)
     })
   })

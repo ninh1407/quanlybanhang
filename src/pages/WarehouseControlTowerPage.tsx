@@ -41,10 +41,10 @@ function calculateLocationStats(
   let discrepancyAmount = 0
   
   // Calculate Revenue & Pending Orders
-  orders.forEach(o => {
+  ;(orders || []).forEach(o => {
       if (o.fulfillmentLocationId === locationId) {
           if (o.status === 'paid' || o.status === 'delivered') {
-            const orderTotal = o.subTotalOverride ?? o.items.reduce((s, i) => s + i.price * i.qty, 0)
+            const orderTotal = o.subTotalOverride ?? (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)
             revenue += orderTotal - (Number(o.discountAmount) || 0)
           }
           if (['confirmed', 'paid', 'packed'].includes(o.status)) {
@@ -54,7 +54,7 @@ function calculateLocationStats(
   })
 
   // Calculate Inventory Discrepancy (Absolute value of compensation from recent checks)
-  stockCounts.forEach(sc => {
+  ;(stockCounts || []).forEach(sc => {
       if (sc.locationId === locationId && sc.status === 'final') {
           discrepancyAmount += Math.abs(sc.compensationAmount || 0)
       }
@@ -62,7 +62,7 @@ function calculateLocationStats(
 
   const stockBySku = new Map<string, number>()
 
-  txs.forEach(t => {
+  ;(txs || []).forEach(t => {
     if (t.locationId !== locationId) return
     const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
     stockBySku.set(t.skuId, (stockBySku.get(t.skuId) ?? 0) + delta)
@@ -72,9 +72,9 @@ function calculateLocationStats(
   let negativeStockCount = 0
   let activeSkuCount = 0
 
-  const threshold = Number(settings.lowStockThresholdPercent) || 10
+  const threshold = Number(settings?.lowStockThresholdPercent) || 10
 
-  skus.forEach(s => {
+  ;(skus || []).forEach(s => {
     if (!s.active) return
     activeSkuCount++
     const qty = stockBySku.get(s.id) ?? 0
@@ -418,15 +418,19 @@ export function WarehouseControlTowerPage() {
                           {province}
                       </h4>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          {locs.map(l => (
-                              <WarehouseCard 
-                                key={l.id} 
-                                location={l} 
-                                stats={locationStatsMap.get(l.id)!} 
-                                rank={getRank(l.id)}
-                                onClick={() => setSelectedLocationId(l.id)}
-                              />
-                          ))}
+                          {locs.map(l => {
+                              const stats = locationStatsMap.get(l.id)
+                              if (!stats) return null
+                              return (
+                                <WarehouseCard 
+                                  key={l.id} 
+                                  location={l} 
+                                  stats={stats} 
+                                  rank={getRank(l.id)}
+                                  onClick={() => setSelectedLocationId(l.id)}
+                                />
+                              )
+                          })}
                       </div>
                   </div>
               ))}
@@ -503,7 +507,7 @@ export function WarehouseControlTowerPage() {
       </div>
 
       {/* Modal */}
-      {selectedLocation && selectedLocationId && (
+      {selectedLocation && selectedLocationId && locationStatsMap.get(selectedLocationId) && (
           <WarehouseDetailModal 
               location={selectedLocation} 
               stats={locationStatsMap.get(selectedLocationId)!}

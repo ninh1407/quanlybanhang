@@ -416,7 +416,7 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
                     <div className="field">
                         <label>Kho</label>
                         <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
-                            {state.locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                            {(state.locations || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                         </select>
                     </div>
                     {type === 'transfer' && (
@@ -424,7 +424,7 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
                             <label>Kho đích</label>
                             <select value={targetWarehouseId} onChange={e => setTargetWarehouseId(e.target.value)}>
                                 <option value="">Chọn kho đích...</option>
-                                {state.locations.filter(l => l.id !== warehouseId).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                {(state.locations || []).filter(l => l.id !== warehouseId).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                             </select>
                         </div>
                     )}
@@ -433,8 +433,8 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
                         <label>Thêm sản phẩm</label>
                         <div style={{ display: 'flex', gap: 8 }}>
                             <select value={skuId} onChange={e => setSkuId(e.target.value)} style={{ flex: 1 }}>
-                                {state.skus.map(s => {
-                                    const p = state.products.find(x => x.id === s.productId)
+                                {(state.skus || []).map(s => {
+                                    const p = (state.products || []).find(x => x.id === s.productId)
                                     return <option key={s.id} value={s.id}>{p?.name} ({s.skuCode})</option>
                                 })}
                             </select>
@@ -471,7 +471,7 @@ export function ApprovalCenterPage() {
   const [selectedRequest, setSelectedRequest] = useState<InventoryRequest | null>(null)
   const [isCreating, setIsCreating] = useState(false)
 
-  const pendingRequests = state.requests.filter(r => {
+  const pendingRequests = (state.requests || []).filter(r => {
       if (user?.role === 'admin') {
           return r.status === 'pending_manager' || r.status === 'pending_accountant'
       }
@@ -480,9 +480,9 @@ export function ApprovalCenterPage() {
       return false
   })
 
-  const myRequests = state.requests.filter(r => r.createdBy === user?.id)
+  const myRequests = (state.requests || []).filter(r => r.createdBy === user?.id)
   
-  const historyRequests = state.requests.filter(r => r.status === 'approved' || r.status === 'rejected' || r.status === 'cancelled')
+  const historyRequests = (state.requests || []).filter(r => r.status === 'approved' || r.status === 'rejected' || r.status === 'cancelled')
 
   const displayedRequests = tab === 'pending' ? pendingRequests : tab === 'my_requests' ? myRequests : historyRequests
 

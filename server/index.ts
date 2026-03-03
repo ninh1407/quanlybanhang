@@ -41,7 +41,9 @@ function loadState() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8')
-      state = JSON.parse(raw)
+      const loaded = JSON.parse(raw)
+      // Merge with seed state to ensure all fields (especially new arrays) are present
+      state = { ...createSeedState(), ...loaded }
       console.log('Loaded state from disk')
       
       // Auto-migrate passwords if needed (simple check)

@@ -215,9 +215,9 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const state = useAppState()
   const [viewMode, setViewMode] = useState<'overview' | 'profit' | 'operation'>('overview')
-  const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
+  const productsById = useMemo(() => new Map((state.products || []).map((p) => [p.id, p.name])), [state.products])
   const agedStock = useMemo(() => {
-    return calculateAgedStock(state.skus, state.stockTransactions, 15)
+    return calculateAgedStock(state.skus || [], state.stockTransactions || [], 15)
   }, [state.skus, state.stockTransactions])
 
   // 1. Calculate Metrics
@@ -229,51 +229,52 @@ export function DashboardPage() {
     const prevMonth = startOfMonth(subMonths(now, 1))
 
     // Revenue Today (Internal Only)
-    const todayOrders = state.orders.filter((o) => isSameDay(new Date(o.createdAt), today))
+    const orders = state.orders || []
+    const todayOrders = orders.filter((o) => isSameDay(new Date(o.createdAt), today))
     const revenueToday = todayOrders.reduce(
       (sum, o) =>
         o.type === 'dropship'
           ? sum
-          : sum + (o.subTotalOverride ?? o.items.reduce((s, i) => s + i.price * i.qty, 0)),
+          : sum + (o.subTotalOverride ?? (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)),
       0,
     )
 
-    const yesterdayOrders = state.orders.filter((o) => isSameDay(new Date(o.createdAt), yesterday))
+    const yesterdayOrders = orders.filter((o) => isSameDay(new Date(o.createdAt), yesterday))
     const revenueYesterday = yesterdayOrders.reduce(
       (sum, o) =>
         o.type === 'dropship'
           ? sum
-          : sum + (o.subTotalOverride ?? o.items.reduce((s, i) => s + i.price * i.qty, 0)),
+          : sum + (o.subTotalOverride ?? (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)),
       0,
     )
 
     // Revenue Month (Internal Only)
-    const monthOrders = state.orders.filter((o) => isSameMonth(new Date(o.createdAt), thisMonth))
+    const monthOrders = orders.filter((o) => isSameMonth(new Date(o.createdAt), thisMonth))
     const revenueMonth = monthOrders.reduce(
       (sum, o) =>
         o.type === 'dropship'
           ? sum
-          : sum + (o.subTotalOverride ?? o.items.reduce((s, i) => s + i.price * i.qty, 0)),
+          : sum + (o.subTotalOverride ?? (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)),
       0,
     )
 
-    const prevMonthOrders = state.orders.filter((o) => isSameMonth(new Date(o.createdAt), prevMonth))
+    const prevMonthOrders = orders.filter((o) => isSameMonth(new Date(o.createdAt), prevMonth))
     const revenuePrevMonth = prevMonthOrders.reduce(
       (sum, o) =>
         o.type === 'dropship'
           ? sum
-          : sum + (o.subTotalOverride ?? o.items.reduce((s, i) => s + i.price * i.qty, 0)),
+          : sum + (o.subTotalOverride ?? (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)),
       0,
     )
 
     // Profit Month
     // 1. Internal: Revenue - COGS
-    const skusMap = new Map(state.skus.map((s) => [s.id, s]))
+    const skusMap = new Map((state.skus || []).map((s) => [s.id, s]))
     const costMonthInternal = monthOrders.reduce((sum, o) => {
       if (o.type === 'dropship') return sum
       return (
         sum +
-        o.items.reduce((s, i) => {
+        (o.items || []).reduce((s, i) => {
           const sku = skusMap.get(i.skuId)
           return s + (sku?.cost || 0) * i.qty
         }, 0)
@@ -292,7 +293,7 @@ export function DashboardPage() {
       if (o.type === 'dropship') return sum
       return (
         sum +
-        o.items.reduce((s, i) => {
+        (o.items || []).reduce((s, i) => {
           const sku = skusMap.get(i.skuId)
           return s + (sku?.cost || 0) * i.qty
         }, 0)
@@ -311,7 +312,7 @@ export function DashboardPage() {
 
     // Inventory Value
     const stockMap = new Map<string, number>()
-    state.stockTransactions.forEach((t) => {
+    ;(state.stockTransactions || []).forEach((t) => {
       const current = stockMap.get(t.skuId) || 0
       const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
       stockMap.set(t.skuId, current + delta)
@@ -325,8 +326,8 @@ export function DashboardPage() {
     })
 
     // Return Rate
-    const totalOrders = state.orders.length
-    const returnedOrders = state.orders.filter(o => o.status === 'returned').length
+    const totalOrders = orders.length
+    const returnedOrders = orders.filter(o => o.status === 'returned').length
     const returnRate = totalOrders > 0 ? (returnedOrders / totalOrders) * 100 : 0
 
     const prevMonthTotalOrders = prevMonthOrders.length
@@ -334,7 +335,7 @@ export function DashboardPage() {
     const returnRatePrevMonth = prevMonthTotalOrders > 0 ? (prevMonthReturnedOrders / prevMonthTotalOrders) * 100 : 0
 
     // Receivables
-    const receivables = state.debts
+    const receivables = (state.debts || [])
         .filter(d => d.type === 'receivable' && d.status === 'open')
         .reduce((sum, d) => sum + d.amount, 0)
 
@@ -344,7 +345,7 @@ export function DashboardPage() {
     
     // Simplified: Late delivery = delivery time > 5 days (mock)
     // Real app would compare deliveredAt vs estimatedArrival
-    const lateOrders = monthOrders.filter(o => o.status === 'delivered' && o.items.length > 10).length // Mock logic
+    const lateOrders = monthOrders.filter(o => o.status === 'delivered' && (o.items || []).length > 10).length // Mock logic
     const lateRate = monthOrders.length > 0 ? (lateOrders / monthOrders.length) * 100 : 0
 
     const fulfillmentRate = monthOrders.length > 0 ? ((monthOrders.length - cancelledOrders) / monthOrders.length) * 100 : 100
@@ -373,7 +374,7 @@ export function DashboardPage() {
       const channelMap = new Map<string, number>()
       const thisMonth = startOfMonth(new Date())
       
-      state.orders.forEach(o => {
+      ;(state.orders || []).forEach(o => {
           if (!isSameMonth(new Date(o.createdAt), thisMonth)) return
           // Infer channel from source or channel config
           let channel = 'Khác'
@@ -382,7 +383,7 @@ export function DashboardPage() {
           else if (o.source === 'web') channel = 'Website'
           else if (o.source === 'pos') channel = 'POS (Cửa hàng)'
           
-          const val = o.items.reduce((s, i) => s + i.price * i.qty, 0)
+          const val = (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)
           channelMap.set(channel, (channelMap.get(channel) || 0) + val)
       })
       
@@ -392,14 +393,14 @@ export function DashboardPage() {
   const profitByWarehouse = useMemo(() => {
       const locMap = new Map<string, { revenue: number, cost: number }>()
       const thisMonth = startOfMonth(new Date())
-      const skusMap = new Map(state.skus.map((s) => [s.id, s]))
+      const skusMap = new Map((state.skus || []).map((s) => [s.id, s]))
 
-      state.orders.forEach(o => {
+      ;(state.orders || []).forEach(o => {
           if (!isSameMonth(new Date(o.createdAt), thisMonth)) return
           if (!o.fulfillmentLocationId) return
           
-          const revenue = o.items.reduce((s, i) => s + i.price * i.qty, 0)
-          const cost = o.items.reduce((s, i) => {
+          const revenue = (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)
+          const cost = (o.items || []).reduce((s, i) => {
               const sku = skusMap.get(i.skuId)
               return s + (sku?.cost || 0) * i.qty
           }, 0)
@@ -412,7 +413,7 @@ export function DashboardPage() {
       })
       
       return Array.from(locMap.entries()).map(([id, val]) => {
-          const loc = state.locations.find(l => l.id === id)
+          const loc = (state.locations || []).find(l => l.id === id)
           return {
               name: loc?.name || 'Unknown',
               profit: val.revenue - val.cost,
@@ -428,11 +429,11 @@ export function DashboardPage() {
           const monthStart = startOfMonth(d)
           const monthLabel = format(d, 'MM/yyyy')
           
-          const orders = state.orders.filter(o => isSameMonth(new Date(o.createdAt), monthStart))
+          const orders = (state.orders || []).filter(o => isSameMonth(new Date(o.createdAt), monthStart))
           const rev = orders.reduce((sum, o) => 
             o.type === 'dropship' 
               ? sum 
-              : sum + (o.subTotalOverride ?? o.items.reduce((s, item) => s + item.price * item.qty, 0)), 
+              : sum + (o.subTotalOverride ?? (o.items || []).reduce((s, item) => s + item.price * item.qty, 0)), 
             0
           )
           
@@ -445,8 +446,8 @@ export function DashboardPage() {
 
   const topSkus = useMemo(() => {
       const skuSales = new Map<string, number>()
-      state.orders.forEach(o => {
-          o.items.forEach(i => {
+      ;(state.orders || []).forEach(o => {
+          (o.items || []).forEach(i => {
               skuSales.set(i.skuId, (skuSales.get(i.skuId) || 0) + i.qty)
           })
       })
@@ -455,8 +456,8 @@ export function DashboardPage() {
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)
           .map(([skuId, qty]) => {
-              const sku = state.skus.find(s => s.id === skuId)
-              const product = state.products.find(p => p.id === sku?.productId)
+              const sku = (state.skus || []).find(s => s.id === skuId)
+              const product = (state.products || []).find(p => p.id === sku?.productId)
               return {
                   name: product ? product.name : skuId,
                   value: qty
@@ -478,8 +479,8 @@ export function DashboardPage() {
   // 3. Alerts
   const alerts = useMemo(() => {
       const lowStockCount = 0 // Calculate if needed, logic is in InventoryPage
-      const unreconciled = state.orders.filter(o => o.status === 'delivered' && o.isReconciledCarrier === 'unreconciled').length
-      const overdueDebt = state.debts.filter(d => d.status === 'open' && d.dueDate && new Date(d.dueDate) < new Date()).length
+      const unreconciled = (state.orders || []).filter(o => o.status === 'delivered' && o.isReconciledCarrier === 'unreconciled').length
+      const overdueDebt = (state.debts || []).filter(d => d.status === 'open' && d.dueDate && new Date(d.dueDate) < new Date()).length
       const negativeProfit = 0 // Placeholder
 
       return { lowStockCount, unreconciled, overdueDebt, negativeProfit }

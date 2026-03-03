@@ -24,10 +24,25 @@ const DispatchContext = createContext<((action: AppAction) => void) | null>(null
 // Actions that should NOT be sent to the server (local session only)
 const LOCAL_ACTIONS = new Set(['auth/login', 'auth/logout', 'session/switchLocation', 'sync'])
 
+function getBaseState(): Omit<AppState, 'currentUserId' | 'currentLocationId'> {
+  return {
+    ...createEmptyWarehouseState(),
+    users: [],
+    locations: [],
+    channelConfigs: [],
+    skuMappings: [],
+    warehouseRegionMappings: [],
+    allocationRules: [],
+    auditLogs: [],
+    sequences: {},
+  }
+}
+
 function localReducer(state: AppState, action: AppAction): AppState {
   if (action.type === 'sync') {
-    // Merge server state with local session
+    // Merge server state with local session AND base state to ensure no undefined arrays
     return {
+      ...getBaseState(),
       ...action.state,
       currentUserId: state.currentUserId,
       currentLocationId: state.currentLocationId,
@@ -45,17 +60,9 @@ function initState(): AppState {
   } catch {}
 
   return {
-    ...createEmptyWarehouseState(),
-    users: [],
-    locations: [],
-    channelConfigs: [],
-    skuMappings: [],
-    warehouseRegionMappings: [],
-    allocationRules: [],
+    ...getBaseState(),
     currentUserId: session.userId || null,
     currentLocationId: session.locationId || null,
-    auditLogs: [],
-    sequences: {},
   }
 }
 

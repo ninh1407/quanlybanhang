@@ -60,12 +60,12 @@ function averageCostFromSortedTxs(txs: StockTransaction[]): number {
 
 export function InventoryRiskAnalysisPage() {
   const state = useAppState()
-  const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
+  const productsById = useMemo(() => new Map((state.products || []).map((p) => [p.id, p.name])), [state.products])
 
   // 1. Calculate Stock & Average Cost per SKU
   const skuStats = useMemo(() => {
     const groupedTxs = new Map<string, StockTransaction[]>()
-    state.stockTransactions.forEach((t) => {
+    ;(state.stockTransactions || []).forEach((t) => {
       const arr = groupedTxs.get(t.skuId)
       if (arr) arr.push(t)
       else groupedTxs.set(t.skuId, [t])
@@ -74,7 +74,7 @@ export function InventoryRiskAnalysisPage() {
 
     const stats = new Map<string, { stock: number; avgCost: number; lastSaleDate: string | null }>()
     
-    state.skus.forEach((s) => {
+    ;(state.skus || []).forEach((s) => {
       const txs = groupedTxs.get(s.id) ?? []
       const avgCost = averageCostFromSortedTxs(txs)
       
@@ -111,7 +111,7 @@ export function InventoryRiskAnalysisPage() {
       '>90': { label: '> 90 ngày', count: 0, value: 0, skus: [] as any[] },
     }
 
-    state.skus.forEach((s) => {
+    ;(state.skus || []).forEach((s) => {
       const stat = skuStats.get(s.id)
       if (!stat || stat.stock <= 0) return
 
@@ -141,7 +141,7 @@ export function InventoryRiskAnalysisPage() {
   const shrinkageData = useMemo(() => {
     const skuLoss = new Map<string, { qty: number; value: number }>()
 
-    state.stockTransactions.forEach(t => {
+    ;(state.stockTransactions || []).forEach(t => {
         // Adjustments with negative qty are considered shrinkage/loss
         if (t.type === 'adjust' && t.qty < 0) {
             const stat = skuStats.get(t.skuId)
@@ -162,7 +162,7 @@ export function InventoryRiskAnalysisPage() {
         .slice(0, 10) // Top 10
 
     return sorted.map(item => {
-        const sku = state.skus.find(s => s.id === item.skuId)
+        const sku = (state.skus || []).find(s => s.id === item.skuId)
         return {
             name: sku ? skuLabel(productsById, sku) : item.skuId,
             value: item.value,
@@ -174,12 +174,12 @@ export function InventoryRiskAnalysisPage() {
   // 4. Overstock Analysis
   const overstockData = useMemo(() => {
       const result: any[] = []
-      state.skus.forEach(s => {
+      ;(state.skus || []).forEach(s => {
           const stat = skuStats.get(s.id)
           if (!stat || stat.stock <= 0) return
           
           // Get max minStock across all locations or use default
-          const minStock = Math.max(...state.skuSettings.filter(x => x.skuId === s.id).map(x => x.minStock), 0)
+          const minStock = Math.max(...(state.skuSettings || []).filter(x => x.skuId === s.id).map(x => x.minStock), 0)
           if (minStock > 0 && stat.stock > minStock * 2) {
               result.push({
                   sku: s,

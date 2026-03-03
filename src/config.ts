@@ -13,5 +13,5 @@ export function getSavedIp() {
 
 export function saveServerIp(ip: string) {
   // Disabled: Không cho phép lưu IP tùy chỉnh
-  console.warn('Changing server IP is disabled')
+  console.warn('Changing server IP is disabled', ip)
 }

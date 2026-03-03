@@ -325,7 +325,7 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
                     </button>
                 )}
                 {canCancel && (
-                    <button className="btn" onClick={() => { /* Implement cancel */ }}>Hủy yêu cầu</button>
+                    <button className="btn" onClick={handleCancel}>Hủy yêu cầu</button>
                 )}
                 <button className="btn" onClick={onClose}>Đóng</button>
             </div>

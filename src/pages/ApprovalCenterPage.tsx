@@ -87,6 +87,29 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
   const canReject = (canApproveManager || canApproveAccountant)
   const canCancel = request.status.startsWith('pending') && user?.id === request.createdBy
 
+  const handleCancel = async () => {
+      const confirm = await dialogs.confirm({ message: 'Bạn có chắc chắn muốn hủy yêu cầu này?' })
+      if (!confirm) return
+
+      const updatedRequest: InventoryRequest = {
+          ...request,
+          status: 'cancelled',
+          updatedAt: nowIso(),
+          logs: [
+              ...request.logs,
+              {
+                  id: newId('log'),
+                  action: 'cancel',
+                  actorId: user?.id || '',
+                  timestamp: nowIso(),
+                  note: 'Người dùng tự hủy'
+              }
+          ]
+      }
+      dispatch({ type: 'requests/upsert', request: updatedRequest })
+      onClose()
+  }
+
   const handleApprove = async () => {
       const confirm = await dialogs.confirm({ message: 'Bạn có chắc chắn muốn duyệt yêu cầu này?' })
       if (!confirm) return

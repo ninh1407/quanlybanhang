@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { loadSettings } from '../settings/settings'
 
 type Theme = 'light' | 'dark'
 
@@ -18,6 +19,32 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       return 'light'
     }
   })
+
+  // Apply Primary Color
+  useEffect(() => {
+    const applySettings = () => {
+        const s = loadSettings()
+        if (s.primaryColor) {
+            document.documentElement.style.setProperty('--primary-600', s.primaryColor)
+            // You might want to generate shades if needed, but for now just main color
+            // Or assume the user provides a valid CSS color
+        }
+    }
+    applySettings()
+
+    const onStorage = (e: StorageEvent) => {
+        if (e.key === 'app_settings_v1') applySettings()
+    }
+    window.addEventListener('storage', onStorage)
+    // Also listen to custom event if settings change in same tab
+    const onLocalSettingsChange = () => applySettings()
+    window.addEventListener('settings_changed', onLocalSettingsChange)
+
+    return () => {
+        window.removeEventListener('storage', onStorage)
+        window.removeEventListener('settings_changed', onLocalSettingsChange)
+    }
+  }, [])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)

@@ -12,6 +12,7 @@ import type {
   Sku,
   StockTransaction,
   StockVoucher,
+  StockLedgerEntry,
   Supplier,
   User,
 } from '../domain/types'
@@ -47,10 +48,16 @@ export function toWarehouseState(state: AppState): WarehouseState {
     stockTransactions: state.stockTransactions,
     stockVouchers: state.stockVouchers,
     stockCounts: state.stockCounts,
+    stockLedger: state.stockLedger,
     financeTransactions: state.financeTransactions,
     debts: state.debts,
+    requests: state.requests,
+    transferOrders: state.transferOrders,
+    notifications: state.notifications,
+    skuSettings: state.skuSettings,
     auditLogs: state.auditLogs,
     sequences: state.sequences,
+    allocationRules: state.allocationRules,
   }
 }
 
@@ -112,10 +119,86 @@ export function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         orders: removeById(state.orders, action.id),
         stockTransactions: state.stockTransactions.filter((t) => !(t.refType === 'order' && t.refId === action.id)),
+        stockLedger: state.stockLedger.filter((l) => !(l.note.includes(action.id))), // Simplistic cleanup
         financeTransactions: state.financeTransactions.filter((t) => !(t.refType === 'order' && t.refId === action.id)),
       }
     case 'stock/add':
-      return { ...state, stockTransactions: [action.tx, ...state.stockTransactions] }
+      {
+        const tx = action.tx
+        // 1. Add Transaction
+        const nextTxs = [tx, ...state.stockTransactions]
+        
+        // 2. Double-Entry Ledger Logic
+        // Determine value
+        const sku = state.skus.find(s => s.id === tx.skuId)
+        const cost = tx.unitCost ?? sku?.cost ?? 0
+        const value = tx.qty * cost
+        const date = nowIso()
+        
+        const entries: StockLedgerEntry[] = []
+        if (value > 0) {
+            // IN: Debit Inventory, Credit AP/Adjustment
+            if (tx.type === 'in') {
+                entries.push({
+                    id: newId('led'),
+                    transactionId: tx.id,
+                    date,
+                    locationId: tx.locationId || 'unknown',
+                    skuId: tx.skuId,
+                    account: 'inventory_asset',
+                    debit: value,
+                    credit: 0,
+                    balance: 0, // Calculated later/async or ignored for simple ledger
+                    note: `Nhập kho: ${tx.code || tx.id}`
+                })
+                entries.push({
+                    id: newId('led'),
+                    transactionId: tx.id,
+                    date,
+                    locationId: tx.locationId || 'unknown',
+                    skuId: tx.skuId,
+                    account: 'ap_clearing', // Or 'adjustment_income'
+                    debit: 0,
+                    credit: value,
+                    balance: 0,
+                    note: `Đối ứng nhập kho: ${tx.code || tx.id}`
+                })
+            }
+            // OUT: Debit COGS/Adjustment, Credit Inventory
+            else if (tx.type === 'out') {
+                entries.push({
+                    id: newId('led'),
+                    transactionId: tx.id,
+                    date,
+                    locationId: tx.locationId || 'unknown',
+                    skuId: tx.skuId,
+                    account: 'cogs', // Or 'adjustment_expense'
+                    debit: value,
+                    credit: 0,
+                    balance: 0,
+                    note: `Xuất kho: ${tx.code || tx.id}`
+                })
+                entries.push({
+                    id: newId('led'),
+                    transactionId: tx.id,
+                    date,
+                    locationId: tx.locationId || 'unknown',
+                    skuId: tx.skuId,
+                    account: 'inventory_asset',
+                    debit: 0,
+                    credit: value,
+                    balance: 0,
+                    note: `Đối ứng xuất kho: ${tx.code || tx.id}`
+                })
+            }
+        }
+
+        return { 
+            ...state, 
+            stockTransactions: nextTxs,
+            stockLedger: [...entries, ...state.stockLedger]
+        }
+      }
     case 'stockVouchers/upsert':
       return { ...state, stockVouchers: upsertById(state.stockVouchers, action.voucher) }
     case 'stockVouchers/delete':
@@ -264,6 +347,63 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, users: upsertById(state.users, action.user) }
     case 'users/delete':
       return { ...state, users: removeById(state.users, action.id) }
+    case 'requests/upsert':
+      {
+        const exists = state.requests.some((r) => r.id === action.request.id)
+        if (exists) return { ...state, requests: upsertById(state.requests, action.request) }
+
+        let request = action.request
+        let sequences = state.sequences
+        if (!request.code || !request.code.trim()) {
+          const ym = yearMonthFromIso(request.createdAt)
+          const seqKey = `request:${ym}`
+          const next = (sequences[seqKey] ?? 0) + 1
+          sequences = { ...sequences, [seqKey]: next }
+          request = { ...request, code: `YC-${ym}-${String(next).padStart(4, '0')}` }
+        }
+        return { ...state, requests: [request, ...state.requests], sequences }
+      }
+    case 'notifications/add':
+      return { ...state, notifications: [action.notification, ...state.notifications].slice(0, 100) }
+    case 'notifications/markRead':
+      return {
+        ...state,
+        notifications: state.notifications.map((n) => (n.id === action.id ? { ...n, read: true } : n)),
+      }
+    case 'notifications/markAllRead':
+      return {
+        ...state,
+        notifications: state.notifications.map((n) => ({ ...n, read: true })),
+      }
+    case 'skuSettings/upsert':
+      {
+        const exists = state.skuSettings.findIndex(
+            s => s.skuId === action.setting.skuId && s.locationId === action.setting.locationId
+        )
+        let nextSettings = [...state.skuSettings]
+        if (exists > -1) {
+            nextSettings[exists] = action.setting
+        } else {
+            nextSettings.push(action.setting)
+        }
+        return { ...state, skuSettings: nextSettings }
+      }
+    case 'channelConfigs/upsert':
+      return { ...state, channelConfigs: upsertById(state.channelConfigs, action.config) }
+    case 'channelConfigs/delete':
+      return { ...state, channelConfigs: removeById(state.channelConfigs, action.id) }
+    case 'skuMappings/upsert':
+      return { ...state, skuMappings: upsertById(state.skuMappings, action.mapping) }
+    case 'skuMappings/delete':
+      return { ...state, skuMappings: removeById(state.skuMappings, action.id) }
+    case 'warehouseRegionMappings/upsert':
+      return { ...state, warehouseRegionMappings: upsertById(state.warehouseRegionMappings, action.mapping) }
+    case 'warehouseRegionMappings/delete':
+      return { ...state, warehouseRegionMappings: removeById(state.warehouseRegionMappings, action.id) }
+    case 'allocationRules/upsert':
+      return { ...state, allocationRules: upsertById(state.allocationRules, action.rule) }
+    case 'allocationRules/delete':
+      return { ...state, allocationRules: removeById(state.allocationRules, action.id) }
   }
   return state
 }
@@ -400,6 +540,7 @@ export function toAuditSnapshot(entityType: AuditLog['entityType'], entity: unkn
         note: t.note,
         refType: t.refType,
         refId: t.refId,
+        entryDate: t.entryDate,
         createdAt: t.createdAt,
       }
     }
@@ -437,6 +578,7 @@ export function toAuditSnapshot(entityType: AuditLog['entityType'], entity: unkn
         amount: t.amount,
         category: t.category,
         note: t.note,
+        locationId: t.locationId,
         refType: t.refType,
         refId: t.refId,
         createdAt: t.createdAt,
@@ -489,8 +631,8 @@ export function toAuditSnapshot(entityType: AuditLog['entityType'], entity: unkn
       return { name: c.name, createdAt: c.createdAt }
     }
     case 'location': {
-      const l = entity as unknown as { code?: string; name?: string; active?: boolean; createdAt?: string }
-      return { code: l.code, name: l.name, active: l.active, createdAt: l.createdAt }
+      const l = entity as unknown as { code?: string; name?: string; province?: string; active?: boolean; createdAt?: string }
+      return { code: l.code, name: l.name, province: l.province, active: l.active, createdAt: l.createdAt }
     }
     case 'user': {
       const u = entity as User

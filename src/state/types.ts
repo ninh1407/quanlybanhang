@@ -13,6 +13,15 @@ import type {
   Supplier,
   StockTransaction,
   User,
+  InventoryRequest,
+  Notification,
+  StockLedgerEntry,
+  TransferOrder,
+  SkuSettings,
+  ChannelConfig,
+  SkuMapping,
+  WarehouseRegionMapping,
+  AllocationRule,
 } from '../domain/types'
 
 export type AppState = {
@@ -26,16 +35,25 @@ export type AppState = {
   stockTransactions: StockTransaction[]
   stockVouchers: StockVoucher[]
   stockCounts: StockCount[]
+  stockLedger: StockLedgerEntry[]
   financeTransactions: FinanceTransaction[]
   debts: Debt[]
   users: User[]
+  requests: InventoryRequest[]
+  transferOrders: TransferOrder[]
+  notifications: Notification[]
+  skuSettings: SkuSettings[]
+  channelConfigs: ChannelConfig[]
+  skuMappings: SkuMapping[]
+  warehouseRegionMappings: WarehouseRegionMapping[]
+  allocationRules: AllocationRule[]
   currentUserId: string | null
   currentLocationId: string | null
   auditLogs: AuditLog[]
   sequences: Record<string, number>
 }
 
-export type WarehouseState = Omit<AppState, 'users' | 'locations' | 'currentUserId' | 'currentLocationId'>
+export type WarehouseState = Omit<AppState, 'users' | 'locations' | 'currentUserId' | 'currentLocationId' | 'channelConfigs' | 'skuMappings' | 'warehouseRegionMappings'>
 
 export type AppAction =
   | { type: 'auth/login'; userId: string }
@@ -67,6 +85,21 @@ export type AppAction =
   | { type: 'debts/delete'; id: string }
   | { type: 'users/upsert'; user: User }
   | { type: 'users/delete'; id: string }
+  | { type: 'requests/upsert'; request: InventoryRequest }
+  | { type: 'transferOrders/upsert'; order: TransferOrder }
+  | { type: 'transferOrders/delete'; id: string }
+  | { type: 'notifications/add'; notification: Notification }
+  | { type: 'notifications/markRead'; id: string }
+  | { type: 'notifications/markAllRead' }
+  | { type: 'skuSettings/upsert'; setting: SkuSettings }
+  | { type: 'channelConfigs/upsert'; config: ChannelConfig }
+  | { type: 'channelConfigs/delete'; id: string }
+  | { type: 'skuMappings/upsert'; mapping: SkuMapping }
+  | { type: 'skuMappings/delete'; id: string }
+  | { type: 'warehouseRegionMappings/upsert'; mapping: WarehouseRegionMapping }
+  | { type: 'warehouseRegionMappings/delete'; id: string }
+  | { type: 'allocationRules/upsert'; rule: AllocationRule }
+  | { type: 'allocationRules/delete'; id: string }
   | { type: 'sync'; state: AppState }
 
 export type AppActionWithMeta = AppAction & {

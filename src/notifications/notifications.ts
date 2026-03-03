@@ -3,7 +3,7 @@ import type { StockTransaction } from '../domain/types'
 import { loadSettings } from '../settings/settings'
 import { prevMonthRange, soldQtyBySku } from '../domain/analytics'
 
-export type NotificationType = 'low_stock' | 'overdue_debt' | 'stock_count_draft' | 'carrier_unreconciled'
+export type NotificationType = 'low_stock' | 'overdue_debt' | 'stock_count_draft' | 'carrier_unreconciled' | 'info' | 'success' | 'warning' | 'error'
 
 export type NotificationItem = {
   id: string

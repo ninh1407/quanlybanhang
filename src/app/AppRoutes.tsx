@@ -26,8 +26,18 @@ import { StockCountsPage } from '../pages/StockCountsPage'
 import { StockVouchersPage } from '../pages/StockVouchersPage'
 import { StockVoucherPrintPage } from '../pages/StockVoucherPrintPage'
 import { AuditLogPage } from '../pages/AuditLogPage'
+import { ApprovalCenterPage } from '../pages/ApprovalCenterPage'
+import { TransferOrderPage } from '../pages/TransferOrderPage'
+import { ReplenishmentPage } from '../pages/ReplenishmentPage'
+import { WarehouseControlTowerPage } from '../pages/WarehouseControlTowerPage'
+import { OrderMonitoringPage } from '../pages/OrderMonitoringPage'
+import { InventoryRiskAnalysisPage } from '../pages/InventoryRiskAnalysisPage'
+import { InventoryBalancingPage } from '../pages/InventoryBalancingPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { NotificationsPage } from '../pages/NotificationsPage'
+import { WarehousePerformancePage } from '../pages/WarehousePerformancePage'
+import { ChannelIntegrationPage } from '../pages/ChannelIntegrationPage'
+import { PickingPackingPage } from '../pages/PickingPackingPage'
 
 export function AppRoutes() {
   return (
@@ -103,6 +113,78 @@ export function AppRoutes() {
               element={
                 <RequirePermissionRoute permission="inventory:read">
                   <InventoryPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/warehouse-control-tower"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <WarehouseControlTowerPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/order-monitoring"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <OrderMonitoringPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/transfers"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <TransferOrderPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/replenishment"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <ReplenishmentPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/inventory-balancing"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <InventoryBalancingPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/inventory-risk"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <InventoryRiskAnalysisPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/warehouse-performance"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <WarehousePerformancePage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/channel-integration"
+              element={
+                <RequirePermissionRoute permission="orders:write">
+                  <ChannelIntegrationPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/pick-pack"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <PickingPackingPage />
                 </RequirePermissionRoute>
               }
             />
@@ -189,6 +271,14 @@ export function AppRoutes() {
               element={
                 <RequirePermissionRoute permission="staff:read">
                   <StaffPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/approval-center"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <ApprovalCenterPage />
                 </RequirePermissionRoute>
               }
             />

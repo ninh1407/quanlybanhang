@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs'
 import { reducer, validateAction } from '../src/state/core'
 import { createSeedState } from '../src/state/seed'
 import type { AppState, AppActionWithMeta } from '../src/state/types'
+import { JobScheduler } from './scheduler'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -82,6 +83,18 @@ function saveStateImmediate() {
 }
 
 loadState()
+
+// Initialize Background Job Engine
+const jobEngine = new JobScheduler(state)
+jobEngine.start()
+jobEngine.register({
+  id: 'auto-replenish',
+  name: 'Calculate Replenishment Needs',
+  cron: '0 8 * * *', // Every morning at 8am
+  handler: async (s) => {
+    console.log('Running replenishment calculation...')
+  }
+})
 
 // --- API Routes ---
 

@@ -219,6 +219,7 @@ function OrderRow({ order, customer, locationLabel, canWrite, isAdmin, onSelect,
         </tr>
     )
 }
+import { findBestLocationForOrder, getStockKey } from '../domain/fulfillment'
 
 export function OrdersPage() {
   const state = useAppState()
@@ -252,6 +253,18 @@ export function OrdersPage() {
   const [paymentBillFiles, setPaymentBillFiles] = useState<FileList | null>(null)
   const [shippingProofFiles, setShippingProofFiles] = useState<FileList | null>(null)
   const [codImport, setCodImport] = useState('')
+
+  // Pre-calculate stock map for fulfillment
+  const stockMap = useMemo(() => {
+      const m = new Map<string, number>()
+      state.stockTransactions.forEach(t => {
+          const loc = t.locationId || 'unknown'
+          const key = getStockKey(t.skuId, loc)
+          const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
+          m.set(key, (m.get(key) ?? 0) + delta)
+      })
+      return m
+  }, [state.stockTransactions])
 
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const selectedOrder = useMemo(
@@ -494,6 +507,48 @@ export function OrdersPage() {
     setItems(items.filter((_, i) => i !== idx))
   }
 
+  function suggestWarehouse() {
+      const needed = items.filter(i => i.skuId).map(i => ({ skuId: i.skuId, qty: Number(i.qty) || 1 }))
+      if (!needed.length) return
+      
+      const customer = customersById.get(customerId)
+      const address = customer?.address || ''
+
+      const bestLocId = findBestLocationForOrder(
+          needed, 
+          locations, 
+          stockMap, 
+          address,
+          state.warehouseRegionMappings,
+          state.allocationRules
+      )
+      
+      if (bestLocId) {
+          setFulfillmentLocationId(bestLocId)
+          void dialogs.alert({ message: `Đã chọn kho phù hợp: ${locationsById.get(bestLocId)?.name}` })
+      } else {
+          // Check for Split Order suggestion
+          // Simple check: do we have enough stock across ALL locations?
+          const totalAvailable = new Map<string, number>()
+          locations.forEach(loc => {
+              if (!loc.active) return
+              needed.forEach(item => {
+                  const key = getStockKey(item.skuId, loc.id)
+                  const stock = stockMap.get(key) ?? 0
+                  totalAvailable.set(item.skuId, (totalAvailable.get(item.skuId) ?? 0) + stock)
+              })
+          })
+          
+          const possible = needed.every(item => (totalAvailable.get(item.skuId) ?? 0) >= item.qty)
+          
+          if (possible) {
+              void dialogs.alert({ message: 'Hệ thống gợi ý: Không có 1 kho nào đủ hàng, nhưng tổng tồn toàn hệ thống ĐỦ. Vui lòng TÁCH ĐƠN (Split Order) để xử lý.' })
+          } else {
+               void dialogs.alert({ message: 'Không tìm thấy kho nào đủ hàng cho đơn này (Tổng tồn cũng không đủ).' })
+          }
+      }
+  }
+
   function resetForm() {
     setType('internal')
     setSource('pos')
@@ -531,6 +586,7 @@ export function OrdersPage() {
         category: 'Bán hàng',
         note: `Thu từ đơn ${order.code}`,
         createdAt,
+        locationId: order.fulfillmentLocationId || undefined,
         refType: 'order',
         refId: order.id,
         attachments: [],
@@ -551,6 +607,7 @@ export function OrdersPage() {
         category: 'Hoàn/Refund',
         note: `Hoàn tiền đơn ${order.code}`,
         createdAt,
+        locationId: order.fulfillmentLocationId || undefined,
         refType: 'order',
         refId: order.id,
         attachments: [],
@@ -993,7 +1050,17 @@ export function OrdersPage() {
 
             {type === 'internal' ? (
               <div className="field">
-                <label>Kho xử lý</label>
+                <label>
+                    Kho xử lý 
+                    <button 
+                        type="button" 
+                        className="btn-link" 
+                        style={{ marginLeft: 8, fontSize: 12 }} 
+                        onClick={suggestWarehouse}
+                    >
+                        (Gợi ý kho)
+                    </button>
+                </label>
                 <select value={fulfillmentLocationId} onChange={(e) => setFulfillmentLocationId(e.target.value)}>
                   <option value="">(Mặc định)</option>
                   {locations.map((l) => (

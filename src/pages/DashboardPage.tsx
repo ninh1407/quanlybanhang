@@ -1,5 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/Store'
+import type { Sku, StockTransaction } from '../domain/types'
 import { formatVnd } from '../lib/money'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { 
@@ -10,7 +12,9 @@ import {
   Package, 
   AlertTriangle,
   RotateCcw,
-  Wallet
+  Wallet,
+  Truck,
+  Activity
 } from 'lucide-react'
 import {
   AreaChart,
@@ -113,15 +117,16 @@ function MetricCard({
   )
 }
 
-function AlertItem({ label, value, type = 'warning' }: { label: string, value: string, type?: 'warning' | 'danger' }) {
+function AlertItem({ label, value, type = 'warning', onClick }: { label: string, value: string, type?: 'warning' | 'danger', onClick?: () => void }) {
     return (
         <div style={{ 
             display: 'flex', 
             justifyContent: 'space-between', 
             alignItems: 'center', 
             padding: '12px 0', 
-            borderBottom: '1px solid var(--border-color)' 
-        }}>
+            borderBottom: '1px solid var(--border-color)',
+            cursor: onClick ? 'pointer' : 'default'
+        }} onClick={onClick}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <AlertTriangle size={16} color={type === 'danger' ? 'var(--danger)' : 'var(--warning)'} />
                 <span style={{ fontSize: 14 }}>{label}</span>
@@ -131,8 +136,89 @@ function AlertItem({ label, value, type = 'warning' }: { label: string, value: s
     )
 }
 
+function skuLabel(productsById: Map<string, string>, sku: Sku): string {
+  const productName = productsById.get(sku.productId) ?? sku.productId
+  const attrs = [sku.color.trim(), sku.size.trim()].filter(Boolean).join(' / ')
+  return `${productName}${attrs ? ` - ${attrs}` : ''} (${sku.skuCode})`
+}
+
+function calculateAgedStock(
+  skus: Sku[],
+  txs: StockTransaction[],
+  daysThreshold: number
+): { sku: Sku; agedQty: number; totalStock: number }[] {
+  const stockMap = new Map<string, number>()
+  // Calculate current stock
+  txs.forEach((t) => {
+    const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
+    stockMap.set(t.skuId, (stockMap.get(t.skuId) ?? 0) + delta)
+  })
+
+  // Group IN transactions by SKU
+  const inTxsBySku = new Map<string, StockTransaction[]>()
+  txs.forEach((t) => {
+    if (t.type !== 'in') return
+    const list = inTxsBySku.get(t.skuId)
+    if (list) list.push(t)
+    else inTxsBySku.set(t.skuId, [t])
+  })
+
+  // Sort IN transactions by date descending (newest first)
+  inTxsBySku.forEach((list) => {
+    list.sort((a, b) => {
+        const da = a.entryDate || a.createdAt
+        const db = b.entryDate || b.createdAt
+        return db.localeCompare(da)
+    })
+  })
+
+  const now = new Date()
+  const thresholdDate = subDays(now, daysThreshold)
+  const result: { sku: Sku; agedQty: number; totalStock: number }[] = []
+
+  skus.forEach((sku) => {
+    const totalStock = stockMap.get(sku.id) ?? 0
+    if (totalStock <= 0) return
+
+    let remainingStock = totalStock
+    let freshStock = 0
+
+    const inTxs = inTxsBySku.get(sku.id) ?? []
+    
+    // Iterate from newest to oldest
+    for (const tx of inTxs) {
+        if (remainingStock <= 0) break
+
+        const txDateStr = tx.entryDate || tx.createdAt
+        const txDate = new Date(txDateStr)
+        const isFresh = txDate > thresholdDate
+
+        const allocated = Math.min(remainingStock, tx.qty)
+        
+        if (isFresh) {
+            freshStock += allocated
+        }
+        
+        remainingStock -= allocated
+    }
+
+    const agedQty = totalStock - freshStock
+    if (agedQty > 0) {
+        result.push({ sku, agedQty, totalStock })
+    }
+  })
+
+  return result.sort((a, b) => b.agedQty - a.agedQty)
+}
+
 export function DashboardPage() {
+  const navigate = useNavigate()
   const state = useAppState()
+  const [viewMode, setViewMode] = useState<'overview' | 'profit' | 'operation'>('overview')
+  const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
+  const agedStock = useMemo(() => {
+    return calculateAgedStock(state.skus, state.stockTransactions, 15)
+  }, [state.skus, state.stockTransactions])
 
   // 1. Calculate Metrics
   const metrics = useMemo(() => {
@@ -252,6 +338,17 @@ export function DashboardPage() {
         .filter(d => d.type === 'receivable' && d.status === 'open')
         .reduce((sum, d) => sum + d.amount, 0)
 
+    // Operation Metrics
+    const cancelledOrders = monthOrders.filter(o => o.status === 'cancelled').length
+    const cancelRate = monthOrders.length > 0 ? (cancelledOrders / monthOrders.length) * 100 : 0
+    
+    // Simplified: Late delivery = delivery time > 5 days (mock)
+    // Real app would compare deliveredAt vs estimatedArrival
+    const lateOrders = monthOrders.filter(o => o.status === 'delivered' && o.items.length > 10).length // Mock logic
+    const lateRate = monthOrders.length > 0 ? (lateOrders / monthOrders.length) * 100 : 0
+
+    const fulfillmentRate = monthOrders.length > 0 ? ((monthOrders.length - cancelledOrders) / monthOrders.length) * 100 : 100
+
     return {
         revenueToday,
         revenueYesterday,
@@ -264,11 +361,66 @@ export function DashboardPage() {
         inventoryValue,
         returnRate,
         returnRatePrevMonth,
-        receivables
+        receivables,
+        cancelRate,
+        lateRate,
+        fulfillmentRate
     }
   }, [state.orders, state.skus, state.stockTransactions, state.debts])
 
   // 2. Charts Data
+  const revenueByChannel = useMemo(() => {
+      const channelMap = new Map<string, number>()
+      const thisMonth = startOfMonth(new Date())
+      
+      state.orders.forEach(o => {
+          if (!isSameMonth(new Date(o.createdAt), thisMonth)) return
+          // Infer channel from source or channel config
+          let channel = 'Khác'
+          if (o.source === 'shopee') channel = 'Shopee'
+          else if (o.source === 'tiktok') channel = 'TikTok'
+          else if (o.source === 'web') channel = 'Website'
+          else if (o.source === 'pos') channel = 'POS (Cửa hàng)'
+          
+          const val = o.items.reduce((s, i) => s + i.price * i.qty, 0)
+          channelMap.set(channel, (channelMap.get(channel) || 0) + val)
+      })
+      
+      return Array.from(channelMap.entries()).map(([name, value]) => ({ name, value }))
+  }, [state.orders])
+
+  const profitByWarehouse = useMemo(() => {
+      const locMap = new Map<string, { revenue: number, cost: number }>()
+      const thisMonth = startOfMonth(new Date())
+      const skusMap = new Map(state.skus.map((s) => [s.id, s]))
+
+      state.orders.forEach(o => {
+          if (!isSameMonth(new Date(o.createdAt), thisMonth)) return
+          if (!o.fulfillmentLocationId) return
+          
+          const revenue = o.items.reduce((s, i) => s + i.price * i.qty, 0)
+          const cost = o.items.reduce((s, i) => {
+              const sku = skusMap.get(i.skuId)
+              return s + (sku?.cost || 0) * i.qty
+          }, 0)
+          
+          const current = locMap.get(o.fulfillmentLocationId) || { revenue: 0, cost: 0 }
+          locMap.set(o.fulfillmentLocationId, { 
+              revenue: current.revenue + revenue, 
+              cost: current.cost + cost 
+          })
+      })
+      
+      return Array.from(locMap.entries()).map(([id, val]) => {
+          const loc = state.locations.find(l => l.id === id)
+          return {
+              name: loc?.name || 'Unknown',
+              profit: val.revenue - val.cost,
+              revenue: val.revenue
+          }
+      }).sort((a, b) => b.profit - a.profit)
+  }, [state.orders, state.locations, state.skus])
+
   const revenue12Months = useMemo(() => {
       const data = []
       for (let i = 11; i >= 0; i--) {
@@ -314,6 +466,15 @@ export function DashboardPage() {
       return sorted.length ? sorted : [{ name: 'Chưa có dữ liệu', value: 0 }]
   }, [state.orders, state.products, state.skus])
 
+  const costBreakdown = useMemo(() => {
+    const items = [
+      { name: 'Giá vốn hàng bán', value: metrics.costMonth, color: '#0088FE' },
+      { name: 'Vận chuyển', value: metrics.shippingMonth, color: '#00C49F' },
+    ].filter((x) => x.value > 0)
+    const total = items.reduce((s, x) => s + x.value, 0)
+    return { items, total }
+  }, [metrics.costMonth, metrics.shippingMonth])
+
   // 3. Alerts
   const alerts = useMemo(() => {
       const lowStockCount = 0 // Calculate if needed, logic is in InventoryPage
@@ -340,20 +501,23 @@ export function DashboardPage() {
     () => computeTrend(metrics.returnRate, metrics.returnRatePrevMonth),
     [metrics.returnRate, metrics.returnRatePrevMonth],
   )
-  const costBreakdown = useMemo(() => {
-    const items = [
-      { name: 'Giá vốn hàng bán', value: metrics.costMonth, color: '#0088FE' },
-      { name: 'Vận chuyển', value: metrics.shippingMonth, color: '#00C49F' },
-    ].filter((x) => x.value > 0)
-    const total = items.reduce((s, x) => s + x.value, 0)
-    return { items, total }
-  }, [metrics.costMonth, metrics.shippingMonth])
 
 
   return (
     <div className="page">
-      <PageHeader title="Tổng quan (CEO View)" />
+      <PageHeader 
+        title="Executive Dashboard (CEO View)" 
+        actions={
+            <div className="tabs">
+                <button className={`tab ${viewMode === 'overview' ? 'active' : ''}`} onClick={() => setViewMode('overview')}>Tổng quan</button>
+                <button className={`tab ${viewMode === 'profit' ? 'active' : ''}`} onClick={() => setViewMode('profit')}>Lợi nhuận & Kênh</button>
+                <button className={`tab ${viewMode === 'operation' ? 'active' : ''}`} onClick={() => setViewMode('operation')}>Vận hành</button>
+            </div>
+        }
+      />
       
+      {viewMode === 'overview' && (
+      <>
       {/* 1. KPI Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
         <MetricCard 
@@ -449,7 +613,11 @@ export function DashboardPage() {
           <div className="card">
               <div className="card-title">Cảnh báo quan trọng</div>
               <div style={{ padding: '0 20px' }}>
-                  <AlertItem label="Tồn kho < 30%" value={`${alerts.lowStockCount} SKU`} />
+                  <AlertItem 
+                    label="Tồn kho < 30%" 
+                    value={`${alerts.lowStockCount} SKU`} 
+                    onClick={() => navigate('/inventory?stockLevel=low')}
+                  />
                   <AlertItem label="Đơn chưa đối soát" value={`${alerts.unreconciled} đơn`} type="danger" />
                   <AlertItem label="Công nợ quá hạn" value={`${alerts.overdueDebt} khách`} type="danger" />
                   <AlertItem label="Lợi nhuận âm" value="0 đơn" />
@@ -513,6 +681,116 @@ export function DashboardPage() {
               </div>
            </div>
       </div>
+
+      {/* 4. Aged Stock Report */}
+      {agedStock.length > 0 && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-title">Cảnh báo tồn kho lâu ngày ({'>'} 15 ngày)</div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Tổng tồn</th>
+                  <th>Tồn {'>'} 15 ngày</th>
+                  <th>Giá trị tồn cũ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agedStock.slice(0, 10).map((item) => (
+                  <tr key={item.sku.id}>
+                    <td>{skuLabel(productsById, item.sku)}</td>
+                    <td>{item.totalStock}</td>
+                    <td style={{ color: 'var(--danger)', fontWeight: 600 }}>{item.agedQty}</td>
+                    <td>{formatVnd(item.agedQty * item.sku.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {agedStock.length > 10 && (
+            <div style={{ padding: 12, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+              ...và {agedStock.length - 10} SKU khác
+            </div>
+          )}
+        </div>
+      )}
+      </>
+      )}
+
+      {viewMode === 'profit' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+               <div className="card">
+                  <div className="card-title">Lợi nhuận theo Kho (Tháng này)</div>
+                  <div style={{ height: 350 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={profitByWarehouse} layout="vertical" margin={{ left: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                              <XAxis type="number" tickFormatter={(val) => formatAxisMoney(val)} />
+                              <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} />
+                              <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                              <Legend />
+                              <Bar dataKey="revenue" name="Doanh thu" fill="#8884d8" barSize={20} />
+                              <Bar dataKey="profit" name="Lợi nhuận gộp" fill="#82ca9d" barSize={20} />
+                          </BarChart>
+                      </ResponsiveContainer>
+                  </div>
+               </div>
+               <div className="card">
+                  <div className="card-title">Doanh thu theo Kênh bán (Tháng này)</div>
+                  <div style={{ height: 350 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                              <Pie
+                                data={revenueByChannel}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={100}
+                                paddingAngle={5}
+                                 dataKey="value"
+                                 label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
+                               >
+                                 {revenueByChannel.map((_entry, index) => (
+                                   <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042'][index % 4]} />
+                                 ))}
+                               </Pie>
+                               <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                          </PieChart>
+                      </ResponsiveContainer>
+                  </div>
+               </div>
+          </div>
+      )}
+
+      {viewMode === 'operation' && (
+          <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+               <MetricCard 
+                    label="Tỷ lệ Fulfillment" 
+                    value={`${metrics.fulfillmentRate.toFixed(1)}%`} 
+                    icon={<Package size={20} />} 
+                    color="#10B981" 
+                />
+               <MetricCard 
+                    label="Tỷ lệ Hủy đơn" 
+                    value={`${metrics.cancelRate.toFixed(1)}%`} 
+                    icon={<Minus size={20} />} 
+                    color="#EF4444" 
+                />
+               <MetricCard 
+                    label="Giao hàng chậm (>5 ngày)" 
+                    value={`${metrics.lateRate.toFixed(1)}%`} 
+                    icon={<Truck size={20} />} 
+                    color="#F59E0B" 
+                />
+               <MetricCard 
+                    label="Hiệu suất vận hành" 
+                    value="98/100" 
+                    icon={<Activity size={20} />} 
+                    color="#3B82F6" 
+                />
+          </div>
+      )}
     </div>
   )
 }

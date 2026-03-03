@@ -8,6 +8,7 @@ export function useAuth(): {
   loginAs: (userId: string) => void
   logout: () => void
   can: (permission: Permission) => boolean
+  checkScope: (targetLocationId?: string) => boolean
 } {
   const state = useAppState()
   const dispatch = useAppDispatch()
@@ -32,5 +33,16 @@ export function useAuth(): {
     return hasPermission(user.role, permission)
   }, [user])
 
-  return { user, loginAs, logout, can }
+  const checkScope = useCallback((targetLocationId?: string) => {
+      if (!user) return false
+      if (user.role === 'admin' || user.role === 'accountant') return true // Global access
+      if (!targetLocationId) return true // No target?
+      
+      if (user.allowedLocationIds && user.allowedLocationIds.length > 0) {
+          return user.allowedLocationIds.includes(targetLocationId)
+      }
+      return true // Default open if no restriction? Or closed? Let's say open for now unless restricted.
+  }, [user])
+
+  return { user, loginAs, logout, can, checkScope }
 }

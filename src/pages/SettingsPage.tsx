@@ -37,16 +37,62 @@ export function SettingsPage() {
       <PageHeader title="Cấu hình hệ thống" />
 
       <div className="card">
-        <div className="card-title">Thông tin chung</div>
+        <div className="card-title">Branding & White Label</div>
         <div className="grid-form">
           <div className="field field-span-2">
-            <label>Tên công ty</label>
+            <label>Tên hệ thống (Company Name)</label>
             <input
               value={settings.companyName}
               onChange={(e) => patchSettings({ companyName: e.target.value })}
               disabled={!canWrite}
+              placeholder="Ví dụ: My Company ERP"
             />
           </div>
+          <div className="field">
+            <label>Logo URL</label>
+            <input
+              value={settings.logoUrl}
+              onChange={(e) => patchSettings({ logoUrl: e.target.value })}
+              disabled={!canWrite}
+              placeholder="https://example.com/logo.png"
+            />
+          </div>
+          <div className="field">
+            <label>Màu chủ đạo (Primary Color)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="color"
+                value={settings.primaryColor}
+                onChange={(e) => patchSettings({ primaryColor: e.target.value })}
+                disabled={!canWrite}
+                style={{ width: 40, padding: 0, border: 'none' }}
+              />
+              <input
+                value={settings.primaryColor}
+                onChange={(e) => patchSettings({ primaryColor: e.target.value })}
+                disabled={!canWrite}
+                style={{ flex: 1 }}
+              />
+            </div>
+          </div>
+          <div className="field field-span-2">
+            <label>Custom Domain (CNAME)</label>
+            <input
+              value={settings.customDomain}
+              onChange={(e) => patchSettings({ customDomain: e.target.value })}
+              disabled={!canWrite}
+              placeholder="erp.mycompany.com"
+            />
+            <div className="hint" style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+              Yêu cầu cấu hình DNS CNAME trỏ về server của chúng tôi.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Thông tin chung</div>
+        <div className="grid-form">
           <div className="field">
             <label>% Thuế mặc định</label>
             <input

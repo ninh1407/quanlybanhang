@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/auth'
 import { getStockQty } from '../domain/stock'
-import type { Location, Sku, StockCount, StockCountAttachmentType, StockTxType } from '../domain/types'
+import type { Location, Sku, StockCount, StockCountAttachmentType, StockTxType, StockTransaction } from '../domain/types'
 import { formatDateTime, nowIso } from '../lib/date'
 import { newId } from '../lib/id'
 import { formatVnd } from '../lib/money'
@@ -10,6 +10,7 @@ import { PageHeader } from '../ui-kit/PageHeader'
 import { validateAttachmentFiles } from '../lib/attachments'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { MoneyInput } from '../ui-kit/MoneyInput'
+import { differenceInDays, parseISO, subDays } from 'date-fns'
 
 function locationLabel(loc: Location): string {
   return `${loc.code} - ${loc.name}`
@@ -19,6 +20,40 @@ function skuLabel(productsById: Map<string, string>, sku: Sku): string {
   const productName = productsById.get(sku.productId) ?? sku.productId
   const attrs = [sku.color.trim(), sku.size.trim()].filter(Boolean).join(' / ')
   return `${productName}${attrs ? ` - ${attrs}` : ''} (${sku.skuCode})`
+}
+
+function averageCostFromSortedTxs(txs: StockTransaction[]): number {
+  let qty = 0
+  let avg = 0
+  txs.forEach((t) => {
+    const q = Number(t.qty) || 0
+    if (!q) return
+    if (t.type === 'in') {
+      const unitCost = t.unitCost == null ? 0 : Number(t.unitCost) || 0
+      const nextQty = qty + q
+      if (nextQty <= 0) {
+        qty = 0
+        avg = 0
+        return
+      }
+      avg = (avg * qty + unitCost * q) / nextQty
+      qty = nextQty
+      return
+    }
+    if (t.type === 'out') {
+      qty = Math.max(0, qty - q)
+      if (qty === 0) avg = 0
+      return
+    }
+    const diff = q
+    if (diff > 0) {
+      qty = qty + diff
+      return
+    }
+    qty = Math.max(0, qty + diff)
+    if (qty === 0) avg = 0
+  })
+  return Number.isFinite(avg) ? avg : 0
 }
 
 const attachmentOptions: { value: StockCountAttachmentType; label: string }[] = [
@@ -69,6 +104,141 @@ export function StockCountsPage() {
   const [pendingBatch, setPendingBatch] = useState('')
   const [pendingQty, setPendingQty] = useState(0)
   const [pendingNote, setPendingNote] = useState('')
+
+  // Smart Count Logic
+  const [showSmartCount, setShowSmartCount] = useState(false)
+  const [smartOptions, setSmartOptions] = useState({
+    abc_a: false,
+    abc_b: false,
+    abc_c: false,
+    high_risk: false,
+    dead_stock: false,
+  })
+
+  const skuClassifications = useMemo(() => {
+    const groupedTxs = new Map<string, StockTransaction[]>()
+    state.stockTransactions.forEach((t) => {
+      const arr = groupedTxs.get(t.skuId)
+      if (arr) arr.push(t)
+      else groupedTxs.set(t.skuId, [t])
+    })
+    groupedTxs.forEach((arr) => arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt)))
+
+    const stats = new Map<string, { usageValue: number; avgCost: number; lastSaleDate: string | null; hasVariance: boolean }>()
+    const now = new Date()
+    const cutoff30 = subDays(now, 30)
+
+    // Check past variances from finalized stock counts
+    const varianceSkus = new Set<string>()
+    state.stockCounts.forEach(c => {
+        if (c.status !== 'final') return
+    })
+    // Alternative: Check 'adjust' transactions linked to stock_count
+    state.stockTransactions.forEach(t => {
+        if (t.type === 'adjust' && t.refType === 'stock_count' && Math.abs(t.qty) > 0) {
+            varianceSkus.add(t.skuId)
+        }
+    })
+
+    const skuUsageList: { skuId: string; usageValue: number }[] = []
+
+    state.skus.forEach((s) => {
+      const txs = groupedTxs.get(s.id) ?? []
+      const avgCost = averageCostFromSortedTxs(txs)
+      
+      let usageValue = 0
+      let lastSaleDate: string | null = null
+
+      txs.forEach(t => {
+          if (t.type === 'out' && parseISO(t.createdAt) >= cutoff30) {
+              usageValue += t.qty * avgCost
+          }
+          if (t.type === 'out' && t.refType === 'order') {
+               if (!lastSaleDate || t.createdAt > lastSaleDate) lastSaleDate = t.createdAt
+          }
+      })
+      
+      stats.set(s.id, { usageValue, avgCost, lastSaleDate, hasVariance: varianceSkus.has(s.id) })
+      skuUsageList.push({ skuId: s.id, usageValue })
+    })
+
+    // Sort by usage value desc
+    skuUsageList.sort((a, b) => b.usageValue - a.usageValue)
+    const totalUsage = skuUsageList.reduce((acc, i) => acc + i.usageValue, 0)
+    
+    let cum = 0
+    const abcMap = new Map<string, 'A' | 'B' | 'C'>()
+    skuUsageList.forEach(i => {
+        cum += i.usageValue
+        const pct = totalUsage ? cum / totalUsage : 1 // if total 0, all C? or all A?
+        if (pct <= 0.8) abcMap.set(i.skuId, 'A')
+        else if (pct <= 0.95) abcMap.set(i.skuId, 'B')
+        else abcMap.set(i.skuId, 'C')
+    })
+
+    return { stats, abcMap }
+  }, [state.stockTransactions, state.skus, state.stockCounts])
+
+  function createSmart() {
+      if (!canWrite) return
+      if (!locationId) {
+          void dialogs.alert({ message: 'Vui lòng chọn kho trước' })
+          return
+      }
+
+      const selectedSkus = new Set<string>()
+      const { stats, abcMap } = skuClassifications
+      const now = new Date()
+
+      state.skus.forEach(s => {
+          if (s.kind !== 'single' || !s.active) return
+          const stat = stats.get(s.id)
+          const abc = abcMap.get(s.id) ?? 'C'
+          
+          let match = false
+          if (smartOptions.abc_a && abc === 'A') match = true
+          if (smartOptions.abc_b && abc === 'B') match = true
+          if (smartOptions.abc_c && abc === 'C') match = true
+          if (smartOptions.high_risk && stat?.hasVariance) match = true
+          
+          if (smartOptions.dead_stock) {
+              const lastSale = stat?.lastSaleDate ? parseISO(stat.lastSaleDate) : parseISO(s.createdAt)
+              if (differenceInDays(now, lastSale) > 90) match = true
+          }
+
+          if (match) selectedSkus.add(s.id)
+      })
+
+      if (selectedSkus.size === 0) {
+          void dialogs.alert({ message: 'Không tìm thấy SKU nào phù hợp tiêu chí.' })
+          return
+      }
+
+      const createdAt = nowIso()
+      const sc: StockCount = {
+        id: newId('sc'),
+        code: '',
+        locationId,
+        status: 'draft',
+        note: `Kiểm kê thông minh (${Object.keys(smartOptions).filter(k => smartOptions[k as keyof typeof smartOptions]).join(', ')})`,
+        createdAt,
+        createdByUserId: user?.id ?? null,
+        responsibleUserId: responsibleUserId || null,
+        compensationAmount: 0,
+        lines: Array.from(selectedSkus).map(skuId => ({ skuId, countedQty: 0 })), // Default 0 or keep empty? usually 0 implies counted 0. But maybe better to let user fill. 
+        // If we want to force count, maybe init with 0. But if we want blind count, display 0 but don't assume.
+        // The current UI shows "Kiểm" column. If we init 0, it says 0.
+        pendingItems: [],
+        attachments: [],
+      }
+      dispatch({ type: 'stockCounts/upsert', stockCount: sc })
+      setSelectedId(sc.id)
+      setNote('')
+      setCompensationAmount(0)
+      setResponsibleUserId('')
+      setShowSmartCount(false)
+      setSmartOptions({ abc_a: false, abc_b: false, abc_c: false, high_risk: false, dead_stock: false })
+  }
 
   function create() {
     if (!canWrite) return
@@ -255,7 +425,55 @@ export function StockCountsPage() {
 
       {canWrite ? (
         <div className="card">
-          <div className="card-title">Tạo phiếu kiểm kho</div>
+          <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Tạo phiếu kiểm kho</span>
+            <button className="btn btn-ghost btn-small" onClick={() => setShowSmartCount(!showSmartCount)}>
+                {showSmartCount ? 'Đóng gợi ý thông minh' : '✨ Gợi ý thông minh'}
+            </button>
+          </div>
+          
+          {showSmartCount && (
+              <div style={{ background: 'var(--bg-subtle)', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 12 }}>Chọn tiêu chí kiểm kê:</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={smartOptions.abc_a} onChange={e => setSmartOptions(p => ({ ...p, abc_a: e.target.checked }))} />
+                          <span>Nhóm A (80% giá trị)</span>
+                      </label>
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={smartOptions.abc_b} onChange={e => setSmartOptions(p => ({ ...p, abc_b: e.target.checked }))} />
+                          <span>Nhóm B (15% giá trị)</span>
+                      </label>
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={smartOptions.abc_c} onChange={e => setSmartOptions(p => ({ ...p, abc_c: e.target.checked }))} />
+                          <span>Nhóm C (5% giá trị)</span>
+                      </label>
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={smartOptions.high_risk} onChange={e => setSmartOptions(p => ({ ...p, high_risk: e.target.checked }))} />
+                          <span>Rủi ro cao (Đã từng lệch)</span>
+                      </label>
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={smartOptions.dead_stock} onChange={e => setSmartOptions(p => ({ ...p, dead_stock: e.target.checked }))} />
+                          <span>Tồn kho chết ({'>'}90 ngày)</span>
+                      </label>
+                  </div>
+                  <div style={{ marginTop: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <select value={locationId} onChange={(e) => setLocationId(e.target.value)} style={{ width: 200 }}>
+                            {locations.map((l) => (
+                            <option key={l.id} value={l.id}>
+                                {locationLabel(l)}
+                            </option>
+                            ))}
+                        </select>
+                      </div>
+                      <button className="btn btn-primary" onClick={createSmart}>
+                          ✨ Tạo phiếu từ gợi ý
+                      </button>
+                  </div>
+              </div>
+          )}
+
           <div className="grid-form">
             <div className="field">
               <label>Vị trí kho</label>

@@ -20,6 +20,8 @@ import {
   UserCog,
   Key,
   LogOut,
+  RotateCw,
+  CheckSquare,
   ChevronDown,
   ChevronRight,
   User,
@@ -28,9 +30,11 @@ import {
   Sun,
   Search,
   Plus,
+  Activity,
   RefreshCw,
   Settings,
-  Bell
+  Bell,
+  Globe
 } from 'lucide-react'
 import { useNotifications } from '../notifications/useNotifications'
 import { useAppState } from '../state/Store'
@@ -67,19 +71,24 @@ function roleLabel(role: string): string {
   return role
 }
 
+import { useSettings } from '../settings/useSettings'
+
+import { version } from '../../package.json'
+
 export function AdminLayout() {
   const { user, logout, can } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const nav = useNavigate()
   const { unreadCount } = useNotifications()
   const state = useAppState()
+  const { settings } = useSettings()
   const currentLocation = useMemo(() => {
     const id = state.currentLocationId
     if (!id) return null
     return state.locations.find((l) => l.id === id) ?? null
   }, [state.currentLocationId, state.locations])
   const groupInitial = useMemo(() => {
-    const map: Record<string, boolean> = { products: true, sales: true, inventory: true, finance: true, staff: true }
+    const map: Record<string, boolean> = { products: true, sales: true, inventory: true, finance: true, staff: true, omnichannel: true }
     try {
       const raw = localStorage.getItem('nav_groups_v1')
       const parsed = raw ? (JSON.parse(raw) as unknown) : null
@@ -130,8 +139,16 @@ export function AdminLayout() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-title">
-          <Store size={24} style={{ marginRight: 10, color: 'var(--primary-400)' }} />
-          Quản lý gia dụng
+          {settings.logoUrl ? (
+            <img 
+              src={settings.logoUrl} 
+              alt="Logo" 
+              style={{ height: 32, marginRight: 10, objectFit: 'contain' }} 
+            />
+          ) : (
+            <Store size={24} style={{ marginRight: 10, color: 'var(--primary-400)' }} />
+          )}
+          {settings.companyName}
         </div>
         <nav className="nav">
           <RequirePermission permission="dashboard:read">
@@ -163,19 +180,50 @@ export function AdminLayout() {
             </NavGroup>
           ) : null}
 
+          {can('orders:write') ? (
+            <NavGroup title="Đa kênh (Omnichannel)" open={groups.omnichannel} onToggle={() => toggleGroup('omnichannel')}>
+                <NavItem to="/channel-integration" label="Cấu hình & Kết nối" icon={<Globe size={18} />} />
+            </NavGroup>
+          ) : null}
+
           {can('inventory:read') ? (
             <NavGroup title="Kho" open={groups.inventory} onToggle={() => toggleGroup('inventory')}>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/approval-center" label="Duyệt yêu cầu" icon={<CheckSquare size={18} />} />
+              </RequirePermission>
               <RequirePermission permission="inventory:read">
                 <NavItem to="/inventory" label="Tồn kho" icon={<Box size={18} />} />
               </RequirePermission>
               <RequirePermission permission="inventory:read">
                 <NavItem to="/stock-vouchers" label="Phiếu kho" icon={<FileText size={18} />} />
               </RequirePermission>
-              {user?.role === 'admin' ? (
-                <RequirePermission permission="inventory:read">
-                  <NavItem to="/locations" label="Vị trí kho" icon={<MapPin size={18} />} />
-                </RequirePermission>
-              ) : null}
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/warehouse-control-tower" label="Control Tower" icon={<Layers size={18} />} />
+              </RequirePermission>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/order-monitoring" label="Giám sát đơn hàng" icon={<Activity size={18} />} />
+              </RequirePermission>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/warehouse-performance" label="KPIs Kho" icon={<Activity size={18} />} />
+              </RequirePermission>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/replenishment" label="Gợi ý nhập hàng" icon={<RotateCw size={18} />} />
+              </RequirePermission>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/inventory-balancing" label="Cân bằng kho" icon={<RotateCw size={18} />} />
+              </RequirePermission>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/inventory-risk" label="Phân tích rủi ro" icon={<Layers size={18} />} />
+              </RequirePermission>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/transfers" label="Chuyển kho (DN)" icon={<Truck size={18} />} />
+              </RequirePermission>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/pick-pack" label="Pick & Pack" icon={<Box size={18} />} />
+              </RequirePermission>
+              <RequirePermission permission="inventory:read">
+                <NavItem to="/locations" label="Vị trí kho" icon={<MapPin size={18} />} />
+              </RequirePermission>
               <RequirePermission permission="inventory:read">
                 <NavItem to="/stock-counts" label="Kiểm kho" icon={<ClipboardList size={18} />} />
               </RequirePermission>
@@ -214,6 +262,10 @@ export function AdminLayout() {
           ) : null}
 
           <NavItem to="/license" label="Bản quyền" icon={<Key size={18} />} />
+          
+          <div style={{ marginTop: 'auto', padding: '16px 20px', fontSize: 11, color: 'var(--text-muted)' }}>
+            v{version}
+          </div>
         </nav>
       </aside>
       <main className="main">

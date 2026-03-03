@@ -23,6 +23,7 @@ export type Location = {
   id: Id
   code: string
   name: string
+  province?: string
   note: string
   active: boolean
   createdAt: string
@@ -92,7 +93,9 @@ export type OrderStatus =
   | 'draft'
   | 'confirmed'
   | 'paid'
+  | 'picking'
   | 'packed'
+  | 'ready_to_ship'
   | 'shipped'
   | 'delivered'
   | 'returned'
@@ -172,6 +175,7 @@ export type StockTransaction = {
   createdAt: string
   refType: 'manual' | 'order' | 'stock_count' | 'voucher'
   refId: Id | null
+  entryDate?: string
   attachments?: StockTransactionAttachment[]
 }
 
@@ -211,6 +215,7 @@ export type FinanceTransaction = {
   category: string
   note: string
   createdAt: string
+  locationId?: Id
   refType: 'manual' | 'order' | 'stock_count' | 'debt'
   refId: Id | null
   attachments: FinanceAttachment[]
@@ -312,7 +317,7 @@ export type AuditLog = {
   createdAt: string
 }
 
-export type Role = 'admin' | 'staff'
+export type Role = 'admin' | 'staff' | 'manager' | 'accountant' | 'region_manager'
 
 export type User = {
   id: Id
@@ -322,7 +327,24 @@ export type User = {
   role: Role
   active: boolean
   allowedLocationIds: Id[]
+  scope?: 'all' | 'region' | 'location'
+  region?: string
   createdAt: string
+}
+
+export type StockLedgerAccount = 'inventory_asset' | 'cogs' | 'ap_clearing' | 'adjustment_expense' | 'transit_inventory'
+
+export type StockLedgerEntry = {
+  id: Id
+  transactionId: Id
+  date: string
+  locationId: Id
+  skuId: Id
+  account: StockLedgerAccount
+  debit: number
+  credit: number
+  balance: number
+  note: string
 }
 
 export type Permission =
@@ -339,3 +361,150 @@ export type Permission =
   | 'customers:write'
   | 'staff:read'
   | 'staff:write'
+
+export type InventoryRequestStatus = 'pending_manager' | 'pending_accountant' | 'approved' | 'rejected' | 'cancelled'
+export type InventoryRequestType = 'in' | 'out' | 'transfer' | 'adjust'
+
+export type InventoryRequestItem = {
+    skuId: Id
+    qty: number
+    unitCost?: number
+    note?: string
+}
+
+export type InventoryRequestLog = {
+    id: Id
+    action: 'create' | 'approve_manager' | 'approve_accountant' | 'reject' | 'cancel'
+    actorId: Id
+    timestamp: string
+    note?: string
+}
+
+export type InventoryRequest = {
+    id: Id
+    code: string
+    type: InventoryRequestType
+    status: InventoryRequestStatus
+    warehouseId: Id
+    targetWarehouseId?: Id
+    items: InventoryRequestItem[]
+    note?: string
+    attachments?: string[]
+    logs: InventoryRequestLog[]
+    createdBy: Id
+    createdAt: string
+    updatedAt: string
+}
+
+export type TransferOrderStatus = 
+  | 'draft' 
+  | 'requested' 
+  | 'approved' 
+  | 'in_transit' 
+  | 'partially_received' 
+  | 'completed' 
+  | 'closed'
+  | 'rejected'
+
+export type TransferOrderLine = {
+    skuId: Id
+    requestedQty: number
+    shippedQty: number
+    receivedQty: number
+    lostQty: number
+    unitCost: number
+    note?: string
+}
+
+export type TransferOrderLog = {
+    id: Id
+    action: string
+    actorId: Id
+    timestamp: string
+    note?: string
+}
+
+export type TransferOrder = {
+    id: Id
+    code: string
+    status: TransferOrderStatus
+    fromLocationId: Id
+    toLocationId: Id
+    lines: TransferOrderLine[]
+    
+    shippingFee: number
+    carrierName?: string
+    trackingCode?: string
+    estimatedArrival?: string
+    
+    note?: string
+    logs: TransferOrderLog[]
+    
+    createdByUserId: Id
+    createdAt: string
+    updatedAt: string
+}
+
+export type NotificationType = 'info' | 'success' | 'warning' | 'error'
+
+export type Notification = {
+    id: Id
+    userId: Id
+    title: string
+    message: string
+    type: NotificationType
+    link?: string
+    read: boolean
+    createdAt: string
+}
+
+export type SkuSettings = {
+    skuId: Id
+    locationId: Id
+    minStock: number
+    maxStock: number
+    safetyStock: number
+    leadTimeDays: number
+}
+
+export type ChannelType = 'shopee' | 'lazada' | 'tiktok' | 'web'
+
+export type ChannelConfig = {
+    id: Id
+    type: ChannelType
+    name: string
+    apiKey?: string
+    apiSecret?: string
+    shopId?: string
+    warehouseId?: Id // Default warehouse for this channel
+    active: boolean
+    createdAt: string
+}
+
+export type SkuMapping = {
+    id: Id
+    channelId: Id
+    channelSku: string
+    systemSkuId: Id
+    createdAt: string
+}
+
+export type WarehouseRegionMapping = {
+    id: Id
+    locationId: Id
+    provinces: string[] // List of province names or codes
+    priority: number // 1 = High, 10 = Low
+    createdAt: string
+}
+
+export type AllocationRule = {
+    id: Id
+    name: string
+    active: boolean
+    priority: number // 1 = highest
+    type: 'region_match' | 'central_warehouse' | 'stock_level' | 'store_online_restriction'
+    config: {
+        centralWarehouseId?: Id
+        allowBranchOnlineSales?: boolean
+    }
+}

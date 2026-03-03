@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useAppState } from '../state/Store'
+import { useAppDispatch, useAppState } from '../state/Store'
 import type { NotificationItem } from './notifications'
 import { deriveNotifications } from './notifications'
 
@@ -31,6 +31,7 @@ export function useNotifications(): {
   markAllRead: () => void
 } {
   const state = useAppState()
+  const dispatch = useAppDispatch()
   const key = useMemo(() => storageKey(state.currentLocationId), [state.currentLocationId])
   const [readIds, setReadIds] = useState<Set<string>>(() => loadReadIds(key))
 
@@ -38,32 +39,70 @@ export function useNotifications(): {
     setReadIds(loadReadIds(key))
   }, [key])
 
-  const items = useMemo(() => deriveNotifications(state), [state])
+  const derivedItems = useMemo(() => deriveNotifications(state), [state])
+  
+  const persistentItems = useMemo(() => {
+    return state.notifications.map(n => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        detail: n.message,
+        createdAt: n.createdAt,
+        href: n.link || '#'
+    } as NotificationItem))
+  }, [state.notifications])
 
-  const unreadCount = useMemo(() => items.filter((x) => !readIds.has(x.id)).length, [items, readIds])
+  const items = useMemo(() => {
+      const all = [...derivedItems, ...persistentItems]
+      return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }, [derivedItems, persistentItems])
 
-  const isRead = useCallback((id: string) => readIds.has(id), [readIds])
+  const unreadCount = useMemo(() => {
+      const derivedUnread = derivedItems.filter((x) => !readIds.has(x.id)).length
+      const persistentUnread = state.notifications.filter(n => !n.read).length
+      return derivedUnread + persistentUnread
+  }, [derivedItems, readIds, state.notifications])
+
+  const isRead = useCallback((id: string) => {
+      // Check if it's a persistent notification
+      const p = state.notifications.find(n => n.id === id)
+      if (p) return p.read
+      return readIds.has(id)
+  }, [readIds, state.notifications])
 
   const markRead = useCallback(
     (id: string) => {
-      setReadIds((prev) => {
-        const next = new Set(prev)
-        next.add(id)
-        saveReadIds(key, next)
-        return next
-      })
+      const p = state.notifications.find(n => n.id === id)
+      if (p) {
+          if (!p.read) {
+            dispatch({ type: 'notifications/markRead', id })
+          }
+      } else {
+          setReadIds((prev) => {
+            const next = new Set(prev)
+            next.add(id)
+            saveReadIds(key, next)
+            return next
+          })
+      }
     },
-    [key, setReadIds],
+    [key, setReadIds, state.notifications, dispatch],
   )
 
   const markAllRead = useCallback(() => {
+    // Mark persistent as read
+    if (state.notifications.some(n => !n.read)) {
+        dispatch({ type: 'notifications/markAllRead' })
+    }
+
+    // Mark derived as read
     setReadIds((prev) => {
       const next = new Set(prev)
-      items.forEach((x) => next.add(x.id))
+      derivedItems.forEach((x) => next.add(x.id))
       saveReadIds(key, next)
       return next
     })
-  }, [items, key])
+  }, [derivedItems, key, state.notifications, dispatch])
 
   return { items, unreadCount, isRead, markRead, markAllRead }
 }

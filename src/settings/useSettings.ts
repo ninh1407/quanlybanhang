@@ -23,6 +23,7 @@ export function useSettings(): {
     const setSettings = (next: AppSettings) => {
       setSettingsState(next)
       saveSettings(next)
+      window.dispatchEvent(new Event('settings_changed'))
     }
     const patchSettings = (patch: Partial<AppSettings>) => {
       setSettings({ ...settings, ...patch })

@@ -82,6 +82,30 @@ export const rolePermissions: Record<Role, Permission[]> = {
     'staff:read',
     'staff:write',
   ],
+  manager: [
+    'dashboard:read',
+    'products:read',
+    'products:write',
+    'orders:read',
+    'orders:write',
+    'inventory:read',
+    'inventory:write',
+    'finance:read',
+    'finance:write',
+    'customers:read',
+    'customers:write',
+    'staff:read',
+  ],
+  region_manager: [
+    'dashboard:read',
+    'products:read',
+    'orders:read',
+    'inventory:read',
+    'inventory:write',
+    'finance:read',
+    'customers:read',
+    'staff:read',
+  ],
   staff: [
     'dashboard:read',
     'products:read',
@@ -92,6 +116,15 @@ export const rolePermissions: Record<Role, Permission[]> = {
     'customers:read',
     'customers:write',
   ],
+  accountant: [
+    'dashboard:read',
+    'products:read',
+    'orders:read',
+    'inventory:read',
+    'finance:read',
+    'finance:write',
+    'customers:read',
+  ]
 }
 
 export function hasPermission(role: Role, permission: Permission): boolean {

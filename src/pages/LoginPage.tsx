@@ -195,7 +195,7 @@ export function LoginPage() {
       </div>
       
       <div style={{ position: 'absolute', bottom: 24, color: 'var(--text-muted)', fontSize: 13 }}>
-        © 2024 DM Xanh Enterprise. All rights reserved.
+        © 2024 Quản lý gia dụng. All rights reserved.
       </div>
     </div>
   )

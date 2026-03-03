@@ -16,6 +16,7 @@ function autoLocationCode(): string {
 const emptyForm: Omit<Location, 'id' | 'createdAt'> = {
   code: '',
   name: '',
+  province: '',
   note: '',
   active: true,
 }
@@ -39,7 +40,7 @@ export function LocationsPage() {
 
   function startEdit(l: Location) {
     setEditingId(l.id)
-    setForm({ code: l.code, name: l.name, note: l.note, active: l.active })
+    setForm({ code: l.code, name: l.name, province: l.province ?? '', note: l.note, active: l.active })
   }
 
   function save() {
@@ -51,6 +52,7 @@ export function LocationsPage() {
       createdAt: existing?.createdAt ?? nowIso(),
       code: form.code.trim().toUpperCase(),
       name: form.name.trim(),
+      province: form.province?.trim(),
       note: form.note.trim(),
       active: form.active,
     }
@@ -78,6 +80,10 @@ export function LocationsPage() {
             <div className="field">
               <label>Tên</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>Tỉnh/Khu vực</label>
+              <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} placeholder="Ví dụ: Hà Nội, TP.HCM..." />
             </div>
             <div className="field">
               <label>Trạng thái</label>
@@ -111,6 +117,7 @@ export function LocationsPage() {
                 <tr>
                   <th>Mã</th>
                   <th>Tên</th>
+                  <th>Khu vực</th>
                   <th>Trạng thái</th>
                   <th>Ghi chú</th>
                   <th />
@@ -121,6 +128,7 @@ export function LocationsPage() {
                   <tr key={l.id}>
                     <td>{l.code}</td>
                     <td>{l.name}</td>
+                    <td>{l.province}</td>
                     <td>{l.active ? 'Hoạt động' : 'Ngưng'}</td>
                     <td>{l.note}</td>
                     <td className="cell-actions">

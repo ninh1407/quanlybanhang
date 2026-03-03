@@ -8,7 +8,7 @@ import { newId } from '../lib/id'
 import { useStore } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 
-const roles: Role[] = ['admin', 'staff']
+const roles: Role[] = ['admin', 'manager', 'region_manager', 'accountant', 'staff']
 
 const emptyForm: Omit<User, 'id' | 'createdAt'> = {
   username: '',
@@ -20,8 +20,11 @@ const emptyForm: Omit<User, 'id' | 'createdAt'> = {
 }
 
 function roleLabel(role: Role): string {
-  if (role === 'admin') return 'Admin'
-  return 'Nhân sự'
+  if (role === 'admin') return 'Quản trị viên (Toàn quyền)'
+  if (role === 'manager') return 'Quản lý tổng (Xem tất cả kho)'
+  if (role === 'region_manager') return 'Quản lý vùng (Xem kho được gán)'
+  if (role === 'accountant') return 'Kế toán (Xem tài chính)'
+  return 'Nhân viên kho (Chỉ kho mình)'
 }
 
 export function StaffPage() {
@@ -68,8 +71,8 @@ export function StaffPage() {
     if (!canWrite) return
     setError('')
     if (!form.username.trim() || !form.fullName.trim()) return
-    if (form.role !== 'admin' && (form.allowedLocationIds ?? []).length === 0) {
-      setError('Vui lòng chọn ít nhất 1 kho cho nhân sự (trừ Admin).')
+    if (form.role !== 'admin' && form.role !== 'manager' && form.role !== 'accountant' && (form.allowedLocationIds ?? []).length === 0) {
+      setError('Vui lòng chọn ít nhất 1 kho cho nhân sự.')
       return
     }
     const existing = editingId ? state.users.find((u) => u.id === editingId) : undefined
@@ -181,7 +184,7 @@ export function StaffPage() {
                       const checked = (form.allowedLocationIds ?? []).includes(l.id)
                       return (
                         <label key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleAllowed(l.id)} disabled={form.role === 'admin'} />
+                          <input type="checkbox" checked={checked} onChange={() => toggleAllowed(l.id)} disabled={form.role === 'admin' || form.role === 'manager' || form.role === 'accountant'} />
                           <span>
                             <span style={{ fontWeight: 800 }}>{l.name}</span>
                             <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>{l.code}</span>
@@ -193,9 +196,9 @@ export function StaffPage() {
                 ) : (
                   <div style={{ color: 'var(--text-muted)' }}>Chưa có kho nào.</div>
                 )}
-                {form.role === 'admin' ? (
+                {form.role === 'admin' || form.role === 'manager' || form.role === 'accountant' ? (
                   <div style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 12 }}>
-                    Admin có quyền truy cập mọi kho.
+                    Vai trò này có quyền truy cập tất cả kho.
                   </div>
                 ) : null}
               </div>
@@ -234,7 +237,7 @@ export function StaffPage() {
                   <td>{u.fullName}</td>
                   <td>{roleLabel(u.role)}</td>
                   <td>
-                    {u.role === 'admin'
+                    {['admin', 'manager', 'accountant'].includes(u.role)
                       ? 'Tất cả'
                       : (u.allowedLocationIds ?? [])
                           .map((id) => locationById.get(id)?.code ?? '')

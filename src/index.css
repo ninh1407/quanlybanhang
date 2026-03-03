@@ -91,7 +91,51 @@ body {
 a { text-decoration: none; color: inherit; transition: color 0.2s; }
 button { font-family: inherit; }
 
-/* Layout Structure */
+/* Tabs (Pill/Rectangle Style from Design) */
+  .tabs {
+    display: inline-flex;
+    gap: -1px; /* Overlap borders slightly */
+  }
+
+  .tab {
+    padding: 8px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #000;
+    background: #F9FAFB; /* Very light grey */
+    border: 1px solid #D1D5DB; /* Light grey border */
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 0;
+    min-width: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tab:first-child {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+  }
+
+  .tab:last-child {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+  }
+
+  .tab:hover {
+    background: #F3F4F6;
+  }
+
+  .tab.active {
+    background: #FFFFFF;
+    font-weight: 600;
+    position: relative;
+    z-index: 1; /* Bring active tab to front */
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  /* Layout Structure */
 .app-shell {
   display: flex;
   min-height: 100vh;

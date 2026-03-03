@@ -1,4 +1,5 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/auth'
 import { prevMonthRange, soldQtyBySku } from '../domain/analytics'
 import type { Location, Sku, StockTransaction, StockTxType, StockTransactionAttachment } from '../domain/types'
@@ -9,7 +10,7 @@ import { exportCsv, exportXlsx } from '../lib/export'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { useDialogs } from '../ui-kit/Dialogs'
-import { Upload, X, Paperclip } from 'lucide-react'
+import { Upload, X, Paperclip, Filter, CheckSquare, Square, MoreHorizontal, Printer } from 'lucide-react'
 import { useSettings } from '../settings/useSettings'
 import { validateAttachmentFiles } from '../lib/attachments'
 import { useListView } from '../ui-kit/listing/useListView'
@@ -62,6 +63,9 @@ function averageCostFromSortedTxs(txs: StockTransaction[]): number {
 
 type StockListFilters = {
   locationId: string
+  categoryId: string
+  supplierId: string
+  stockLevel: 'all' | 'low' | 'negative'
 }
 
 type StockListSortKey = 'sku' | 'stock' | 'avgCost'
@@ -89,15 +93,27 @@ const StockRow = memo(function StockRow(props: {
   productName: string
   stock: number
   avgCost: number
+  selected: boolean
+  onSelect: () => void
 }) {
-  const { sku, productName, stock, avgCost } = props
+  const { sku, productName, stock, avgCost, selected, onSelect } = props
   return (
-    <tr>
-      <td>
-        {productName} ({sku.skuCode})
+    <tr className={selected ? 'tr-selected' : ''}>
+      <td className="sticky-col-1" style={{ background: selected ? 'var(--primary-50)' : 'var(--bg-surface)' }}>
+        <div 
+            onClick={(e) => { e.stopPropagation(); onSelect() }} 
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+            {selected ? <CheckSquare size={18} color="var(--primary-600)" /> : <Square size={18} color="var(--text-muted)" />}
+        </div>
+      </td>
+      <td className="sticky-col-2" style={{ background: selected ? 'var(--primary-50)' : 'var(--bg-surface)' }}>
+        <div style={{ fontWeight: 500 }}>{productName}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sku.skuCode}</div>
       </td>
       <td>{stock}</td>
       <td>{formatVnd(avgCost)}</td>
+      <td>{formatVnd(stock * avgCost)}</td>
     </tr>
   )
 })
@@ -117,8 +133,14 @@ const HistoryRow = memo(function HistoryRow(props: {
         {productName} {sku ? `(${sku.skuCode})` : tx.skuId}
       </td>
       <td>{loc ? loc.code : ''}</td>
-      <td>{tx.type === 'in' ? 'Nhập' : tx.type === 'out' ? 'Xuất' : 'Điều chỉnh'}</td>
-      <td>{tx.type === 'out' ? -tx.qty : tx.qty}</td>
+      <td>
+        <span className={`badge ${tx.type === 'in' ? 'badge-success' : tx.type === 'out' ? 'badge-warning' : 'badge-neutral'}`}>
+            {tx.type === 'in' ? 'Nhập' : tx.type === 'out' ? 'Xuất' : 'Điều chỉnh'}
+        </span>
+      </td>
+      <td style={{ fontWeight: 600, color: tx.type === 'out' ? 'var(--danger)' : 'var(--success)' }}>
+        {tx.type === 'out' ? -tx.qty : tx.qty}
+      </td>
       <td>
         <div>{tx.note}</div>
         {tx.attachments && tx.attachments.length > 0 && (
@@ -149,8 +171,11 @@ export function InventoryPage() {
   const canWrite = can('inventory:write')
   const dialogs = useDialogs()
   const { settings } = useSettings()
+  const [searchParams] = useSearchParams()
 
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
+  const categories = useMemo(() => state.categories, [state.categories])
+  const suppliers = useMemo(() => state.suppliers, [state.suppliers])
   const locations = useMemo(
     () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
     [state.locations],
@@ -164,8 +189,24 @@ export function InventoryPage() {
     pageSize: 50,
     filters: {
       locationId: locations[0]?.id ?? '',
+      categoryId: '',
+      supplierId: '',
+      stockLevel: 'all'
     },
   })
+
+  // Drill-down initialization
+  useEffect(() => {
+      const locId = searchParams.get('locationId')
+      const stockLevel = searchParams.get('stockLevel')
+      if (locId || stockLevel) {
+          stockList.patchFilters({
+              locationId: locId || stockList.state.filters.locationId,
+              stockLevel: (stockLevel as any) || 'all'
+          })
+          if (stockLevel) setShowFilters(true)
+      }
+  }, []) // Run once
 
   const historyList = useListView<StockHistoryFilters>('inventory:history', {
     q: '',
@@ -180,6 +221,10 @@ export function InventoryPage() {
       to: '',
     },
   })
+
+  const [showFilters, setShowFilters] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
   const skus = useMemo(
     () =>
       state.skus
@@ -200,6 +245,7 @@ export function InventoryPage() {
   const soldPrevBySkuId = useMemo(() => {
     return soldQtyBySku(state.orders, prevRange.start, prevRange.end)
   }, [prevRange.end, prevRange.start, state.orders])
+  
   const lowStockSkus = useMemo(() => {
     return skus.filter((s) => {
       const soldPrev = soldPrevBySkuId.get(s.id) ?? 0
@@ -208,6 +254,7 @@ export function InventoryPage() {
       return soldPrev > 0 && stock < soldPrev * threshold
     })
   }, [settings.lowStockThresholdPercent, skus, soldPrevBySkuId, stockQtyBySkuId])
+
   const skusById = useMemo(() => new Map(state.skus.map((s) => [s.id, s])), [state.skus])
   const locationsById = useMemo(() => new Map(state.locations.map((l) => [l.id, l])), [state.locations])
   const txs = useMemo(
@@ -221,6 +268,7 @@ export function InventoryPage() {
       'Mã SKU': r.sku.skuCode,
       Tồn: r.stock,
       'Giá vốn TB': r.avgCost,
+      'Thành tiền': r.stock * r.avgCost,
       'Vị trí': locationsById.get(locationId)?.code ?? '',
     }))
     const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
@@ -250,6 +298,7 @@ export function InventoryPage() {
   const [type, setType] = useState<StockTxType>('in')
   const [qty, setQty] = useState<number>(1)
   const [unitCost, setUnitCost] = useState<number>(0)
+  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10))
   const [note, setNote] = useState('')
   const [attachments, setAttachments] = useState<StockTransactionAttachment[]>([])
 
@@ -305,14 +354,27 @@ export function InventoryPage() {
 
   const stockRows = (() => {
     const needle = stockList.state.q.trim().toLowerCase()
+    const { categoryId, supplierId, stockLevel } = stockList.state.filters
+    
     const rows = skus
       .map((s) => {
         const stock = stockQtyAtLocationBySkuId.get(s.id) ?? 0
         const avgCost = averageCostBySkuId.get(s.id) ?? 0
         const label = skuLabel(productsById, s)
-        return { sku: s, label, stock, avgCost }
+        const product = state.products.find(p => p.id === s.productId)
+        return { sku: s, label, stock, avgCost, product }
       })
       .filter((r) => {
+        if (categoryId && r.product?.categoryId !== categoryId) return false
+        if (supplierId && r.product?.supplierId !== supplierId) return false
+        
+        if (stockLevel === 'low') {
+            const soldPrev = soldPrevBySkuId.get(r.sku.id) ?? 0
+            const threshold = Math.max(0, Math.min(100, Number(settings.lowStockThresholdPercent) || 0)) / 100
+            if (!(soldPrev > 0 && r.stock < soldPrev * threshold)) return false
+        }
+        if (stockLevel === 'negative' && r.stock >= 0) return false
+
         if (!needle) return true
         return `${r.label} ${r.sku.skuCode}`.toLowerCase().includes(needle)
       })
@@ -374,8 +436,6 @@ export function InventoryPage() {
     return filteredHistoryTxs.slice(start, end)
   })()
 
-  
-
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files?.length) return
     const validated = validateAttachmentFiles(e.target.files)
@@ -432,6 +492,7 @@ export function InventoryPage() {
         qty: Number(qty) || 0,
         unitCost: type === 'in' ? Number(unitCost) || 0 : null,
         note: note.trim(),
+        entryDate,
         createdAt,
         refType: 'manual',
         refId: null,
@@ -440,13 +501,60 @@ export function InventoryPage() {
     })
     setQty(1)
     setUnitCost(0)
+    setEntryDate(new Date().toISOString().slice(0, 10))
     setNote('')
     setAttachments([])
+  }
+
+  const toggleSelect = (id: string) => {
+      setSelectedIds(prev => {
+          const next = new Set(prev)
+          if (next.has(id)) next.delete(id)
+          else next.add(id)
+          return next
+      })
+  }
+
+  const toggleSelectAll = () => {
+      if (selectedIds.size === pagedStockRows.length && pagedStockRows.length > 0) {
+          setSelectedIds(new Set())
+      } else {
+          setSelectedIds(new Set(pagedStockRows.map(r => r.sku.id)))
+      }
   }
 
   return (
     <div className="page">
       <PageHeader title="Quản lý kho" />
+
+      {/* Bulk Actions */}
+      {selectedIds.size > 0 && (
+          <div className="bulk-actions-bar" style={{ 
+              position: 'fixed', 
+              bottom: 24, 
+              left: '50%', 
+              transform: 'translateX(-50%)', 
+              background: 'var(--bg-surface)', 
+              boxShadow: 'var(--shadow-lg)',
+              padding: '8px 16px',
+              borderRadius: 32,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              zIndex: 100,
+              border: '1px solid var(--border-color)'
+          }}>
+              <span style={{ fontWeight: 600 }}>{selectedIds.size} đã chọn</span>
+              <div style={{ height: 20, width: 1, background: 'var(--border-color)' }} />
+              <button className="btn btn-small btn-ghost" onClick={() => setSelectedIds(new Set())}>Bỏ chọn</button>
+              <button className="btn btn-small" onClick={() => dialogs.alert({ message: 'Tính năng In tem đang phát triển' })}>
+                  <Printer size={16} /> In tem
+              </button>
+              <button className="btn btn-small" onClick={() => dialogs.alert({ message: 'Tính năng Xuất kho nhanh đang phát triển' })}>
+                  <MoreHorizontal size={16} /> Thao tác
+              </button>
+          </div>
+      )}
 
       <div className="row" style={{ marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
         <button className="btn" onClick={() => exportStock('xlsx')}>
@@ -539,6 +647,10 @@ export function InventoryPage() {
               />
             </div>
             <div className="field">
+              <label>Ngày nhập</label>
+              <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
+            </div>
+            <div className="field">
               <label>Ghi chú</label>
               <input value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
@@ -581,7 +693,7 @@ export function InventoryPage() {
       <div className="card">
         <div className="card-title">Tồn kho hiện tại</div>
         <div className="row">
-          <div className="field" style={{ width: 320 }}>
+          <div className="field" style={{ width: 280 }}>
             <label>Vị trí kho</label>
             <select value={locationId} onChange={(e) => stockList.patchFilters({ locationId: e.target.value })}>
               {locations.map((l) => (
@@ -597,7 +709,7 @@ export function InventoryPage() {
               </div>
             )}
           </div>
-          <div className="field" style={{ width: 320 }}>
+          <div className="field" style={{ flex: 1 }}>
             <label>Tìm kiếm SKU</label>
             <input
               value={stockList.state.q}
@@ -605,7 +717,13 @@ export function InventoryPage() {
               placeholder="Tên, mã SKU…"
             />
           </div>
-          <div className="field" style={{ width: 220 }}>
+          <div className="field" style={{ width: 120 }}>
+             <label>&nbsp;</label>
+             <button className={`btn ${showFilters ? 'btn-primary' : ''}`} onClick={() => setShowFilters(!showFilters)}>
+                 <Filter size={16} /> Bộ lọc
+             </button>
+          </div>
+          <div className="field" style={{ width: 150 }}>
             <label>Sắp xếp</label>
             <select value={stockList.state.sortKey} onChange={(e) => stockList.patch({ sortKey: e.target.value })}>
               <option value="sku">SKU</option>
@@ -613,14 +731,7 @@ export function InventoryPage() {
               <option value="avgCost">Giá vốn TB</option>
             </select>
           </div>
-          <div className="field" style={{ width: 200 }}>
-            <label>Chiều</label>
-            <select value={stockList.state.sortDir} onChange={(e) => stockList.patch({ sortDir: e.target.value as 'asc' | 'desc' })}>
-              <option value="asc">Tăng dần</option>
-              <option value="desc">Giảm dần</option>
-            </select>
-          </div>
-          <div className="field" style={{ flex: 1 }}>
+          <div className="field" style={{ width: 150 }}>
             <label>Saved views</label>
             <SavedViewsBar
               views={stockList.views}
@@ -629,20 +740,62 @@ export function InventoryPage() {
               onDelete={stockList.deleteView}
             />
           </div>
-          <div className="field">
-            <label>&nbsp;</label>
-            <button className="btn" onClick={stockList.reset}>
-              Reset
-            </button>
-          </div>
         </div>
+
+        {/* Advanced Filters Panel */}
+        {showFilters && (
+            <div className="filter-panel" style={{ padding: 16, background: 'var(--bg-subtle)', borderRadius: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                <div className="field">
+                    <label>Danh mục</label>
+                    <select value={stockList.state.filters.categoryId} onChange={e => stockList.patchFilters({ categoryId: e.target.value })}>
+                        <option value="">Tất cả</option>
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                </div>
+                <div className="field">
+                    <label>Thương hiệu</label>
+                    <select value={stockList.state.filters.supplierId} onChange={e => stockList.patchFilters({ supplierId: e.target.value })}>
+                        <option value="">Tất cả</option>
+                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                </div>
+                <div className="field">
+                    <label>Trạng thái tồn</label>
+                    <select value={stockList.state.filters.stockLevel} onChange={e => stockList.patchFilters({ stockLevel: e.target.value as any })}>
+                        <option value="all">Tất cả</option>
+                        <option value="low">Cảnh báo thấp</option>
+                        <option value="negative">Kho âm</option>
+                        <option value="high">Tồn nhiều ({'>'}100)</option>
+                    </select>
+                </div>
+                <div className="field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <button className="btn btn-ghost" onClick={() => stockList.patchFilters({ categoryId: '', supplierId: '', stockLevel: 'all' })}>
+                        Xóa bộ lọc
+                    </button>
+                </div>
+            </div>
+        )}
+
         <div className="table-wrap">
-          <table className="table">
+          <table className="table sticky-header">
             <thead>
               <tr>
-                <th>SKU</th>
+                <th className="sticky-col-1" style={{ width: 48, textAlign: 'center' }}>
+                    <div 
+                        onClick={toggleSelectAll}
+                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        {selectedIds.size === pagedStockRows.length && pagedStockRows.length > 0 ? (
+                            <CheckSquare size={18} color="var(--primary-600)" />
+                        ) : (
+                            <Square size={18} color="var(--text-muted)" />
+                        )}
+                    </div>
+                </th>
+                <th className="sticky-col-2">SKU</th>
                 <th>Tồn</th>
                 <th>Giá vốn TB</th>
+                <th>Thành tiền</th>
               </tr>
             </thead>
             <tbody>
@@ -653,6 +806,8 @@ export function InventoryPage() {
                   productName={productsById.get(r.sku.productId) ?? r.sku.productId}
                   stock={r.stock}
                   avgCost={r.avgCost}
+                  selected={selectedIds.has(r.sku.id)}
+                  onSelect={() => toggleSelect(r.sku.id)}
                 />
               ))}
             </tbody>
@@ -785,6 +940,26 @@ export function InventoryPage() {
           onChangePageSize={(pageSize) => historyList.patch({ pageSize })}
         />
       </div>
+      
+      <style>{`
+        .sticky-col-1 {
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border-color);
+        }
+        .sticky-col-2 {
+            position: sticky;
+            left: 48px;
+            z-index: 10;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border-color);
+        }
+        .tr-selected td {
+            background: var(--primary-50);
+        }
+      `}</style>
     </div>
   )
 }

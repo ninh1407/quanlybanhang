@@ -1,5 +1,8 @@
 export type AppSettings = {
   companyName: string
+  logoUrl: string
+  primaryColor: string
+  customDomain: string
   taxRatePercent: number
   lowStockThresholdPercent: number
   defaultLocationId: string
@@ -10,6 +13,9 @@ const STORAGE_KEY = 'app_settings_v1'
 
 export const defaultSettings: AppSettings = {
   companyName: 'Điện máy xanh',
+  logoUrl: '',
+  primaryColor: '#2563EB', // blue-600
+  customDomain: '',
   taxRatePercent: 25,
   lowStockThresholdPercent: 30,
   defaultLocationId: '',
@@ -27,6 +33,9 @@ export function loadSettings(): AppSettings {
     const parsed = JSON.parse(raw) as Partial<AppSettings>
     return {
       companyName: typeof parsed.companyName === 'string' ? parsed.companyName : defaultSettings.companyName,
+      logoUrl: typeof parsed.logoUrl === 'string' ? parsed.logoUrl : defaultSettings.logoUrl,
+      primaryColor: typeof parsed.primaryColor === 'string' ? parsed.primaryColor : defaultSettings.primaryColor,
+      customDomain: typeof parsed.customDomain === 'string' ? parsed.customDomain : defaultSettings.customDomain,
       taxRatePercent: clamp(Number(parsed.taxRatePercent ?? defaultSettings.taxRatePercent), 0, 100),
       lowStockThresholdPercent: clamp(
         Number(parsed.lowStockThresholdPercent ?? defaultSettings.lowStockThresholdPercent),

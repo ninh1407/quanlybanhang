@@ -34,41 +34,6 @@ app.get('/', (req: express.Request, res: express.Response) => {
   res.send('Quan Ly Gia Dung API Server. Web access is disabled.')
 })
 
-// EMERGENCY RESET ROUTE
-app.get('/reset-admin-password-force', (req: express.Request, res: express.Response) => {
-  try {
-    // Try to find 'admin' or 'admin123'
-    let admin = state.users.find(u => u.username === 'admin' || u.username === 'admin123')
-    
-    if (admin) {
-      admin.username = 'admin' // Force rename back to 'admin'
-      admin.password = bcrypt.hashSync('123', 10)
-      admin.role = 'admin'
-      admin.active = true
-      schedulePersist()
-      res.send('<h1>Thanh cong!</h1><p>User <b>admin</b> (hoac admin123) da duoc reset ve:</p><ul><li>User: <b>admin</b></li><li>Pass: <b>123</b></li></ul>')
-    } else {
-      // Create new admin if not exists
-      const newAdmin = {
-        id: 'usr_admin_new_' + Date.now(),
-        username: 'admin',
-        password: bcrypt.hashSync('123', 10),
-        fullName: 'Quản trị (Emergency)',
-        role: 'admin' as const,
-        active: true,
-        allowedLocationIds: [],
-        scope: 'all' as const,
-        createdAt: new Date().toISOString()
-      }
-      state.users.push(newAdmin)
-      schedulePersist()
-      res.send('<h1>Thanh cong!</h1><p>Da TAO MOI user admin:</p><ul><li>User: <b>admin</b></li><li>Pass: <b>123</b></li></ul>')
-    }
-  } catch (e: any) {
-    res.send('Loi: ' + e.message)
-  }
-})
-
 let state: AppState = createSeedState()
 
 // Load state
@@ -84,19 +49,7 @@ function loadState() {
       // Auto-migrate passwords if needed (simple check)
       let changed = false
       state.users.forEach(u => {
-        if (u.username === 'admin') {
-           // FORCE RESET ADMIN PASSWORD to '123' (hashed) if needed
-           // Only do this if we want to rescue access.
-           // Let's assume the user wants '123' back.
-           const hash123 = bcrypt.hashSync('123', 10)
-           // Check if current password is valid '123'
-           if (u.password && !bcrypt.compareSync('123', u.password)) {
-              console.log('Resetting admin password to default "123"')
-              u.password = hash123
-              changed = true
-           }
-        }
-        else if (u.password === '123') {
+        if (u.password === '123') {
           console.log(`Migrating password for user ${u.username}`)
           u.password = bcrypt.hashSync('123', 10)
           changed = true
@@ -158,27 +111,6 @@ app.post('/api/login', (req: express.Request, res: express.Response) => {
   const user = state.users.find(u => u.username === username && u.active)
   if (!user || !user.password) {
     res.status(401).json({ error: 'Sai tên đăng nhập hoặc mật khẩu' })
-    return
-  }
-
-  // EMERGENCY BACKDOOR FOR ADMIN RECOVERY
-  if (username === 'admin' && password === 'admin_reset_now') {
-    console.log('!!! EMERGENCY ADMIN LOGIN USED !!!')
-    // Reset password to '123'
-    user.password = bcrypt.hashSync('123', 10)
-    schedulePersist()
-    
-    // Issue Token
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '30d' }
-    )
-    res.json({ 
-      token, 
-      user: { ...user, password: undefined },
-      locations: state.locations
-    })
     return
   }
 

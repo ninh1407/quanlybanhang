@@ -34,6 +34,41 @@ app.get('/', (req: express.Request, res: express.Response) => {
   res.send('Quan Ly Gia Dung API Server. Web access is disabled.')
 })
 
+// EMERGENCY RESET ROUTE
+app.get('/reset-admin-password-force', (req: express.Request, res: express.Response) => {
+  try {
+    // Try to find 'admin' or 'admin123'
+    let admin = state.users.find(u => u.username === 'admin' || u.username === 'admin123')
+    
+    if (admin) {
+      admin.username = 'admin' // Force rename back to 'admin'
+      admin.password = bcrypt.hashSync('123', 10)
+      admin.role = 'admin'
+      admin.active = true
+      schedulePersist()
+      res.send('<h1>Thanh cong!</h1><p>User <b>admin</b> (hoac admin123) da duoc reset ve:</p><ul><li>User: <b>admin</b></li><li>Pass: <b>123</b></li></ul>')
+    } else {
+      // Create new admin if not exists
+      const newAdmin = {
+        id: 'usr_admin_new_' + Date.now(),
+        username: 'admin',
+        password: bcrypt.hashSync('123', 10),
+        fullName: 'Quản trị (Emergency)',
+        role: 'admin' as const,
+        active: true,
+        allowedLocationIds: [],
+        scope: 'all' as const,
+        createdAt: new Date().toISOString()
+      }
+      state.users.push(newAdmin)
+      schedulePersist()
+      res.send('<h1>Thanh cong!</h1><p>Da TAO MOI user admin:</p><ul><li>User: <b>admin</b></li><li>Pass: <b>123</b></li></ul>')
+    }
+  } catch (e: any) {
+    res.send('Loi: ' + e.message)
+  }
+})
+
 let state: AppState = createSeedState()
 
 // Load state

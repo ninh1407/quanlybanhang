@@ -70,7 +70,28 @@ export function createSeedState(): AppState {
     stockLedger: [],
     financeTransactions: [],
     debts: [],
-    users: [admin],
+    users: [
+      {
+        id: 'usr_admin',
+        username: 'admin',
+        password: '$2a$10$wT8vFkG.z6y9qJ1kL4t3.e6.g5h4i3j2k1l0m9n8o7p6q5r4s3t2u1', // Placeholder hash, server will reset if needed
+        fullName: 'Quản trị (Admin)',
+        role: 'admin',
+        locationId: null, // Admin has access to all
+        active: true,
+        createdAt: nowIso(),
+      },
+      {
+        id: 'usr_staff1',
+        username: 'staff1',
+        password: '$2a$10$wT8vFkG.z6y9qJ1kL4t3.e6.g5h4i3j2k1l0m9n8o7p6q5r4s3t2u1',
+        fullName: 'Nhân viên 1',
+        role: 'staff',
+        locationId: 'loc_hcm',
+        active: true,
+        createdAt: nowIso(),
+      },
+    ],
     requests: [],
     transferOrders: [],
     notifications: [],

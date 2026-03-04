@@ -45,17 +45,6 @@ export function createSeedState(): AppState {
     createdAt,
   }
 
-  const admin = {
-    id: newId('usr'),
-    username: 'admin',
-    password: '$2b$10$dsrzZxDopDBXAybC24E96et0Fii1U2/3/VEhoLoYF5FLt7mLqiqtm', // '123'
-    fullName: 'Quản trị',
-    role: 'admin' as const,
-    active: true,
-    allowedLocationIds: [],
-    createdAt,
-  }
-
   return {
     categories: [],
     suppliers: [],
@@ -77,8 +66,9 @@ export function createSeedState(): AppState {
         password: '$2a$10$wT8vFkG.z6y9qJ1kL4t3.e6.g5h4i3j2k1l0m9n8o7p6q5r4s3t2u1', // Placeholder hash, server will reset if needed
         fullName: 'Quản trị (Admin)',
         role: 'admin',
-        locationId: null, // Admin has access to all
         active: true,
+        allowedLocationIds: [], // Admin has access to all
+        scope: 'all',
         createdAt: nowIso(),
       },
       {
@@ -87,8 +77,9 @@ export function createSeedState(): AppState {
         password: '$2a$10$wT8vFkG.z6y9qJ1kL4t3.e6.g5h4i3j2k1l0m9n8o7p6q5r4s3t2u1',
         fullName: 'Nhân viên 1',
         role: 'staff',
-        locationId: 'loc_hcm',
         active: true,
+        allowedLocationIds: ['loc_hcm'],
+        scope: 'location',
         createdAt: nowIso(),
       },
     ],

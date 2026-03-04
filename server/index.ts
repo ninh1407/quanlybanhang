@@ -34,7 +34,7 @@ app.get('/', (req: express.Request, res: express.Response) => {
   res.send('Quan Ly Gia Dung API Server. Web access is disabled.')
 })
 
-let state: AppState
+let state: AppState = createSeedState()
 
 // Load state
 function loadState() {
@@ -55,7 +55,7 @@ function loadState() {
            // Let's assume the user wants '123' back.
            const hash123 = bcrypt.hashSync('123', 10)
            // Check if current password is valid '123'
-           if (!bcrypt.compareSync('123', u.password)) {
+           if (u.password && !bcrypt.compareSync('123', u.password)) {
               console.log('Resetting admin password to default "123"')
               u.password = hash123
               changed = true
@@ -70,12 +70,11 @@ function loadState() {
       if (changed) saveStateImmediate()
 
     } else {
-      state = createSeedState()
       console.log('Created new seed state')
     }
   } catch (e) {
     console.error('Failed to load state:', e)
-    state = createSeedState()
+    // state is already seed state
   }
 }
 

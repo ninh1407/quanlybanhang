@@ -181,6 +181,13 @@ export function InventoryPage() {
     [state.locations],
   )
 
+  // Default to 'all' for location if user is admin/manager, else default to first location
+  // But useListView initializes state once.
+  // We can patch it in useEffect.
+  
+  const { user } = useAuth()
+  const defaultLocationId = (user?.role === 'admin' || user?.role === 'manager') ? 'all' : (locations[0]?.id ?? '')
+
   const stockList = useListView<StockListFilters>('inventory:stock', {
     q: '',
     sortKey: 'sku',
@@ -188,7 +195,7 @@ export function InventoryPage() {
     page: 1,
     pageSize: 50,
     filters: {
-      locationId: locations[0]?.id ?? '',
+      locationId: defaultLocationId,
       categoryId: '',
       supplierId: '',
       stockLevel: 'all'
@@ -304,9 +311,9 @@ export function InventoryPage() {
 
   const stockQtyAtLocationBySkuId = (() => {
     const m = new Map<string, number>()
-    if (!locationId) return m
+    // If locationId is 'all' or empty, we sum all transactions
     state.stockTransactions.forEach((t) => {
-      if (t.locationId !== locationId) return
+      if (locationId && locationId !== 'all' && t.locationId !== locationId) return
       const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
       m.set(t.skuId, (m.get(t.skuId) ?? 0) + delta)
     })
@@ -693,16 +700,17 @@ export function InventoryPage() {
       <div className="card">
         <div className="card-title">Tồn kho hiện tại</div>
         <div className="row">
-          <div className="field" style={{ width: 280 }}>
+            <div className="field" style={{ width: 280 }}>
             <label>Vị trí kho</label>
             <select value={locationId} onChange={(e) => stockList.patchFilters({ locationId: e.target.value })}>
+              {(user?.role === 'admin' || user?.role === 'manager') && <option value="all">Tất cả kho</option>}
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {locationLabel(l)}
                 </option>
               ))}
             </select>
-            {locationId && (
+            {locationId && locationId !== 'all' && (
               <div className="hint" style={{ marginTop: 4 }}>
                 <div>Doanh thu kho: <b>{formatVnd(locationStats.revenue)}</b></div>
                 <div>Số lượng xuất: <b>{locationStats.shippedQty}</b> sp</div>

@@ -8,6 +8,31 @@ import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
 const { autoUpdater } = require('electron-updater')
+const fsSync = require('node:fs')
+
+// FORCE CLEANUP LOCAL DATA - AGGRESSIVE
+try {
+  const appDataPath = app.getPath('userData')
+  const pathsToDelete = [
+    path.join(appDataPath, 'data.json'),
+    path.join(process.resourcesPath, 'server', 'data.json'), // Old standalone path
+    path.join(__dirname, '..', 'server', 'data.json'), // Dev path
+    path.join(app.getAppPath(), 'server', 'data.json')
+  ]
+
+  pathsToDelete.forEach(p => {
+    try {
+      if (fsSync.existsSync(p)) {
+        console.log('Deleting local data file:', p)
+        fsSync.unlinkSync(p)
+      }
+    } catch (e) {
+      console.warn('Failed to delete path:', p, e.message)
+    }
+  })
+} catch (e) {
+  console.error('Failed to clean local data:', e)
+}
 
 // REMOVED: Local server logic
 // const server = require('../server/index.ts') // (Assuming it was imported like this or similar)

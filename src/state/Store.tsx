@@ -40,7 +40,22 @@ function getBaseState(): Omit<AppState, 'currentUserId' | 'currentLocationId'> {
 
 function localReducer(state: AppState, action: AppAction): AppState {
   if (action.type === 'sync') {
-    // Merge server state with local session AND base state to ensure no undefined arrays
+    // When syncing, we MUST NOT lose the current session (userId/locationId)
+    // But we must also respect the server's data.
+    
+    // Important: If server returns empty lists but we have local session,
+    // we should trust server for shared data (products, skus, etc)
+    // but maybe keep local session state?
+    
+    // The issue "Admin sees 0 SKUs" while "Staff sees data" implies:
+    // 1. Staff's machine HAS data locally or connects to a different server (local?)
+    // 2. Admin's machine connects to VPS which HAS NO DATA (or Admin is filtered out).
+    
+    // If the user says "Staff sees it", and we forced everyone to VPS, 
+    // maybe Staff hasn't updated yet and is still running local server with data?
+    
+    // Regardless, if Admin sees 0, it means state.skus is empty.
+    
     return {
       ...getBaseState(),
       ...action.state,

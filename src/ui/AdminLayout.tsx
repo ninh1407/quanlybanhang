@@ -72,6 +72,7 @@ function roleLabel(role: string): string {
 }
 
 import { useSettings } from '../settings/useSettings'
+import { getServerUrl } from '../config'
 
 import { version } from '../../package.json'
 
@@ -82,6 +83,7 @@ export function AdminLayout() {
   const { unreadCount } = useNotifications()
   const state = useAppState()
   const { settings } = useSettings()
+  const serverUrl = getServerUrl()
   const currentLocation = useMemo(() => {
     const id = state.currentLocationId
     if (!id) return null
@@ -285,6 +287,14 @@ export function AdminLayout() {
              </div>
           </div>
           <div className="topbar-right" style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            {user?.role === 'admin' && (
+              <div style={{ fontSize: 11, color: '#64748b', textAlign: 'right', lineHeight: 1.2, borderRight: '1px solid #e2e8f0', paddingRight: 12 }}>
+                <div>Server: <b>{serverUrl.replace('http://', '')}</b></div>
+                <div style={{ color: state.skus?.length ? 'green' : 'red' }}>
+                  SKUs: <b>{state.skus?.length || 0}</b> | Products: <b>{state.products?.length || 0}</b>
+                </div>
+              </div>
+            )}
             {currentLocation ? (
               <button
                 className="btn btn-small"

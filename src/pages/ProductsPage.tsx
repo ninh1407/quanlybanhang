@@ -192,7 +192,10 @@ export function ProductsPage() {
 
   const stockQtyBySkuId = useMemo(() => {
     const m = new Map<string, number>()
-    state.stockTransactions.forEach((t) => {
+    // For admin/manager, we want to see TOTAL stock across all locations by default in Products list
+    // Unless we add a location filter here. Currently there is no location filter in ProductsPage.
+    // So we aggregate all.
+    ;(state.stockTransactions || []).forEach((t) => {
       const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
       m.set(t.skuId, (m.get(t.skuId) ?? 0) + delta)
     })
@@ -243,6 +246,10 @@ export function ProductsPage() {
   }, [state.categories, state.products, state.skus, availableQtyBySkuId])
 
   const skus = useMemo(() => {
+    // START DEBUG
+    // console.log('All SKUs:', state.skus.length)
+    // END DEBUG
+    
     let list = state.skus.slice()
     
     if (search) {
@@ -269,6 +276,7 @@ export function ProductsPage() {
        list = list.filter(s => s.active === isActive)
     }
 
+    // Default Sort
     return list.sort((a, b) => {
       const pa = productsById.get(a.productId) ?? a.productId
       const pb = productsById.get(b.productId) ?? b.productId

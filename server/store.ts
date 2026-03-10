@@ -4,11 +4,15 @@ import { fileURLToPath } from 'url'
 import bcrypt from 'bcryptjs'
 import { createSeedState } from '../src/state/seed'
 import type { AppState } from '../src/state/types'
+import { PrismaClient } from '@prisma/client'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const DATA_FILE = path.resolve(__dirname, 'data.json')
+
+// Prisma Client Instance
+export const prisma = new PrismaClient()
 
 // Singleton State Container
 class Store {

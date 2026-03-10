@@ -15,6 +15,7 @@ const emptyForm: Omit<Customer, 'id' | 'createdAt'> = {
   address: '',
   note: '',
   discountPercent: 0,
+  loyaltyPoints: 0,
 }
 
 function sum(numbers: number[]): number {
@@ -67,6 +68,24 @@ export function CustomersPage() {
     return map
   }, [state.orders])
 
+  const debtByCustomer = useMemo(() => {
+    const map = new Map<string, number>()
+    state.debts.forEach((d) => {
+      // Try to match by partnerId first, then partnerName
+      let customerId = d.partnerId
+      if (!customerId) {
+         // Fallback: name matching (weak)
+         const c = state.customers.find(c => c.name === d.partnerName)
+         if (c) customerId = c.id
+      }
+      
+      if (customerId && d.status === 'open' && d.type === 'receivable') {
+        map.set(customerId, (map.get(customerId) ?? 0) + d.amount)
+      }
+    })
+    return map
+  }, [state.debts, state.customers])
+
   const customers = useMemo(() => {
     const query = q.trim().toLowerCase()
     const list = state.customers
@@ -81,7 +100,8 @@ export function CustomersPage() {
         const isVip = count > 0 && (spend >= Math.max(0, Number(vipSpend) || 0) || count >= Math.max(1, Number(vipOrders) || 0))
         const isNew = count > 0 && !isVip && daysSinceFirst <= Math.max(1, Number(newDays) || 1)
         const seg = count === 0 ? 'none' : isVip ? 'vip' : isNew ? 'new' : 'old'
-        return { c, orders, purchases, spend, count, first, last, seg }
+        const debt = debtByCustomer.get(c.id) ?? 0
+        return { c, orders, purchases, spend, count, first, last, seg, debt }
       })
       .filter((x) => {
         if (!query) return true
@@ -94,7 +114,7 @@ export function CustomersPage() {
       .filter((x) => (segment === 'all' ? true : x.seg === segment))
       .sort((a, b) => b.c.createdAt.localeCompare(a.c.createdAt))
     return list
-  }, [newDays, ordersByCustomer, q, refMs, segment, state.customers, vipOrders, vipSpend])
+  }, [newDays, ordersByCustomer, debtByCustomer, q, refMs, segment, state.customers, vipOrders, vipSpend])
 
   const segmentCounts = useMemo(() => {
     const counts = { new: 0, old: 0, vip: 0, none: 0 }
@@ -123,6 +143,7 @@ export function CustomersPage() {
       address: c.address,
       note: c.note,
       discountPercent: c.discountPercent,
+      loyaltyPoints: c.loyaltyPoints || 0,
     })
   }
 
@@ -139,6 +160,7 @@ export function CustomersPage() {
       address: form.address.trim(),
       note: form.note.trim(),
       discountPercent: Math.max(0, Math.min(100, Number(form.discountPercent) || 0)),
+      loyaltyPoints: existing ? (existing.loyaltyPoints || 0) : 0, // Preserve points if editing, or 0 if new
     }
     dispatch({ type: 'customers/upsert', customer })
     startCreate()
@@ -271,14 +293,16 @@ export function CustomersPage() {
                   <th>Email</th>
                   <th>Địa chỉ</th>
                   <th>CK (%)</th>
+                  <th>Điểm tích lũy</th>
                   <th>Số đơn</th>
                   <th>Tổng mua</th>
+                  <th>Công nợ</th>
                   <th>Lần mua cuối</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {customers.map(({ c, count, spend, last, seg }) => (
+                {customers.map(({ c, count, spend, last, seg, debt }) => (
                   <tr key={c.id}>
                     <td>{seg === 'vip' ? 'VIP' : seg === 'new' ? 'Khách mới' : seg === 'old' ? 'Khách cũ' : 'Chưa mua'}</td>
                     <td>{c.name}</td>
@@ -286,8 +310,10 @@ export function CustomersPage() {
                     <td>{c.email}</td>
                     <td>{c.address}</td>
                     <td>{c.discountPercent}</td>
+                    <td style={{ fontWeight: 600, color: '#2563EB' }}>{c.loyaltyPoints || 0}</td>
                     <td>{count}</td>
                     <td>{formatVnd(spend)}</td>
+                    <td style={{ color: debt > 0 ? 'red' : 'inherit', fontWeight: debt > 0 ? 600 : 400 }}>{formatVnd(debt)}</td>
                     <td>{last ? formatDateTime(last) : ''}</td>
                     <td className="cell-actions">
                       <button className="btn btn-small" onClick={() => setSelectedId(c.id)}>

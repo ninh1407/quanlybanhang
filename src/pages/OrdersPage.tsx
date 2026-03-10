@@ -55,6 +55,7 @@ const allStatuses: { value: OrderStatus; label: string }[] = [
   { value: 'paid', label: 'Đã thanh toán' },
   { value: 'returned', label: 'Hoàn trả' },
   { value: 'cancelled', label: 'Đã hủy' },
+  { value: 'pending_cancel', label: 'Chờ hủy' },
 ]
 
 const reconcileOptions: { value: ReconcileStatus; label: string }[] = [
@@ -149,7 +150,7 @@ function KanbanCard({ order, customer, onSelect }: { order: Order, customer: Cus
                 borderRadius: 6, 
                 boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                 cursor: 'pointer',
-                borderLeft: `4px solid ${order.status === 'paid' ? 'green' : order.status === 'cancelled' ? 'red' : 'blue'}`
+                borderLeft: `4px solid ${order.status === 'paid' ? 'green' : order.status === 'cancelled' ? 'red' : order.status === 'pending_cancel' ? 'orange' : 'blue'}`
             }}
         >
             <div className="row-between" style={{ marginBottom: 4 }}>
@@ -165,7 +166,7 @@ function KanbanCard({ order, customer, onSelect }: { order: Order, customer: Cus
     )
 }
 
-function OrderRow({ order, customer, locationLabel, canWrite, isAdmin, onSelect, onSetPaid, onSetReturned, onDelete }: {
+function OrderRow({ order, customer, locationLabel, canWrite, isAdmin, onSelect, onSetPaid, onSetReturned, onDelete, onRequestCancel, onApproveCancel, onRejectCancel }: {
     order: Order,
     customer: Customer | null,
     locationLabel: string,
@@ -174,7 +175,10 @@ function OrderRow({ order, customer, locationLabel, canWrite, isAdmin, onSelect,
     onSelect: (id: string) => void,
     onSetPaid: (order: Order) => void,
     onSetReturned: (order: Order) => void,
-    onDelete: (order: Order) => void
+    onDelete: (order: Order) => void,
+    onRequestCancel: (order: Order) => void,
+    onApproveCancel: (order: Order) => void,
+    onRejectCancel: (order: Order) => void
 }) {
     const total = orderTotal(order)
     return (
@@ -188,7 +192,7 @@ function OrderRow({ order, customer, locationLabel, canWrite, isAdmin, onSelect,
             <td>{locationLabel}</td>
             <td>{formatDateTime(order.createdAt)}</td>
             <td>
-                <span className={`badge badge-${order.status === 'paid' ? 'success' : order.status === 'cancelled' ? 'danger' : 'neutral'}`}>
+                <span className={`badge badge-${order.status === 'paid' ? 'success' : order.status === 'cancelled' ? 'danger' : order.status === 'pending_cancel' ? 'warning' : 'neutral'}`}>
                     {orderStatusLabels[order.status]}
                 </span>
             </td>
@@ -200,7 +204,22 @@ function OrderRow({ order, customer, locationLabel, canWrite, isAdmin, onSelect,
             <td>{order.isReconciledSupplier === 'reconciled' ? 'Đã đối soát' : '-'}</td>
             <td style={{ fontWeight: 600 }}>{formatVnd(total)}</td>
             <td className="cell-actions" onClick={e => e.stopPropagation()}>
-                {canWrite && order.status !== 'paid' && order.status !== 'cancelled' && (
+                {canWrite && !['cancelled', 'returned', 'pending_cancel'].includes(order.status) && (
+                    <button className="btn btn-small btn-warning" onClick={() => onRequestCancel(order)} title="Yêu cầu hủy">
+                        Hủy
+                    </button>
+                )}
+                {isAdmin && order.status === 'pending_cancel' && (
+                  <>
+                    <button className="btn btn-small btn-success" onClick={() => onApproveCancel(order)} title="Duyệt hủy">
+                        Duyệt
+                    </button>
+                    <button className="btn btn-small btn-danger" onClick={() => onRejectCancel(order)} title="Từ chối hủy">
+                        Từ chối
+                    </button>
+                  </>
+                )}
+                {canWrite && order.status !== 'paid' && order.status !== 'cancelled' && order.status !== 'pending_cancel' && (
                     <button className="btn btn-small btn-success" onClick={() => onSetPaid(order)}>
                         TT
                     </button>
@@ -253,6 +272,7 @@ export function OrdersPage() {
   const [paymentBillFiles, setPaymentBillFiles] = useState<FileList | null>(null)
   const [shippingProofFiles, setShippingProofFiles] = useState<FileList | null>(null)
   const [codImport, setCodImport] = useState('')
+  const [usePoints, setUsePoints] = useState<number>(0)
 
   // Pre-calculate stock map for fulfillment
   const stockMap = useMemo(() => {
@@ -489,8 +509,10 @@ export function OrdersPage() {
   }, [orderItems, source, subTotalOverride, type])
   const discountAmount = useMemo(() => {
     if (source !== 'pos' && type !== 'dropship') return 0
-    return Math.round((subTotal * (Number(discountPercent) || 0)) / 100)
-  }, [discountPercent, source, subTotal, type])
+    const percentDisc = Math.round((subTotal * (Number(discountPercent) || 0)) / 100)
+    const pointsDisc = (usePoints || 0) * 1000
+    return percentDisc + pointsDisc
+  }, [discountPercent, source, subTotal, type, usePoints])
   const total = useMemo(() => subTotal - discountAmount + (Number(shippingFee) || 0), [discountAmount, shippingFee, subTotal])
 
   function setItem(idx: number, next: ItemDraft) {
@@ -571,6 +593,30 @@ export function OrdersPage() {
     setDiscountPercentInput(0)
     setPaymentBillFiles(null)
     setShippingProofFiles(null)
+  }
+
+  function awardLoyaltyPoints(order: Order) {
+    if (!order.customerId) return
+    const customer = customersById.get(order.customerId)
+    if (!customer) return
+    
+    // 1 point per 100,000 VND
+    const total = orderTotal(order)
+    const earned = Math.floor(total / 100000)
+    if (earned <= 0) return
+
+    dispatch({
+        type: 'customers/upsert',
+        customer: { ...customer, loyaltyPoints: (customer.loyaltyPoints || 0) + earned }
+    })
+    
+    // Update order to record awarded points
+    dispatch({
+        type: 'orders/upsert',
+        order: { ...order, loyaltyPointsAwarded: earned }
+    })
+    
+    void dialogs.alert({ message: `Khách hàng ${customer.name} được cộng ${earned} điểm tích lũy.` })
   }
 
   function addFinanceIncome(order: Order) {
@@ -768,6 +814,7 @@ export function OrdersPage() {
       partnerVoucherCode: type === 'dropship' ? partnerVoucherCode.trim() : undefined,
       discountPercent: Number(discountPercentInput) || 0,
       discountAmount: source === 'pos' || type === 'dropship' ? discountAmount : 0,
+      loyaltyPointsUsed: usePoints > 0 ? usePoints : undefined,
       vatAmount: Math.max(0, Number(vatAmount) || 0),
       otherFees: Math.max(0, Number(otherFees) || 0),
       otherFeesNote: otherFeesNote.trim() || undefined,
@@ -781,12 +828,60 @@ export function OrdersPage() {
 
     dispatch({ type: 'orders/upsert', order })
 
+    // Deduct Points
+    if (usePoints > 0 && customerId) {
+        const c = customersById.get(customerId)
+        if (c) {
+            dispatch({
+                type: 'customers/upsert',
+                customer: { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - usePoints) }
+            })
+        }
+    }
+
     if (order.status === 'paid') {
       addFinanceIncome(order)
+      awardLoyaltyPoints(order)
       if (order.source === 'pos') addStockOut(order)
+    } else if (order.paymentMethod === 'debt' && (order.status === 'delivered' || order.status === 'shipped' || order.status === 'confirmed')) {
+       // If Debt, we create Debt record instead of Finance Income
+       if (true) {
+          addDebtRecord(order)
+          if (order.source === 'pos') addStockOut(order)
+       }
     }
 
     resetForm()
+  }
+
+  function addDebtRecord(order: Order) {
+    if (order.paymentMethod !== 'debt') return
+    if (!order.customerId) return
+    const customer = customersById.get(order.customerId)
+    const amount = orderTotal(order)
+    if (amount <= 0) return
+    
+    // Check if debt already exists for this order
+    const existing = state.debts.find(d => d.note.includes(order.code))
+    if (existing) return
+
+    const createdAt = nowIso()
+    dispatch({
+      type: 'debts/upsert',
+      debt: {
+        id: newId('dbt'),
+        code: `CN${state.debts.length + 1}`,
+        type: 'receivable',
+        partnerId: order.customerId,
+        partnerName: customer ? customer.name : 'Unknown',
+        amount,
+        status: 'open',
+        dueDate: null,
+        note: `Công nợ đơn hàng ${order.code}`,
+        createdAt,
+        settledAt: null
+      }
+    })
   }
 
   function updateOrder(order: Order, patch: Partial<Order>, metaReason?: string) {
@@ -821,6 +916,7 @@ export function OrdersPage() {
     }
     updateOrder(order, { status: 'paid' })
     addFinanceIncome({ ...order, status: 'paid' })
+    awardLoyaltyPoints({ ...order, status: 'paid' })
     if (order.source === 'pos') addStockOut(order)
   }
 
@@ -836,6 +932,42 @@ export function OrdersPage() {
     updateOrder(order, { status: 'returned' })
     addFinanceRefund({ ...order, status: 'returned' })
     if (order.source === 'pos') addStockIn(order)
+  }
+
+  async function onRequestCancel(order: Order) {
+    if (!canWrite) return
+    if (order.status === 'cancelled' || order.status === 'returned' || order.status === 'pending_cancel') {
+        await dialogs.alert({ message: 'Đơn này không thể yêu cầu hủy.' })
+        return
+    }
+    
+    const reason = await dialogs.prompt({ message: 'Nhập lý do hủy đơn (bắt buộc):', required: true })
+    if (reason == null) return
+    if (!reason.trim()) {
+      await dialogs.alert({ message: 'Vui lòng nhập lý do.' })
+      return
+    }
+    
+    updateOrder(order, { status: 'pending_cancel', cancelReason: reason.trim() }, `Requested cancel: ${reason.trim()}`)
+    await dialogs.alert({ message: 'Đã gửi yêu cầu hủy đơn. Vui lòng chờ Admin duyệt.' })
+  }
+
+  async function onApproveCancel(order: Order) {
+    if (!isAdmin) return
+    const ok = await dialogs.confirm({ message: `Duyệt hủy và XÓA VĨNH VIỄN đơn ${order.code}?\nLý do hủy: ${order.cancelReason}`, dangerous: true })
+    if (!ok) return
+    
+    dispatch({ type: 'orders/delete', id: order.id, meta: { reason: `Admin approved cancel request: ${order.cancelReason}` } })
+    if (selectedOrderId === order.id) setSelectedOrderId(null)
+    await dialogs.alert({ message: 'Đã xóa đơn thành công.' })
+  }
+
+  async function onRejectCancel(order: Order) {
+    if (!isAdmin) return
+    const ok = await dialogs.confirm({ message: `Từ chối hủy đơn ${order.code}? Trạng thái sẽ về "Xác nhận".` })
+    if (!ok) return
+    
+    updateOrder(order, { status: 'confirmed', cancelReason: undefined }, 'Admin rejected cancel')
   }
 
   async function deleteOrder(order: Order) {
@@ -941,10 +1073,10 @@ export function OrdersPage() {
 
   const kanbanColumns = useMemo(() => [
       { id: 'new', label: 'Mới', statuses: ['draft', 'confirmed'] as OrderStatus[], icon: <Clock size={16} /> },
-      { id: 'processing', label: 'Đang xử lý', statuses: ['packed'] as OrderStatus[], icon: <Package size={16} /> },
+      { id: 'processing', label: 'Đang xử lý', statuses: ['picking', 'packed', 'ready_to_ship'] as OrderStatus[], icon: <Package size={16} /> },
       { id: 'shipping', label: 'Đang giao', statuses: ['shipped'] as OrderStatus[], icon: <Truck size={16} /> },
       { id: 'delivered', label: 'Đã giao / Thành công', statuses: ['delivered', 'paid'] as OrderStatus[], icon: <CheckCircle size={16} /> },
-      { id: 'returned', label: 'Hoàn', statuses: ['returned', 'cancelled'] as OrderStatus[], icon: <AlertCircle size={16} /> },
+      { id: 'returned', label: 'Hủy / Hoàn', statuses: ['pending_cancel', 'returned', 'cancelled'] as OrderStatus[], icon: <AlertCircle size={16} /> },
   ], [])
 
   return (
@@ -1016,6 +1148,7 @@ export function OrdersPage() {
               <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as OrderPaymentMethod)}>
                 <option value="cod">COD</option>
                 <option value="transfer">Chuyển khoản</option>
+                <option value="debt">Công nợ (Thanh toán sau)</option>
               </select>
             </div>
             {paymentMethod === 'transfer' && (
@@ -1037,6 +1170,24 @@ export function OrdersPage() {
                 onChange={(e) => setDiscountPercentInput(Number(e.target.value))}
               />
             </div>
+            {customerId && customersById.get(customerId) && (
+              <div className="field">
+                <label>
+                  Dùng điểm (Có: {customersById.get(customerId)!.loyaltyPoints || 0})
+                </label>
+                <input
+                  type="number"
+                  value={usePoints}
+                  onChange={(e) => {
+                    const v = Math.max(0, Number(e.target.value))
+                    const max = customersById.get(customerId!)!.loyaltyPoints || 0
+                    if (v > max) return 
+                    setUsePoints(v)
+                  }}
+                />
+                <div className="hint">Giảm {formatVnd(usePoints * 1000)}</div>
+              </div>
+            )}
             <div className="field">
               <label>Trạng thái</label>
               <select value={status} onChange={(e) => setStatus(e.target.value as OrderStatus)}>
@@ -1479,6 +1630,9 @@ export function OrdersPage() {
                       onSetPaid={setPaid}
                       onSetReturned={setReturned}
                       onDelete={deleteOrder}
+                      onRequestCancel={onRequestCancel}
+                      onApproveCancel={onApproveCancel}
+                      onRejectCancel={onRejectCancel}
                     />
                   ))}
                 </tbody>
@@ -1501,6 +1655,21 @@ export function OrdersPage() {
                  <div className="row-between" style={{ marginBottom: 16 }}>
                     <h3>Chi tiết đơn: {selectedOrder.code}</h3>
                     <div className="row">
+                      {canWrite && !['cancelled', 'returned', 'pending_cancel'].includes(selectedOrder.status) && (
+                          <button className="btn btn-warning" onClick={() => onRequestCancel(selectedOrder)}>
+                              Yêu cầu hủy
+                          </button>
+                      )}
+                      {isAdmin && selectedOrder.status === 'pending_cancel' && (
+                        <>
+                          <button className="btn btn-success" onClick={() => onApproveCancel(selectedOrder)}>
+                              Duyệt hủy
+                          </button>
+                          <button className="btn btn-danger" onClick={() => onRejectCancel(selectedOrder)}>
+                              Từ chối hủy
+                          </button>
+                        </>
+                      )}
                       {selectedOrder.type === 'internal' && (
                         <button className="btn" onClick={() => {
                           const items = selectedOrder.items.map(it => {
@@ -1521,6 +1690,14 @@ export function OrdersPage() {
                           In phiếu xuất kho
                         </button>
                       )}
+                      {isAdmin && (selectedOrder.status === 'draft' || selectedOrder.status === 'cancelled') && (
+                          <button className="btn btn-danger" onClick={() => deleteOrder(selectedOrder)}>
+                              Xóa đơn
+                          </button>
+                      )}
+                      <button className="btn" onClick={() => window.open(`#/orders/${selectedOrder.id}/print`, '_blank')}>
+                          In phiếu
+                      </button>
                       <button className="btn" onClick={() => setSelectedOrderId(null)}>Đóng</button>
                     </div>
                  </div>
@@ -1540,6 +1717,12 @@ export function OrdersPage() {
                           ))}
                        </select>
                     </div>
+                    {selectedOrder.cancelReason && (
+                      <div className="field field-span-2" style={{ background: '#fff4e5', padding: 8, borderRadius: 4, border: '1px solid #ffe0b2' }}>
+                        <label style={{ color: '#e65100', display: 'block', marginBottom: 4 }}>Lý do hủy:</label>
+                        <div style={{ fontWeight: 600 }}>{selectedOrder.cancelReason}</div>
+                      </div>
+                    )}
                     <div className="field">
                        <label>Loại đơn</label>
                        <select
@@ -1637,6 +1820,7 @@ export function OrdersPage() {
                       >
                         <option value="cod">COD</option>
                         <option value="transfer">Chuyển khoản</option>
+                        <option value="debt">Công nợ</option>
                       </select>
                     </div>
                     <div className="field">

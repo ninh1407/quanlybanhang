@@ -21,6 +21,7 @@ const emptyForm: Omit<Supplier, 'id' | 'createdAt'> = {
   address: '',
   note: '',
   country: '',
+  manufacturingCountry: '',
   segment: 'cheap',
 }
 
@@ -51,6 +52,7 @@ export function SuppliersPage() {
       address: s.address,
       note: s.note,
       country: s.country || '',
+      manufacturingCountry: s.manufacturingCountry || '',
       segment: s.segment || 'cheap',
     })
   }
@@ -69,6 +71,7 @@ export function SuppliersPage() {
       address: form.address.trim(),
       note: form.note.trim(),
       country: form.country?.trim(),
+      manufacturingCountry: form.manufacturingCountry?.trim(),
       segment: form.segment,
     }
     dispatch({ type: 'suppliers/upsert', supplier })
@@ -97,8 +100,12 @@ export function SuppliersPage() {
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="field">
-              <label>Quốc gia</label>
-              <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="VD: Việt Nam, Nhật Bản..." />
+              <label>Xuất xứ thương hiệu</label>
+              <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="VD: Nhật Bản, Mỹ..." />
+            </div>
+            <div className="field">
+              <label>Nơi sản xuất</label>
+              <input value={form.manufacturingCountry} onChange={(e) => setForm({ ...form, manufacturingCountry: e.target.value })} placeholder="VD: Trung Quốc, Việt Nam..." />
             </div>
              <div className="field">
               <label>Phân khúc</label>
@@ -147,7 +154,8 @@ export function SuppliersPage() {
                 <tr>
                   <th>Mã</th>
                   <th>Tên</th>
-                  <th>Quốc gia</th>
+                  <th>Xuất xứ</th>
+                  <th>Nơi SX</th>
                   <th>Phân khúc</th>
                   <th>SĐT</th>
                   <th />
@@ -159,6 +167,7 @@ export function SuppliersPage() {
                     <td>{s.code}</td>
                     <td>{s.name}</td>
                     <td>{s.country}</td>
+                    <td>{s.manufacturingCountry}</td>
                     <td>
                        {s.segment === 'cheap' && <span className="badge badge-neutral">Phổ thông</span>}
                        {s.segment === 'mid' && <span className="badge badge-info">Trung cấp</span>}

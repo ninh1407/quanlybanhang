@@ -1,4 +1,5 @@
 import express from 'express'
+import cors from 'cors'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
 import fs from 'fs'
@@ -19,7 +20,21 @@ const PORT = process.env.PORT || 3000
 const JWT_SECRET = 'dmx-secret-key-2024-secure-v1'
 
 const app = express()
+app.use(cors()) // Enable CORS for all routes
 app.use(express.json()) // Parse JSON bodies
+
+// System Endpoints
+app.get('/api/version', (req, res) => res.json({ version: '2.11.0', name: 'Enterprise Server' }))
+app.get('/api/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }))
+
+// Backup Endpoint
+app.get('/api/backup', (req, res) => {
+    if (fs.existsSync(DATA_FILE)) {
+        res.download(DATA_FILE)
+    } else {
+        res.status(404).json({ error: 'No data found' })
+    }
+})
 
 const httpServer = createServer(app)
 const io = new Server(httpServer, {

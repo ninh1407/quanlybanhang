@@ -39,29 +39,78 @@ function getBaseState(): Omit<AppState, 'currentUserId' | 'currentLocationId'> {
 }
 
 function localReducer(state: AppState, action: AppAction): AppState {
-  if (action.type === 'sync') {
-    // When syncing, we MUST NOT lose the current session (userId/locationId)
-    // But we must also respect the server's data.
-    
-    // Important: If server returns empty lists but we have local session,
-    // we should trust server for shared data (products, skus, etc)
-    // but maybe keep local session state?
-    
-    // The issue "Admin sees 0 SKUs" while "Staff sees data" implies:
-    // 1. Staff's machine HAS data locally or connects to a different server (local?)
-    // 2. Admin's machine connects to VPS which HAS NO DATA (or Admin is filtered out).
-    
-    // If the user says "Staff sees it", and we forced everyone to VPS, 
-    // maybe Staff hasn't updated yet and is still running local server with data?
-    
-    // Regardless, if Admin sees 0, it means state.skus is empty.
-    
+  // LOG ALL ACTIONS FOR DEBUG
+  // console.log('[Reducer:Action]', action.type)
+
+  if (action.type === 'auth/login') {
+    // DO NOT RESET STATE ON LOGIN IF WE ALREADY HAVE DATA
+    // Only update userId
     return {
-      ...getBaseState(),
+      ...state,
+      currentUserId: action.userId,
+      // Keep existing data (products, skus, etc)
+    }
+  }
+
+  if (action.type === 'session/switchLocation') {
+    // DO NOT RESET STATE ON SWITCH LOCATION IF WE ALREADY HAVE DATA
+    // The core reducer might try to replace state with action.warehouse
+    // But if action.warehouse is empty (which happens on client-side switch), we lose data.
+    
+    // Check if we have data locally but incoming warehouse state is empty
+    if (state.products.length > 0 && (!action.warehouse || !action.warehouse.products || action.warehouse.products.length === 0)) {
+       console.warn('[Reducer:SwitchLocation] Preventing state reset. Keeping local data.')
+       return {
+         ...state,
+         currentLocationId: action.locationId,
+       }
+    }
+    // If incoming warehouse has data, maybe it's a full sync from server? Let it proceed?
+    // Actually, switchLocation usually comes from UI, not server full sync.
+    // SAFE: Always keep local state and just switch ID.
+    return {
+        ...state,
+        currentLocationId: action.locationId,
+    }
+  }
+
+  if (action.type === 'sync') {
+    // Debug: Check what we are merging
+    /*
+    console.log('[Reducer:Sync] Incoming:', {
+      products: action.state.products?.length,
+      skus: action.state.skus?.length
+    })
+    */
+
+    // Validate incoming state before merging
+    if (!action.state || !Array.isArray(action.state.products)) {
+      console.error('[Reducer:Sync] Invalid state received!', action.state)
+      return state // Do not update if invalid
+    }
+    
+    // PROTECT STATE: If incoming state is empty but current state has data, DO NOT OVERWRITE with empty
+    // unless we are sure. But for Admin, empty state is usually wrong.
+    if (action.state.products.length === 0 && state.products.length > 0) {
+        console.warn('[Reducer:Sync] Ignored EMPTY state from server because local state has data (Safety Guard)')
+        return state
+    }
+
+    const nextState = {
+      ...state, // KEEP CURRENT STATE, DON'T RESET TO BASE
       ...action.state,
       currentUserId: state.currentUserId,
-      currentLocationId: state.currentLocationId,
+      currentLocationId: state.currentLocationId || 'all', // FORCE DEFAULT 'all' for Admin if null
     }
+    
+    /*
+    console.log('[Reducer:Sync] New State:', {
+      products: nextState.products?.length,
+      skus: nextState.skus?.length
+    })
+    */
+
+    return nextState
   }
   return coreReducer(state, action)
 }
@@ -130,7 +179,15 @@ export function StoreProvider(props: { children: ReactNode }) {
     })
 
     socket.on('sync', (serverState: AppState) => {
-      console.log('Received sync from server')
+      console.log('Received sync from server', {
+        products: serverState.products?.length,
+        skus: serverState.skus?.length,
+        users: serverState.users?.length
+      })
+      
+      // Ensure we don't accidentally wipe data if server sends partial state
+      // But server sends full state currently.
+      
       dispatch({ type: 'sync', state: serverState })
     })
 
@@ -144,8 +201,10 @@ export function StoreProvider(props: { children: ReactNode }) {
     })
 
     return () => {
-      socket.disconnect()
-      socketRef.current = null
+      if (socketRef.current) {
+        socketRef.current.disconnect()
+        socketRef.current = null
+      }
     }
   }, [state.currentUserId, dialogs])
 

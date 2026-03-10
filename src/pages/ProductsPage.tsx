@@ -175,6 +175,7 @@ export function ProductsPage() {
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [filterLocationId, setFilterLocationId] = useState('')
   const [activeTab, setActiveTab] = useState('products')
 
   // Import State
@@ -192,15 +193,15 @@ export function ProductsPage() {
 
   const stockQtyBySkuId = useMemo(() => {
     const m = new Map<string, number>()
-    // For admin/manager, we want to see TOTAL stock across all locations by default in Products list
-    // Unless we add a location filter here. Currently there is no location filter in ProductsPage.
-    // So we aggregate all.
     ;(state.stockTransactions || []).forEach((t) => {
+      // Filter by location if selected
+      if (filterLocationId && t.locationId && t.locationId !== filterLocationId) return
+      
       const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
       m.set(t.skuId, (m.get(t.skuId) ?? 0) + delta)
     })
     return m
-  }, [state.stockTransactions])
+  }, [state.stockTransactions, filterLocationId])
 
   const availableQtyBySkuId = useMemo(() => {
     const m = new Map<string, number>()
@@ -615,6 +616,18 @@ export function ProductsPage() {
               >
                 <option value="">Tất cả danh mục</option>
                 {state.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <Filter size={16} style={{ position: 'absolute', left: 10, top: 12, color: 'var(--text-muted)' }} />
+            </div>
+
+            <div style={{ position: 'relative' }}>
+              <select 
+                 value={filterLocationId} 
+                 onChange={e => setFilterLocationId(e.target.value)}
+                 style={{ width: 180, paddingLeft: 32 }}
+              >
+                <option value="">Tất cả kho</option>
+                {state.locations.map(l => <option key={l.id} value={l.id}>{l.code} - {l.name}</option>)}
               </select>
               <Filter size={16} style={{ position: 'absolute', left: 10, top: 12, color: 'var(--text-muted)' }} />
             </div>

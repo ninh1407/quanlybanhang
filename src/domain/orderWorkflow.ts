@@ -11,19 +11,21 @@ export const orderStatusLabels: Record<OrderStatus, string> = {
   delivered: 'Đã giao',
   returned: 'Hoàn',
   cancelled: 'Hủy',
+  pending_cancel: 'Chờ hủy',
 }
 
 const transitions: Record<OrderStatus, OrderStatus[]> = {
   draft: ['draft', 'confirmed', 'cancelled'],
-  confirmed: ['confirmed', 'paid', 'picking', 'packed', 'cancelled'],
-  paid: ['paid', 'picking', 'packed', 'ready_to_ship', 'shipped', 'delivered', 'returned'],
-  picking: ['picking', 'packed', 'cancelled'],
-  packed: ['packed', 'ready_to_ship', 'shipped', 'delivered', 'returned'],
-  ready_to_ship: ['ready_to_ship', 'shipped', 'delivered', 'returned'],
-  shipped: ['shipped', 'delivered', 'returned'],
-  delivered: ['delivered', 'returned'],
+  confirmed: ['confirmed', 'paid', 'picking', 'packed', 'cancelled', 'pending_cancel'],
+  paid: ['paid', 'picking', 'packed', 'ready_to_ship', 'shipped', 'delivered', 'returned', 'pending_cancel'],
+  picking: ['picking', 'packed', 'cancelled', 'pending_cancel'],
+  packed: ['packed', 'ready_to_ship', 'shipped', 'delivered', 'returned', 'pending_cancel'],
+  ready_to_ship: ['ready_to_ship', 'shipped', 'delivered', 'returned', 'pending_cancel'],
+  shipped: ['shipped', 'delivered', 'returned', 'pending_cancel'],
+  delivered: ['delivered', 'returned', 'pending_cancel'],
   returned: ['returned'],
   cancelled: ['cancelled'],
+  pending_cancel: ['pending_cancel', 'cancelled', 'confirmed'],
 }
 
 export function canTransitionOrderStatus(from: OrderStatus, to: OrderStatus): boolean {

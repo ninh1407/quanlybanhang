@@ -325,22 +325,19 @@ export function reducer(state: AppState, action: AppAction): AppState {
         }
         return { ...state, financeTransactions: [tx, ...state.financeTransactions], sequences }
       }
-    case 'debts/upsert':
-      {
-        const exists = state.debts.some((d) => d.id === action.debt.id)
-        if (exists) return { ...state, debts: upsertById(state.debts, action.debt) }
-
-        let debt = action.debt
-        let sequences = state.sequences
-        if (!debt.code || !debt.code.trim()) {
-          const ym = yearMonthFromIso(debt.createdAt)
-          const seqKey = `debt:${ym}`
-          const next = (sequences[seqKey] ?? 0) + 1
-          sequences = { ...sequences, [seqKey]: next }
-          debt = { ...debt, code: `CN-${ym}-${String(next).padStart(4, '0')}` }
+    case 'debts/upsert': {
+      const existing = state.debts.find(d => d.id === action.debt.id)
+      if (existing) {
+        return {
+          ...state,
+          debts: state.debts.map(d => d.id === action.debt.id ? action.debt : d)
         }
-        return { ...state, debts: [debt, ...state.debts], sequences }
       }
+      return {
+        ...state,
+        debts: [action.debt, ...state.debts]
+      }
+    }
     case 'debts/delete':
       return { ...state, debts: removeById(state.debts, action.id) }
     case 'users/upsert':
@@ -444,10 +441,12 @@ export function validateAction(prev: AppState, action: AppAction): { ok: true } 
     if (order.status !== 'draft' && order.status !== 'cancelled') {
       return { ok: false, error: 'Chỉ cho phép xóa đơn ở trạng thái Nháp hoặc Hủy.' }
     }
-    const hasStock = prev.stockTransactions.some((t) => t.refType === 'order' && t.refId === action.id)
-    if (hasStock) return { ok: false, error: 'Không thể xóa đơn vì đã phát sinh phiếu kho theo đơn.' }
-    const hasFinance = prev.financeTransactions.some((t) => t.refType === 'order' && t.refId === action.id)
-    if (hasFinance) return { ok: false, error: 'Không thể xóa đơn vì đã phát sinh thu/chi theo đơn.' }
+    if (!isAdmin) {
+      const hasStock = prev.stockTransactions.some((t) => t.refType === 'order' && t.refId === action.id)
+      if (hasStock) return { ok: false, error: 'Đơn đã phát sinh phiếu kho. Vui lòng "Hủy đơn" thay vì xóa, hoặc liên hệ Admin.' }
+      const hasFinance = prev.financeTransactions.some((t) => t.refType === 'order' && t.refId === action.id)
+      if (hasFinance) return { ok: false, error: 'Đơn đã phát sinh thu/chi. Vui lòng "Hủy đơn" thay vì xóa, hoặc liên hệ Admin.' }
+    }
     return { ok: true }
   }
 

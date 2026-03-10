@@ -14,7 +14,8 @@ export type Supplier = {
   email: string
   address: string
   note: string
-  country?: string
+  country?: string // Brand Origin (Xuất xứ thương hiệu)
+  manufacturingCountry?: string // Place of Production (Nơi sản xuất)
   segment?: string
   createdAt: string
 }
@@ -80,6 +81,7 @@ export type Customer = {
   address: string
   note: string
   discountPercent: number
+  loyaltyPoints: number
   createdAt: string
 }
 
@@ -87,7 +89,7 @@ export type OrderSource = 'pos' | 'cod' | 'web' | 'social' | 'shopee' | 'tiktok'
 
 export type OrderType = 'internal' | 'dropship'
 
-export type OrderPaymentMethod = 'cod' | 'transfer'
+export type OrderPaymentMethod = 'cod' | 'transfer' | 'debt'
 
 export type OrderStatus =
   | 'draft'
@@ -100,6 +102,7 @@ export type OrderStatus =
   | 'delivered'
   | 'returned'
   | 'cancelled'
+  | 'pending_cancel'
 
 export type ReconcileStatus = 'unreconciled' | 'reconciled' | 'disputed'
 
@@ -138,10 +141,13 @@ export type Order = {
   partnerVoucherCode?: string
   discountPercent: number
   discountAmount: number
+  loyaltyPointsUsed?: number
+  loyaltyPointsAwarded?: number
   vatAmount: number
   otherFees: number
   otherFeesNote?: string
   note: string
+  cancelReason?: string
   isReconciledCarrier: ReconcileStatus
   isReconciledSupplier: ReconcileStatus
   reconciliationResultAmount?: number
@@ -239,6 +245,7 @@ export type Debt = {
   id: Id
   code: string
   type: DebtType
+  partnerId?: Id
   partnerName: string
   amount: number
   status: DebtStatus

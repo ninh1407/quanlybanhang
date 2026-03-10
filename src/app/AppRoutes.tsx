@@ -38,6 +38,8 @@ import { NotificationsPage } from '../pages/NotificationsPage'
 import { WarehousePerformancePage } from '../pages/WarehousePerformancePage'
 import { ChannelIntegrationPage } from '../pages/ChannelIntegrationPage'
 import { PickingPackingPage } from '../pages/PickingPackingPage'
+import { HelpPage } from '../pages/HelpPage'
+import { OrderPrintPage } from '../pages/OrderPrintPage'
 
 export function AppRoutes() {
   return (
@@ -97,6 +99,14 @@ export function AppRoutes() {
               element={
                 <RequirePermissionRoute permission="products:read">
                   <SuppliersPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/orders/:id/print"
+              element={
+                <RequirePermissionRoute permission="orders:read">
+                  <OrderPrintPage />
                 </RequirePermissionRoute>
               }
             />
@@ -303,6 +313,14 @@ export function AppRoutes() {
               element={
                 <RequirePermissionRoute permission="dashboard:read">
                   <NotificationsPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/help"
+              element={
+                <RequirePermissionRoute permission="dashboard:read">
+                  <HelpPage />
                 </RequirePermissionRoute>
               }
             />

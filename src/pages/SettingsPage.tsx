@@ -48,6 +48,33 @@ export function SettingsPage() {
               placeholder="Ví dụ: My Company ERP"
             />
           </div>
+          <div className="field field-span-2">
+            <label>Địa chỉ</label>
+            <input
+              value={settings.address}
+              onChange={(e) => patchSettings({ address: e.target.value })}
+              disabled={!canWrite}
+              placeholder="123 Đường ABC, Quận XYZ, TP.HCM"
+            />
+          </div>
+          <div className="field">
+            <label>Số điện thoại</label>
+            <input
+              value={settings.phone}
+              onChange={(e) => patchSettings({ phone: e.target.value })}
+              disabled={!canWrite}
+              placeholder="0901234567"
+            />
+          </div>
+          <div className="field">
+            <label>Mã số thuế</label>
+            <input
+              value={settings.taxCode}
+              onChange={(e) => patchSettings({ taxCode: e.target.value })}
+              disabled={!canWrite}
+              placeholder="0312345678"
+            />
+          </div>
           <div className="field">
             <label>Logo URL</label>
             <input

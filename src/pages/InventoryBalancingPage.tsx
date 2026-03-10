@@ -1,9 +1,15 @@
 import { useMemo } from 'react'
+import { useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { Sku } from '../domain/types'
+import { Sku, TransferOrder } from '../domain/types'
 import { subDays, parseISO } from 'date-fns'
 import { ArrowRight, Truck } from 'lucide-react'
+import { newId } from '../lib/id'
+import { nowIso } from '../lib/date'
+import { useAuth } from '../auth/auth'
+import { useDialogs } from '../ui-kit/Dialogs'
 
 function skuLabel(productsById: Map<string, string>, sku: Sku): string {
   const productName = productsById.get(sku.productId) ?? sku.productId
@@ -13,8 +19,42 @@ function skuLabel(productsById: Map<string, string>, sku: Sku): string {
 
 export function InventoryBalancingPage() {
   const state = useAppState()
+  const dispatch = useDispatch()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const dialogs = useDialogs()
+  
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
   const locations = useMemo(() => state.locations.filter(l => l.active), [state.locations])
+
+  function createTransfer(s: any) {
+      const id = newId('to')
+      const transfer: TransferOrder = {
+          id,
+          code: `TO-${id.slice(-6).toUpperCase()}`,
+          status: 'draft',
+          fromLocationId: s.from,
+          toLocationId: s.to,
+          lines: [{
+              skuId: s.sku.id,
+              requestedQty: s.qty,
+              shippedQty: 0,
+              receivedQty: 0,
+              lostQty: 0,
+              unitCost: s.sku.cost || 0,
+              note: s.reason
+          }],
+          shippingFee: 0,
+          logs: [],
+          createdByUserId: user?.id || 'system',
+          createdAt: nowIso(),
+          updatedAt: nowIso()
+      }
+      dispatch({ type: 'transferOrders/upsert', order: transfer })
+      dialogs.alert({ message: 'Đã tạo phiếu chuyển kho nháp.' }).then(() => {
+           navigate('/transfer-orders')
+      })
+  }
 
   // 1. Calculate Stock & Sales per Location per SKU
   const analysis = useMemo(() => {
@@ -166,7 +206,7 @@ export function InventoryBalancingPage() {
                           <td style={{ fontWeight: 'bold' }}>{s.qty}</td>
                           <td>{s.reason}</td>
                           <td>
-                              <button className="btn btn-small btn-primary">
+                              <button className="btn btn-small btn-primary" onClick={() => createTransfer(s)}>
                                   <Truck size={14} style={{ marginRight: 4 }} />
                                   Tạo phiếu chuyển
                               </button>

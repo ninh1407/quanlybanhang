@@ -1,5 +1,8 @@
 export type AppSettings = {
   companyName: string
+  address: string
+  phone: string
+  taxCode: string
   logoUrl: string
   primaryColor: string
   customDomain: string
@@ -13,6 +16,9 @@ const STORAGE_KEY = 'app_settings_v1'
 
 export const defaultSettings: AppSettings = {
   companyName: 'Điện máy xanh',
+  address: '',
+  phone: '',
+  taxCode: '',
   logoUrl: '',
   primaryColor: '#2563EB', // blue-600
   customDomain: '',
@@ -33,6 +39,9 @@ export function loadSettings(): AppSettings {
     const parsed = JSON.parse(raw) as Partial<AppSettings>
     return {
       companyName: typeof parsed.companyName === 'string' ? parsed.companyName : defaultSettings.companyName,
+      address: typeof parsed.address === 'string' ? parsed.address : defaultSettings.address,
+      phone: typeof parsed.phone === 'string' ? parsed.phone : defaultSettings.phone,
+      taxCode: typeof parsed.taxCode === 'string' ? parsed.taxCode : defaultSettings.taxCode,
       logoUrl: typeof parsed.logoUrl === 'string' ? parsed.logoUrl : defaultSettings.logoUrl,
       primaryColor: typeof parsed.primaryColor === 'string' ? parsed.primaryColor : defaultSettings.primaryColor,
       customDomain: typeof parsed.customDomain === 'string' ? parsed.customDomain : defaultSettings.customDomain,

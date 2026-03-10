@@ -11,7 +11,7 @@ try {
 
   // 2. Install dependencies
   console.log('📦 2. Đang cài đặt thư viện mới...')
-  execSync('npm install', { stdio: 'inherit' })
+  execSync('npm install --legacy-peer-deps', { stdio: 'inherit' }) // Force legacy peer deps just in case
 
   // Check if schema.prisma exists
   const schemaPath = path.resolve('prisma/schema.prisma')

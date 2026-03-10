@@ -43,7 +43,8 @@ export class AuthService {
       active: user.active,
       allowedLocationIds: user.allowedLocationIds,
       scope: user.scope as any,
-      password: user.password
+      password: user.password,
+      createdAt: user.createdAt.toISOString() // Fix missing createdAt
     }
 
     const accessToken = this.generateAccessToken(domainUser)
@@ -82,7 +83,8 @@ export class AuthService {
       active: user.active,
       allowedLocationIds: user.allowedLocationIds,
       scope: user.scope as any,
-      password: user.password
+      password: user.password,
+      createdAt: user.createdAt.toISOString()
     }
 
     // Rotate: Delete old, create new

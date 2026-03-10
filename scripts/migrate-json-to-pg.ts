@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { PrismaClient } from '@prisma/client'
 
-const DATA_FILE = path.resolve(__dirname, '../server/data.json')
+const DATA_FILE = path.resolve('server/data.json')
 const prisma = new PrismaClient()
 
 async function migrate() {

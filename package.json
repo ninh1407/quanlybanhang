@@ -21,7 +21,9 @@
     "preview": "vite preview",
     "desktop:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_RENDERER_URL=http://localhost:5173 electron .\"",
     "desktop:build": "cross-env DESKTOP=true npm run build",
-    "desktop:dist": "npm run gen:icon && npm run desktop:build && electron-builder --win --x64 -p never"
+    "desktop:dist": "npm run gen:icon && npm run desktop:build && electron-builder --win --x64 -p never",
+    "db:setup": "prisma generate && prisma db push",
+    "db:migrate-data": "ts-node scripts/migrate-json-to-pg.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -44,9 +46,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@prisma/client": "^7.4.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.12.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -58,6 +61,8 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "prisma": "^7.4.2",
+    "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",

@@ -2,31 +2,52 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
-console.log('🚀 Đang cập nhật Server...')
+console.log('🚀 Đang cập nhật Server & Database...')
 
 try {
   // 1. Pull latest code
-  console.log('📥 Đang tải code mới từ GitHub...')
+  console.log('📥 1. Đang tải code mới từ GitHub...')
   execSync('git pull', { stdio: 'inherit' })
 
   // 2. Install dependencies
-  console.log('📦 Đang cài đặt thư viện mới...')
+  console.log('📦 2. Đang cài đặt thư viện mới...')
   execSync('npm install', { stdio: 'inherit' })
 
-  // 3. Rebuild frontend (if needed)
-  console.log('🏗️ Đang build lại giao diện...')
-  execSync('npm run build', { stdio: 'inherit' })
+  // 3. Database Setup (Prisma)
+  console.log('🗄️ 3. Đang cập nhật cấu trúc Database...')
+  execSync('npx prisma generate', { stdio: 'inherit' })
+  execSync('npx prisma db push', { stdio: 'inherit' })
 
-  // 4. Restart server (using PM2 if available, otherwise just warn)
-  console.log('🔄 Đang khởi động lại Server...')
-  try {
-    execSync('pm2 restart quanlykho', { stdio: 'inherit' })
-    console.log('✅ Đã khởi động lại PM2.')
-  } catch (e) {
-    console.log('⚠️ Không tìm thấy PM2 hoặc lỗi khi restart. Nếu bạn đang chạy server thủ công, hãy tắt đi bật lại.')
+  // 4. Data Migration (JSON -> PG)
+  // Only run if data.json exists to ensure we don't crash
+  const dataPath = path.resolve('server/data.json')
+  if (fs.existsSync(dataPath)) {
+      console.log('🚚 4. Đang đồng bộ dữ liệu cũ (JSON) sang Database...')
+      try {
+        execSync('npx ts-node scripts/migrate-json-to-pg.ts', { stdio: 'inherit' })
+      } catch (e) {
+          console.warn('⚠️ Cảnh báo: Lỗi khi migrate dữ liệu (có thể bỏ qua nếu đã migrate xong).')
+      }
+  } else {
+      console.log('⏩ Bỏ qua migrate dữ liệu (không tìm thấy data.json).')
   }
 
-  console.log('🎉 Cập nhật hoàn tất!')
+  // 5. Rebuild frontend
+  console.log('🏗️ 5. Đang build lại giao diện...')
+  execSync('npm run build', { stdio: 'inherit' })
+
+  // 6. Restart server
+  console.log('🔄 6. Đang khởi động lại Server...')
+  try {
+    // Try to reload using ecosystem config
+    execSync('pm2 reload ecosystem.config.cjs || pm2 start ecosystem.config.cjs', { stdio: 'inherit' })
+    console.log('✅ Server đã khởi động lại.')
+  } catch (e) {
+    console.log('⚠️ Không thể restart PM2 tự động. Hãy kiểm tra lại PM2.')
+  }
+
+  console.log('🎉 Cập nhật hoàn tất! Hệ thống đã sẵn sàng.')
 } catch (e) {
   console.error('❌ Lỗi khi cập nhật:', e.message)
+  process.exit(1)
 }

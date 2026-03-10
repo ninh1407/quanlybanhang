@@ -1,0 +1,527 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --- IAM (Identity & Access Management) ---
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  fullName  String?
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // RLP (Row Level Permission)
+  scope              String   @default("ALL") // 'ALL', 'REGION', 'WAREHOUSE'
+  managedWarehouses  UserWarehouse[]
+
+  orders    Order[]
+  auditLogs AuditLog[]
+  approvalRequests ApprovalRequest[]
+  approvedRequests ApprovalRequest[] @relation("Approver")
+}
+
+model UserWarehouse {
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@id([userId, warehouseId])
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique // 'admin', 'manager', 'staff'
+  permissions Permission[]
+  users       User[]
+}
+
+model Permission {
+  id          String @id @default(uuid())
+  code        String @unique // 'order.create', 'product.view'
+  description String?
+  roles       Role[]
+}
+
+// --- Product Master Data ---
+
+model Brand {
+  id        String   @id @default(uuid())
+  name      String
+  products  Product[]
+}
+
+model Unit {
+  id        String   @id @default(uuid())
+  name      String   // 'pcs', 'box', 'kg'
+  products  Product[]
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  
+  brandId     String?
+  brand       Brand?    @relation(fields: [brandId], references: [id])
+  
+  unitId      String?
+  unit        Unit?     @relation(fields: [unitId], references: [id])
+  
+  costingMethod String  @default("average") // 'fifo', 'lifo', 'average', 'standard'
+  
+  variants    ProductVariant[]
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Category {
+  id       String    @id @default(uuid())
+  name     String
+  products Product[]
+}
+
+model ProductVariant {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  skuCode   String   @unique
+  name      String   // e.g. "Size L, Red"
+  costPrice Decimal  @default(0)
+  salePrice Decimal  @default(0)
+  
+  inventory InventorySnapshot[]
+  orderItems OrderItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  transferItems StockTransferItem[]
+  returnItems   ReturnItem[]
+  transactions InventoryTransaction[]
+  pickingTasks PickingTask[]
+  channelPrices ProductChannelPrice[]
+  reservations  InventoryReservation[]
+  
+  active    Boolean  @default(true)
+}
+
+model ProductChannelPrice {
+  id          String   @id @default(uuid())
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  channelId   String
+  channel     Channel  @relation(fields: [channelId], references: [id])
+  price       Decimal
+  
+  @@unique([variantId, channelId])
+}
+
+// --- Warehouse & WMS ---
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  active    Boolean  @default(true)
+  
+  locations WarehouseLocation[]
+  inventory InventorySnapshot[]
+  transactions InventoryTransaction[]
+  reservations InventoryReservation[]
+  
+  orders    Order[]
+  purchaseOrders PurchaseOrder[]
+  transfersOut StockTransfer[] @relation("SourceWarehouse")
+  transfersIn  StockTransfer[] @relation("TargetWarehouse")
+  waves     PickingWave[]
+  managers  UserWarehouse[]
+}
+
+model WarehouseLocation {
+  id          String   @id @default(uuid())
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  
+  code        String   // Unique code: "Z1-R01-L1-B01"
+  name        String
+  
+  zone        String   // 'ZONE-A'
+  rack        String?  // 'RACK-01'
+  level       String?  // 'L1'
+  bin         String?  // 'B01'
+  
+  type        String   @default("PICK") // 'PICK', 'RESERVE', 'STAGING', 'PACKING', 'RECEIVING'
+  
+  transactions InventoryTransaction[]
+  pickingTasks PickingTask[]
+}
+
+// Ledger
+model InventoryTransaction {
+  id          String   @id @default(uuid())
+  skuId       String
+  variant     ProductVariant @relation(fields: [skuId], references: [id])
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  locationId  String?
+  location    WarehouseLocation? @relation(fields: [locationId], references: [id])
+  
+  type        String   // 'IN', 'OUT', 'TRANSFER', 'ADJUST'
+  quantity    Decimal
+  cost        Decimal
+  
+  referenceType String // 'order', 'purchase_order', 'transfer', 'adjustment', 'return'
+  referenceId   String
+  
+  createdAt   DateTime @default(now())
+  createdBy   String
+}
+
+model InventorySnapshot {
+  id          String   @id @default(uuid())
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  quantity    Decimal  @default(0)
+  @@unique([warehouseId, variantId])
+}
+
+model InventoryReservation {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  
+  quantity    Int
+  expiresAt   DateTime // Auto-release if order not confirmed
+  status      String   // 'active', 'fulfilled', 'cancelled'
+  
+  createdAt   DateTime @default(now())
+}
+
+// --- Advanced WMS Operations ---
+
+model PickingWave {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  status      String   // 'planned', 'picking', 'packing', 'completed'
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  
+  orders      Order[]
+  tasks       PickingTask[]
+  
+  createdAt   DateTime @default(now())
+}
+
+model PickingTask {
+  id          String   @id @default(uuid())
+  waveId      String?
+  wave        PickingWave? @relation(fields: [waveId], references: [id])
+  
+  orderId     String?  // If picking for specific order (not batch)
+  order       Order?   @relation(fields: [orderId], references: [id])
+  
+  skuId       String
+  variant     ProductVariant @relation(fields: [skuId], references: [id])
+  
+  locationId  String
+  location    WarehouseLocation @relation(fields: [locationId], references: [id])
+  
+  quantity    Int
+  pickedQty   Int      @default(0)
+  
+  status      String   // 'pending', 'in_progress', 'completed'
+  workerId    String?
+  
+  createdAt   DateTime @default(now())
+}
+
+model ReplenishmentTask {
+  id             String   @id @default(uuid())
+  skuId          String
+  fromLocationId String
+  toLocationId   String
+  quantity       Int
+  status         String   // 'pending', 'completed'
+  createdAt      DateTime @default(now())
+}
+
+// --- Order Orchestration ---
+
+model AllocationRule {
+  id          String   @id @default(uuid())
+  name        String   // 'Priority Warehouse A', 'Nearest Distance'
+  priority    Int
+  conditions  Json     // { "channel": "shopee", "city": "Hanoi" }
+  actions     Json     // { "warehouseId": "WH-HN" }
+  active      Boolean  @default(true)
+}
+
+// --- Order Management ---
+
+model Order {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  status      String   // 'new', 'confirmed', 'processing', 'shipping', 'completed', 'cancelled'
+  
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  
+  warehouseId String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  
+  items       OrderItem[]
+  returns     ReturnOrder[]
+  reservations InventoryReservation[]
+  
+  // WMS Link
+  waveId      String?
+  wave        PickingWave? @relation(fields: [waveId], references: [id])
+  
+  totalAmount Decimal
+  paidAmount  Decimal  @default(0)
+  
+  channelId   String?
+  channel     Channel? @relation(fields: [channelId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  quantity  Int
+  price     Decimal
+}
+
+// --- Procurement & Returns ---
+
+model PurchaseOrder {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  status      String   // 'draft', 'approval_pending', 'approved', 'ordered', 'receiving', 'received', 'completed', 'cancelled'
+  
+  invoiceStatus String @default("pending") // 'pending', 'received', 'paid'
+  
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  items       PurchaseOrderItem[]
+  totalAmount Decimal
+  
+  approvedBy  String?
+  approvedAt  DateTime?
+  
+  createdAt   DateTime @default(now())
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  variantId       String
+  variant         ProductVariant @relation(fields: [variantId], references: [id])
+  quantity        Int
+  receivedQty     Int      @default(0)
+  costPrice       Decimal
+}
+
+model ReturnOrder {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  type        String   // 'customer_return', 'supplier_return'
+  
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id])
+  
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  
+  status      String   // 'requested', 'approved', 'received', 'inspected', 'completed'
+  refundStatus String  @default("pending") // 'pending', 'refunded'
+  
+  items       ReturnItem[]
+  refundAmount Decimal @default(0)
+  
+  createdAt   DateTime @default(now())
+}
+
+model ReturnItem {
+  id          String   @id @default(uuid())
+  returnId    String
+  returnOrder ReturnOrder @relation(fields: [returnId], references: [id])
+  
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  
+  quantity    Int
+  reason      String?
+  condition   String?  // 'good', 'damaged', 'refurbish'
+}
+
+// --- Promotion Engine ---
+
+model Promotion {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  type        String   // 'discount_amount', 'discount_percent', 'buy_x_get_y'
+  
+  value       Decimal
+  minOrderValue Decimal?
+  
+  startDate   DateTime
+  endDate     DateTime
+  
+  active      Boolean  @default(true)
+  usageLimit  Int?
+  usedCount   Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+}
+
+// --- Stock Transfers ---
+
+model StockTransfer {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  status          String
+  sourceWarehouseId String
+  sourceWarehouse Warehouse @relation("SourceWarehouse", fields: [sourceWarehouseId], references: [id])
+  targetWarehouseId String
+  targetWarehouse Warehouse @relation("TargetWarehouse", fields: [targetWarehouseId], references: [id])
+  items           StockTransferItem[]
+  createdAt       DateTime @default(now())
+}
+
+model StockTransferItem {
+  id              String   @id @default(uuid())
+  transferId      String
+  transfer        StockTransfer @relation(fields: [transferId], references: [id])
+  variantId       String
+  variant         ProductVariant @relation(fields: [variantId], references: [id])
+  quantity        Int
+}
+
+// --- Partners ---
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  orders    Order[]
+  debts     Debt[]
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  purchaseOrders PurchaseOrder[]
+  returnOrders ReturnOrder[]
+  debts     Debt[]
+}
+
+// --- Finance ---
+
+model Debt {
+  id          String   @id @default(uuid())
+  type        String
+  amount      Decimal
+  paidAmount  Decimal  @default(0)
+  status      String
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+}
+
+// --- Channels ---
+
+model Channel {
+  id        String   @id @default(uuid())
+  type      String
+  name      String
+  config    Json?
+  active    Boolean  @default(true)
+  orders    Order[]
+  productPrices ProductChannelPrice[]
+}
+
+// --- System ---
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  entity    String
+  entityId  String?
+  details   Json?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// --- Approval Workflow ---
+
+model ApprovalRule {
+  id          String   @id @default(uuid())
+  name        String   // "Transfer > 200m"
+  entityType  String   // 'transfer', 'purchase_order', 'adjustment'
+  condition   Json     // { "field": "totalAmount", "operator": "gt", "value": 200000000 }
+  approverRole String  // 'CEO', 'CFO', 'MANAGER'
+  priority    Int      @default(1)
+  active      Boolean  @default(true)
+}
+
+model ApprovalRequest {
+  id          String   @id @default(uuid())
+  code        String   @unique // Request ID
+  entityType  String
+  entityId    String
+  
+  ruleId      String?
+  rule        ApprovalRule? @relation(fields: [ruleId], references: [id])
+  
+  status      String   @default("pending") // 'pending', 'approved', 'rejected'
+  
+  requesterId String
+  requester   User     @relation(fields: [requesterId], references: [id])
+  
+  approverId  String?
+  approver    User?    @relation("Approver", fields: [approverId], references: [id])
+  
+  approvedAt  DateTime?
+  note        String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

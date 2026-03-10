@@ -85,7 +85,7 @@ export type Customer = {
   createdAt: string
 }
 
-export type OrderSource = 'pos' | 'cod' | 'web' | 'social' | 'shopee' | 'tiktok' | 'other'
+export type OrderSource = 'pos' | 'cod' | 'web' | 'social' | 'shopee' | 'tiktok' | 'lazada' | 'other'
 
 export type OrderType = 'internal' | 'dropship'
 
@@ -127,6 +127,7 @@ export type Order = {
   code: string
   customerId: Id | null
   fulfillmentLocationId: Id | null
+  warehouseId?: Id | null // For BOLA filtering
   type: OrderType
   source: OrderSource
   paymentMethod: OrderPaymentMethod
@@ -175,6 +176,7 @@ export type StockTransaction = {
   type: StockTxType
   skuId: Id
   locationId: Id | null
+  warehouseId?: Id | null // For BOLA filtering (usually same as locationId)
   qty: number
   unitCost: number | null
   note: string
@@ -308,6 +310,7 @@ export type AuditEntityType =
   | 'category'
   | 'location'
   | 'user'
+  | 'request'
 
 export type AuditActionType = 'create' | 'update' | 'delete'
 
@@ -324,7 +327,7 @@ export type AuditLog = {
   createdAt: string
 }
 
-export type Role = 'admin' | 'staff' | 'manager' | 'accountant' | 'region_manager'
+export type Role = 'admin' | 'staff' | 'manager' | 'accountant' | 'region_manager' | 'ceo'
 
 export type User = {
   id: Id
@@ -369,7 +372,7 @@ export type Permission =
   | 'staff:read'
   | 'staff:write'
 
-export type InventoryRequestStatus = 'pending_manager' | 'pending_accountant' | 'approved' | 'rejected' | 'cancelled'
+export type InventoryRequestStatus = 'pending_manager' | 'pending_accountant' | 'pending_ceo' | 'approved' | 'rejected' | 'cancelled'
 export type InventoryRequestType = 'in' | 'out' | 'transfer' | 'adjust'
 
 export type InventoryRequestItem = {
@@ -381,7 +384,7 @@ export type InventoryRequestItem = {
 
 export type InventoryRequestLog = {
     id: Id
-    action: 'create' | 'approve_manager' | 'approve_accountant' | 'reject' | 'cancel'
+    action: 'create' | 'approve_manager' | 'approve_accountant' | 'approve_ceo' | 'reject' | 'cancel'
     actorId: Id
     timestamp: string
     note?: string

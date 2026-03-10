@@ -43,7 +43,10 @@ export function LoginPage() {
       }
 
       // Save token
-      localStorage.setItem('auth_token', data.token)
+      localStorage.setItem('auth_token', data.accessToken)
+      if (data.refreshToken) {
+        localStorage.setItem('refresh_token', data.refreshToken)
+      }
       
       const user = data.user
       const locations = data.locations

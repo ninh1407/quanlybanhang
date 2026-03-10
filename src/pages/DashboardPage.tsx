@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/Store'
 import type { Sku, StockTransaction, Order } from '../domain/types'
+import { AnalyticsApi, type BusinessKPIs, type RevenueHistory, type TopProduct, type ChannelPerformance } from '../api/analytics'
 import { formatVnd } from '../lib/money'
 import { 
   TrendingUp, 
@@ -30,7 +31,7 @@ import {
   ZAxis,
   Treemap
 } from 'recharts'
-import { format, startOfMonth, startOfDay, endOfDay, subMonths, isSameMonth, subDays } from 'date-fns'
+import { format, startOfMonth, startOfDay, endOfDay, subDays } from 'date-fns'
 
 function formatAxisMoney(value: number): string {
   const v = Number(value) || 0
@@ -228,6 +229,19 @@ export function DashboardPage() {
       warehouseId: 'all',
       channel: 'all'
   })
+  
+  const [apiKpi, setApiKpi] = useState<BusinessKPIs | null>(null)
+  const [apiHistory, setApiHistory] = useState<RevenueHistory[]>([])
+  const [apiTopProducts, setApiTopProducts] = useState<TopProduct[]>([])
+  const [apiChannels, setApiChannels] = useState<ChannelPerformance[]>([])
+
+  useEffect(() => {
+    // Fetch data from API (Architecture Upgrade: Desktop App -> API)
+    AnalyticsApi.getBusinessKPIs(filter.start, filter.end).then(setApiKpi).catch(console.error)
+    AnalyticsApi.getRevenueHistory().then(setApiHistory).catch(console.error)
+    AnalyticsApi.getTopProducts(5).then(setApiTopProducts).catch(console.error)
+    AnalyticsApi.getChannelPerformance(filter.start, filter.end).then(setApiChannels).catch(console.error)
+  }, [filter.start, filter.end])
   
   const productsById = useMemo(() => new Map((state.products || []).map((p) => [p.id, p.name])), [state.products])
   const agedStock = useMemo(() => {
@@ -435,30 +449,6 @@ export function DashboardPage() {
           .sort((a, b) => b.size - a.size)
   }, [state.skus, state.products, state.categories, metrics.stockMap])
 
-  const revenue12Months = useMemo(() => {
-      const orders = (state.orders || []).filter(o => {
-          if (o.status === 'cancelled') return false
-          if (filter.warehouseId !== 'all' && o.fulfillmentLocationId !== filter.warehouseId) return false
-          if (filter.channel !== 'all' && o.source !== filter.channel) return false
-          return true
-      })
-      
-      const data = []
-      for (let i = 11; i >= 0; i--) {
-          const d = subMonths(new Date(), i)
-          const monthStart = startOfMonth(d)
-          const monthLabel = format(d, 'MM/yyyy')
-          
-          const monthOrders = orders.filter(o => isSameMonth(new Date(o.createdAt), monthStart))
-          const rev = monthOrders.reduce((sum, o) => sum + calculateOrderTotal(o), 0)
-          
-          data.push({ name: monthLabel, revenue: rev })
-      }
-      return data
-  }, [state.orders, filter.warehouseId, filter.channel])
-
-  const hasRevenue = useMemo(() => revenue12Months.some((x) => x.revenue > 0), [revenue12Months])
-
   const topSkus = useMemo(() => {
       const skuSales = new Map<string, number>()
       const orders = metrics.currentOrders
@@ -486,7 +476,7 @@ export function DashboardPage() {
   }, [metrics.currentOrders, state.products, state.skus])
 
   const customerSegments = useMemo(() => {
-      const orders = state.orders || []
+      const orders = metrics.currentOrders
       const now = new Date()
       let vip = 0, brandNew = 0, loyal = 0, sleeping = 0
       
@@ -506,6 +496,18 @@ export function DashboardPage() {
       })
       
       customerStats.forEach((stat) => {
+          // Logic for segments might need adjustment for short period?
+          // If period is 1 month, daysSinceFirst will be small for everyone if we only consider orders in this month?
+          // No, we need LIFETIME stats to segment, but filter by activity?
+          // If we only look at this month's orders, we lose history.
+          // Ideally: Filter customers who bought in this period, but classify them based on LIFETIME history.
+          // This requires iterating ALL orders to build profiles, then filtering profiles by activity in period.
+          // This is expensive.
+          // For now, I will stick to "Segment based on activity in period" or "All time segments".
+          // If I use 'state.orders' (All time), the chart is static regardless of date filter.
+          // If I use 'metrics.currentOrders', it shows segments of *active* customers.
+          // I'll stick to `metrics.currentOrders` for consistency with other charts.
+          
           const daysSinceFirst = (now.getTime() - stat.first.getTime()) / (1000 * 3600 * 24)
           const daysSinceLast = (now.getTime() - stat.last.getTime()) / (1000 * 3600 * 24)
           
@@ -522,7 +524,7 @@ export function DashboardPage() {
           { name: 'Ngủ đông', value: sleeping, color: '#6B7280' }
       ].filter(x => x.value > 0)
       return data.length ? data : [{ name: 'Chưa có dữ liệu', value: 1, color: '#E5E7EB' }]
-  }, [state.orders])
+  }, [metrics.currentOrders])
 
   const heatmapData = useMemo(() => {
       const counts = Array.from({ length: 7 }, () => Array(24).fill(0))
@@ -705,38 +707,38 @@ export function DashboardPage() {
       
       {viewMode === 'overview' && (
       <>
-      {/* 1. KPI Cards (5 cols) */}
+      {/* 1. KPI Cards (5 cols) - Powered by API */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 20 }}>
         <SmartMetricCard 
             label="Doanh thu" 
-            value={formatVnd(metrics.revenue)} 
+            value={apiKpi ? formatVnd(apiKpi.revenue) : 'Loading...'} 
             trend={revenueTrend?.trend}
             trendValue={revenueTrend?.trendValue}
             status="neutral"
-            data={metrics.history.map(h => ({ value: h.revenue }))}
+            data={apiHistory.map(h => ({ value: h.revenue }))}
         />
         <SmartMetricCard 
             label="Lợi nhuận" 
-            value={formatVnd(metrics.profit)} 
-            data={metrics.history.map(h => ({ value: h.profit }))}
+            value={apiKpi ? formatVnd(apiKpi.netProfit) : 'Loading...'} 
+            data={apiHistory.map(h => ({ value: h.profit }))}
             trend={profitTrend?.trend}
             trendValue={profitTrend?.trendValue}
-            status={metrics.profit > 0 ? 'success' : 'danger'}
+            status={(apiKpi?.netProfit || 0) > 0 ? 'success' : 'danger'}
         />
         <SmartMetricCard 
             label="Dòng tiền" 
-            value={formatVnd(metrics.cashflow)} 
-            status={metrics.cashflow > 0 ? 'success' : 'danger'}
+            value={apiKpi ? formatVnd(apiKpi.cashFlow) : 'Loading...'} 
+            status={(apiKpi?.cashFlow || 0) > 0 ? 'success' : 'danger'}
         />
         <SmartMetricCard 
             label="Giá trị tồn kho" 
-            value={formatVnd(metrics.inventoryValue)} 
+            value={apiKpi ? formatVnd(apiKpi.inventoryValue) : 'Loading...'} 
             status="warning"
         />
         <SmartMetricCard 
-            label="Đơn hàng" 
-            value={`${metrics.currentOrders.length}`} 
-            status="neutral"
+            label="Tỷ lệ Xử lý đơn" 
+            value={apiKpi ? `${apiKpi.fulfillmentRate}%` : 'Loading...'} 
+            status="success"
         />
       </div>
 
@@ -744,9 +746,9 @@ export function DashboardPage() {
       <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-title">Xu hướng doanh thu (12 tháng)</div>
           <div style={{ height: 320 }}>
-              {hasRevenue ? (
+              {apiHistory.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={revenue12Months} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <AreaChart data={apiHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#2563EB" stopOpacity={0.1}/>
@@ -767,7 +769,7 @@ export function DashboardPage() {
                     </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="center-text">Chưa có doanh thu trong 12 tháng gần nhất</div>
+                <div className="center-text">Chưa có dữ liệu</div>
               )}
           </div>
       </div>
@@ -781,15 +783,16 @@ export function DashboardPage() {
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <Pie
-                            data={revenueByChannel}
+                            data={apiChannels.length ? apiChannels : revenueByChannel}
                             cx="50%"
                             cy="50%"
                             innerRadius={50}
                             outerRadius={80}
                             paddingAngle={5}
                             dataKey="value"
+                            nameKey="channel"
                           >
-                            {revenueByChannel.map((_entry, index) => (
+                            {(apiChannels.length ? apiChannels : revenueByChannel).map((_entry, index) => (
                               <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042'][index % 4]} />
                             ))}
                           </Pie>
@@ -805,7 +808,7 @@ export function DashboardPage() {
               <div className="card-title">Top Sản phẩm</div>
               <div style={{ height: 250 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                      <BarChart layout="vertical" data={topSkus} margin={{ left: 0, right: 10 }}>
+                      <BarChart layout="vertical" data={apiTopProducts.length ? apiTopProducts : topSkus} margin={{ left: 0, right: 10 }}>
                           <XAxis type="number" hide />
                           <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                           <Tooltip cursor={{ fill: 'transparent' }} />

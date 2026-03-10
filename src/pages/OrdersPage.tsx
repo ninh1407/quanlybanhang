@@ -296,6 +296,13 @@ export function OrdersPage() {
     return state.stockTransactions.some((t) => t.refType === 'order' && t.refId === selectedOrder.id)
   }, [selectedOrder, state.stockTransactions])
 
+  const orderLogs = useMemo(() => {
+    if (!selectedOrderId) return []
+    return state.auditLogs
+      .filter((l) => l.entityType === 'order' && l.entityId === selectedOrderId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }, [selectedOrderId, state.auditLogs])
+
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
   const skusById = useMemo(() => new Map(state.skus.map((s) => [s.id, s])), [state.skus])
   const skus = useMemo(() => {
@@ -1957,6 +1964,52 @@ export function OrdersPage() {
                         <input value={usersById.get(selectedOrder.shippedByUserId ?? selectedOrder.packedByUserId!)?.fullName ?? 'Unknown'} disabled />
                       </div>
                     )}
+                  </div>
+
+                  <div className="card" style={{ marginBottom: 16 }}>
+                    <div className="card-title">Lịch sử hoạt động (Timeline)</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {orderLogs.length > 0 ? (
+                        orderLogs.map((log) => {
+                          const actor = log.actorUserId ? usersById.get(log.actorUserId)?.fullName : 'Hệ thống'
+                          const actionLabel = log.action === 'create' ? 'Tạo mới' : log.action === 'update' ? 'Cập nhật' : 'Xóa'
+                          const statusChange = log.before && log.after && (log.before as any).status !== (log.after as any).status
+                            ? `Trạng thái: ${orderStatusLabels[(log.before as any).status as OrderStatus]} -> ${orderStatusLabels[(log.after as any).status as OrderStatus]}`
+                            : ''
+                          
+                          return (
+                            <div key={log.id} style={{ display: 'flex', gap: 12 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--primary)', marginTop: 6 }} />
+                                <div style={{ width: 2, flex: 1, background: 'var(--neutral-200)', marginTop: 4 }} />
+                              </div>
+                              <div style={{ paddingBottom: 16 }}>
+                                <div style={{ fontWeight: 600, fontSize: 13 }}>
+                                  {actionLabel} bởi {actor}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                  {formatDateTime(log.createdAt)}
+                                </div>
+                                {statusChange && (
+                                  <div style={{ fontSize: 13, marginTop: 4, color: 'var(--primary-600)' }}>
+                                    {statusChange}
+                                  </div>
+                                )}
+                                {log.reason && (
+                                  <div style={{ fontSize: 13, marginTop: 4, fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                                    "{log.reason}"
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>
+                          Chưa có dữ liệu lịch sử chi tiết (Tính năng Audit Log mới được kích hoạt).
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {selectedOrder.type === 'dropship' && (

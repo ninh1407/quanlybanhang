@@ -40,6 +40,8 @@ import { ChannelIntegrationPage } from '../pages/ChannelIntegrationPage'
 import { PickingPackingPage } from '../pages/PickingPackingPage'
 import { HelpPage } from '../pages/HelpPage'
 import { OrderPrintPage } from '../pages/OrderPrintPage'
+import { DocumentCenterPage } from '../pages/DocumentCenterPage'
+import { ComingSoonPage } from '../pages/ComingSoonPage'
 
 export function AppRoutes() {
   return (
@@ -321,6 +323,38 @@ export function AppRoutes() {
               element={
                 <RequirePermissionRoute permission="dashboard:read">
                   <HelpPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/documents"
+              element={
+                <RequirePermissionRoute permission="dashboard:read">
+                  <DocumentCenterPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/purchasing/*"
+              element={
+                <RequirePermissionRoute permission="products:read">
+                  <ComingSoonPage title="Mua hàng (Purchasing)" module="Purchase Orders & Inbound" />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/analytics/*"
+              element={
+                <RequirePermissionRoute permission="dashboard:read">
+                  <ComingSoonPage title="Báo cáo (Analytics)" module="Advanced Reporting & BI" />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/channel-reconciliation"
+              element={
+                <RequirePermissionRoute permission="orders:write">
+                  <ComingSoonPage title="Đối soát (Reconciliation)" module="Channel Reconciliation" />
                 </RequirePermissionRoute>
               }
             />

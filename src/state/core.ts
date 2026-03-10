@@ -15,6 +15,7 @@ import type {
   StockLedgerEntry,
   Supplier,
   User,
+  InventoryRequest,
 } from '../domain/types'
 import type { AppActionWithMeta as AppAction, AppState, WarehouseState } from './types'
 import { createEmptyWarehouseState } from './seed'
@@ -637,12 +638,50 @@ export function toAuditSnapshot(entityType: AuditLog['entityType'], entity: unkn
       const u = entity as User
       return { username: u.username, fullName: u.fullName, role: u.role, active: u.active, createdAt: u.createdAt }
     }
+    case 'request': {
+        const r = entity as InventoryRequest
+        return {
+            code: r.code,
+            type: r.type,
+            status: r.status,
+            warehouseId: r.warehouseId,
+            targetWarehouseId: r.targetWarehouseId,
+            items: r.items.length,
+            lastLog: r.logs[r.logs.length - 1],
+            updatedAt: r.updatedAt
+        }
+    }
   }
 }
 
 export function createAuditLog(prev: AppState, next: AppState, action: AppAction): AuditLog | null {
   const actorUserId = prev.currentUserId ?? next.currentUserId
   const reason = action.meta?.reason?.trim() ? action.meta?.reason?.trim() : undefined
+
+  if (action.type === 'requests/upsert') {
+      const before = prev.requests.find(r => r.id === action.request.id) ?? null
+      const after = next.requests.find(r => r.id === action.request.id) ?? null
+      if (!after) return null
+      
+      // Determine action type
+      let auditAction: AuditLog['action'] = before ? 'update' : 'create'
+      
+      // If status changed to approved/rejected, we can consider it an "update" but maybe we want to highlight it?
+      // For now 'update' is fine, the details will show the status change.
+      
+      return {
+          id: newId('log'),
+          actorUserId,
+          action: auditAction,
+          entityType: 'request' as any, // Need to add 'request' to AuditEntityType
+          entityId: after.id,
+          entityCode: after.code,
+          before: before ? toAuditSnapshot('request' as any, before) : undefined,
+          after: toAuditSnapshot('request' as any, after),
+          reason,
+          createdAt: nowIso()
+      }
+  }
 
   if (action.type === 'stockVouchers/upsert') {
     const before = prev.stockVouchers.find((x) => x.id === action.voucher.id) ?? null

@@ -1,34 +1,81 @@
+import 'dotenv/config' // Load .env
 import express from 'express'
 import cors from 'cors'
 import { createServer } from 'http'
+import { createServer as createHttpsServer } from 'https'
 import { Server } from 'socket.io'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { reducer, validateAction } from '../src/state/core'
 import { createSeedState } from '../src/state/seed'
 import type { AppState, AppActionWithMeta } from '../src/state/types'
 import { JobScheduler } from './scheduler'
+import { initWorkers } from './workers'
+import { queue } from './queue'
+import { ShopeeClient } from './integrations/shopee'
+import { rateLimit } from 'express-rate-limit'
+
+import { store } from './store'
+import { analyticsService } from './services/analytics'
+
+import { authService } from './services/auth'
+import { authenticateToken, authorizeWarehouse } from './middleware/auth'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const DATA_FILE = path.resolve(__dirname, 'data.json')
 const PORT = process.env.PORT || 3000
-const JWT_SECRET = 'dmx-secret-key-2024-secure-v1'
+const HTTPS_PORT = process.env.HTTPS_PORT || 3443
+// Security: Use Env Var, Fallback only for Dev
+const JWT_SECRET = process.env.JWT_SECRET || 'dmx-secret-key-2024-secure-v1' 
+
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    console.error('CRITICAL SECURITY WARNING: JWT_SECRET is not set in production environment!')
+    process.exit(1)
+}
 
 const app = express()
+
+// Security Middleware
+// 1. HSTS (Strict-Transport-Security)
+app.use((req, res, next) => {
+    // Force HTTPS in production (or if behind proxy)
+    if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    }
+    next()
+})
+
+// 2. Rate Limiting (OWASP API Security)
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	limit: 100, // Limit each IP to 100 requests per windowMs
+	standardHeaders: 'draft-7',
+	legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' }
+})
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5, // 5 login attempts per 15 mins
+    message: { error: 'Too many login attempts, please try again later.' }
+})
+
+app.use(limiter) // Apply global rate limit
+
 app.use(cors()) // Enable CORS for all routes
 app.use(express.json()) // Parse JSON bodies
 
 // System Endpoints
-app.get('/api/version', (req, res) => res.json({ version: '2.11.0', name: 'Enterprise Server' }))
+app.get('/api/version', (req, res) => res.json({ version: '3.0.0', name: 'Enterprise Server' }))
 app.get('/api/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }))
 
-// Backup Endpoint
-app.get('/api/backup', (req, res) => {
+// Backup Endpoint (Protected)
+app.get('/api/backup', authenticateToken, (req, res) => {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
     if (fs.existsSync(DATA_FILE)) {
         res.download(DATA_FILE)
     } else {
@@ -36,8 +83,29 @@ app.get('/api/backup', (req, res) => {
     }
 })
 
-const httpServer = createServer(app)
-const io = new Server(httpServer, {
+// Create Servers
+let httpServer = createServer(app)
+let httpsServer: any = null
+
+// Load SSL Certs if available
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH || path.join(__dirname, 'certs', 'privkey.pem')
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || path.join(__dirname, 'certs', 'fullchain.pem')
+
+if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
+    try {
+        const httpsOptions = {
+            key: fs.readFileSync(SSL_KEY_PATH),
+            cert: fs.readFileSync(SSL_CERT_PATH)
+        }
+        httpsServer = createHttpsServer(httpsOptions, app)
+        console.log('HTTPS Server initialized')
+    } catch (e) {
+        console.error('Failed to initialize HTTPS server:', e)
+    }
+}
+
+// Attach Socket.IO (Prefer HTTPS if available, otherwise HTTP)
+const io = new Server(httpsServer || httpServer, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST'],
@@ -49,60 +117,11 @@ app.get('/', (req: express.Request, res: express.Response) => {
   res.send('Quan Ly Gia Dung API Server. Web access is disabled.')
 })
 
-let state: AppState = createSeedState()
-
-// Load state
-function loadState() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf-8')
-      const loaded = JSON.parse(raw)
-      // Merge with seed state to ensure all fields (especially new arrays) are present
-      state = { ...createSeedState(), ...loaded }
-      console.log('Loaded state from disk')
-      
-      // Auto-migrate passwords if needed (simple check)
-      let changed = false
-      state.users.forEach(u => {
-        if (u.password === '123') {
-          console.log(`Migrating password for user ${u.username}`)
-          u.password = bcrypt.hashSync('123', 10)
-          changed = true
-        }
-      })
-      if (changed) saveStateImmediate()
-
-    } else {
-      console.log('Created new seed state')
-    }
-  } catch (e) {
-    console.error('Failed to load state:', e)
-    // state is already seed state
-  }
-}
-
-// Persist state
-let persistTimer: NodeJS.Timeout | null = null
-function schedulePersist() {
-  if (persistTimer) return
-  persistTimer = setTimeout(() => {
-    persistTimer = null
-    saveStateImmediate()
-  }, 2000)
-}
-
-function saveStateImmediate() {
-  fs.writeFile(DATA_FILE, JSON.stringify(state, null, 2), (err) => {
-    if (err) console.error('Failed to save state:', err)
-    else console.log('State saved to disk')
-  })
-}
-
-loadState()
-
 // Initialize Background Job Engine
-const jobEngine = new JobScheduler(state)
+const jobEngine = new JobScheduler(store.state)
 jobEngine.start()
+initWorkers()
+
 jobEngine.register({
   id: 'auto-replenish',
   name: 'Calculate Replenishment Needs',
@@ -112,10 +131,82 @@ jobEngine.register({
   }
 })
 
+// Webhook Endpoint
+app.post('/api/webhook/:channel', async (req, res) => {
+    const { channel } = req.params
+    const payload = req.body
+    
+    console.log(`[Webhook] Received event from ${channel}`)
+    
+    if (channel === 'shopee') {
+        // In real app, load config from DB or verify signature
+        const client = new ShopeeClient({ shopId: 'default', accessToken: 'xxx' })
+        const event = await client.handleWebhook(payload)
+        
+        if (event?.type === 'ORDER_UPDATE') {
+            queue.add('SYNC_ORDER', { channelId: 'shopee-1', orderId: event.data.ordersn })
+        }
+    }
+    
+    res.json({ status: 'ok' })
+})
+
 // --- API Routes ---
 
-// Login Endpoint
-app.post('/api/login', (req: express.Request, res: express.Response) => {
+// Analytics Endpoints (Protected & Scoped)
+app.get('/api/analytics/business', authenticateToken, async (req, res) => {
+    try {
+        const from = req.query.from ? new Date(String(req.query.from)) : new Date(new Date().setDate(new Date().getDate() - 30))
+        const to = req.query.to ? new Date(String(req.query.to)) : new Date()
+        // Pass user context for BOLA filtering
+        const data = await analyticsService.getBusinessKPIs(from, to, req.user)
+        res.json(data)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+app.get('/api/analytics/history', authenticateToken, async (req, res) => {
+    try {
+        const data = await analyticsService.getRevenueHistory(req.user)
+        res.json(data)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+app.get('/api/analytics/top-products', authenticateToken, async (req, res) => {
+    try {
+        const limit = Number(req.query.limit) || 5
+        const data = await analyticsService.getTopProducts(req.user, limit)
+        res.json(data)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+app.get('/api/analytics/inventory', authenticateToken, async (req, res) => {
+    try {
+        const data = await analyticsService.getInventoryKPIs(req.user)
+        res.json(data)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+app.get('/api/analytics/channels', authenticateToken, async (req, res) => {
+    try {
+        const from = req.query.from ? new Date(String(req.query.from)) : new Date(new Date().setDate(new Date().getDate() - 30))
+        const to = req.query.to ? new Date(String(req.query.to)) : new Date()
+        const data = await analyticsService.getChannelPerformance(from, to, req.user)
+        res.json(data)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+// Login Endpoint (Updated)
+app.post('/api/login', loginLimiter, async (req: express.Request, res: express.Response) => {
   const { username, password } = req.body
   
   if (!username || !password) {
@@ -123,38 +214,41 @@ app.post('/api/login', (req: express.Request, res: express.Response) => {
     return
   }
 
-  const user = state.users.find(u => u.username === username && u.active)
-  if (!user || !user.password) {
-    res.status(401).json({ error: 'Sai tên đăng nhập hoặc mật khẩu' })
-    return
-  }
-
-  const valid = user.password ? bcrypt.compareSync(password, user.password) : false
-  if (!valid) {
-    // Lazy migration: Check if password matches plain text
-    if (password === user.password) {
-      console.log(`Migrating password for user ${user.username} (Lazy)`)
-      user.password = bcrypt.hashSync(password, 10)
-      schedulePersist()
-      // Continue to login success...
-    } else {
+  const result = await authService.login(username, password)
+  if (!result) {
       res.status(401).json({ error: 'Sai tên đăng nhập hoặc mật khẩu' })
       return
-    }
   }
 
-  // Issue Token
-  const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
-    JWT_SECRET,
-    { expiresIn: '30d' }
-  )
-
   res.json({ 
-    token, 
-    user: { ...user, password: undefined },
-    locations: state.locations
+    token: result.accessToken, // Keep 'token' key for backward compatibility if client expects it
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken,
+    user: result.user,
+    locations: store.state.locations
   })
+})
+
+// Auth Management Endpoints
+app.post('/api/auth/refresh', async (req, res) => {
+    const { refreshToken } = req.body
+    if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' })
+    
+    const result = await authService.refresh(refreshToken)
+    if (!result) return res.status(403).json({ error: 'Invalid or expired refresh token' })
+    
+    res.json(result)
+})
+
+app.post('/api/auth/logout', async (req, res) => {
+    const { refreshToken } = req.body
+    if (refreshToken) await authService.logout(refreshToken)
+    res.json({ status: 'ok' })
+})
+
+app.post('/api/auth/logout-all', authenticateToken, async (req, res) => {
+    if (req.user?.id) await authService.logoutAll(req.user.id)
+    res.json({ status: 'ok' })
 })
 
 // --- Socket.IO Security ---
@@ -166,13 +260,14 @@ io.use((socket, next) => {
     return next(new Error('Authentication error: No token provided'))
   }
 
-  jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
-    if (err) return next(new Error('Authentication error: Invalid token'))
+  const user = authService.verifyAccessToken(token)
+  if (!user) {
+    return next(new Error('Authentication error: Invalid token'))
+  }
     
-    // Attach user to socket
-    socket.data.user = decoded
-    next()
-  })
+  // Attach user to socket
+  socket.data.user = user
+  next()
 })
 
 io.on('connection', (socket) => {
@@ -184,8 +279,8 @@ io.on('connection', (socket) => {
   // Ideally yes. But 'users' list is needed for UI.
   // We can strip passwords from the state copy sent to client.
   const safeState = {
-    ...state,
-    users: state.users.map(u => ({ ...u, password: undefined }))
+    ...store.state,
+    users: store.state.users.map(u => ({ ...u, password: undefined }))
   }
   socket.emit('sync', safeState)
 
@@ -193,7 +288,7 @@ io.on('connection', (socket) => {
     // Validate Action against permissions
     // We create a temp state where currentUserId is the socket's user
     // to allow validateAction to check roles/permissions.
-    const tempState = { ...state, currentUserId: user.id }
+    const tempState = { ...store.state, currentUserId: user.id }
     
     const validation = validateAction(tempState, action)
     if (!validation.ok) {
@@ -205,12 +300,11 @@ io.on('connection', (socket) => {
     // Apply reducer to global state
     // Note: We do NOT pass tempState to reducer, because we don't want to persist currentUserId=user.id
     // The global state should remain neutral regarding session.
-    const nextState = reducer(state, action)
+    const nextState = reducer(store.state, action)
     
     // If state changed
-    if (nextState !== state) {
-      state = nextState
-      schedulePersist()
+    if (nextState !== store.state) {
+      store.setState(nextState)
       
       // Broadcast action to others
       // For security, we should maybe broadcast only to allowed users?
@@ -221,8 +315,8 @@ io.on('connection', (socket) => {
 
   socket.on('requestSync', () => {
     const safeState = {
-      ...state,
-      users: state.users.map(u => ({ ...u, password: undefined }))
+      ...store.state,
+      users: store.state.users.map(u => ({ ...u, password: undefined }))
     }
     socket.emit('sync', safeState)
   })
@@ -232,6 +326,13 @@ io.on('connection', (socket) => {
   })
 })
 
+// Start Servers
 httpServer.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`)
+  console.log(`HTTP Server running on http://localhost:${PORT}`)
 })
+
+if (httpsServer) {
+    httpsServer.listen(HTTPS_PORT, () => {
+        console.log(`HTTPS Server running on https://localhost:${HTTPS_PORT}`)
+    })
+}

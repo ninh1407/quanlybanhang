@@ -18,6 +18,7 @@ const entityLabels: Record<AuditLog['entityType'], string> = {
   category: 'Danh mục',
   location: 'Vị trí kho',
   user: 'Nhân sự',
+  request: 'Yêu cầu duyệt',
 }
 
 const actionLabels: Record<AuditLog['action'], string> = {

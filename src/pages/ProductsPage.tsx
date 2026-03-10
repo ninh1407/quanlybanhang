@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useRef } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useAuth } from '../auth/auth'
 import type { Product, Sku } from '../domain/types'
 import { nowIso } from '../lib/date'
@@ -7,7 +7,9 @@ import { formatVnd } from '../lib/money'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { Drawer } from '../ui-kit/Drawer'
 import { useDialogs } from '../ui-kit/Dialogs'
-import { Search, Plus, Edit, Save, Filter, Upload, Download, FileSpreadsheet } from 'lucide-react'
+import { SmartTable, Column, SortConfig } from '../ui-kit/listing/SmartTable'
+import { AdvancedFilter, FilterDef } from '../ui-kit/listing/AdvancedFilter'
+import { Plus, Edit, Save, Upload, Download, FileSpreadsheet, Trash2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 function autoInternalCode(): string {
@@ -16,17 +18,17 @@ function autoInternalCode(): string {
   return `SP-${d}-${rnd}`
 }
 
-function skuTitle(productName: string, sku: Sku): string {
-  const attrs = [
-    sku.color.trim(),
-    sku.size.trim(),
-    sku.material?.trim(),
-    sku.volume?.trim(),
-    sku.capacity?.trim(),
-    sku.power?.trim()
-  ].filter(Boolean).join(' / ')
-  return `${productName}${attrs ? ` - ${attrs}` : ''}`
-}
+// function skuTitle(productName: string, sku: Sku): string {
+//   const attrs = [
+//     sku.color.trim(),
+//     sku.size.trim(),
+//     sku.material?.trim(),
+//     sku.volume?.trim(),
+//     sku.capacity?.trim(),
+//     sku.power?.trim()
+//   ].filter(Boolean).join(' / ')
+//   return `${productName}${attrs ? ` - ${attrs}` : ''}`
+// }
 
 const emptyProductForm: Omit<Product, 'id' | 'createdAt'> = {
   internalCode: '',
@@ -59,97 +61,8 @@ const emptySkuForm: Omit<Sku, 'id' | 'createdAt' | 'productId'> = {
   components: [],
 }
 
-const ProductRow = memo(function ProductRow(props: {
-  sku: Sku
-  product: Product | undefined
-  categoryName: string
-  supplierName: string
-  qty: number
-  canWrite: boolean
-  onEditProduct: (p: Product) => void
-  onAddSku: (productId: string) => void
-  onEditSku: (s: Sku) => void
-  onRemoveSku: (id: string) => void
-  onRemoveProduct: (id: string) => void
-}) {
-  const {
-    sku,
-    product,
-    categoryName,
-    qty,
-    canWrite,
-    onEditProduct,
-    onAddSku,
-    onEditSku,
-  } = props
+// ProductRow removed
 
-  const productName = product ? product.name : sku.productId
-  const variant = [
-    sku.color.trim(),
-    sku.size.trim(),
-    sku.material?.trim(),
-    sku.volume?.trim(),
-    sku.capacity?.trim(),
-    sku.power?.trim()
-  ].filter(Boolean).join(' / ')
-  const profit = sku.price - sku.cost
-  const profitPercent = sku.price > 0 ? (profit / sku.price) * 100 : 0
-
-  return (
-    <tr style={{ height: 60 }}>
-      <td>
-        <div style={{ width: 40, height: 40, background: 'var(--neutral-100)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>IMG</span>
-        </div>
-      </td>
-      <td><span className="text-muted" style={{ fontFamily: 'monospace' }}>{product ? product.internalCode : ''}</span></td>
-      <td>
-        <div style={{ fontWeight: 600, color: 'var(--primary-700)' }}>{productName}</div>
-        {variant && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{variant}</div>}
-      </td>
-      <td>{categoryName && <span className="badge badge-neutral">{categoryName}</span>}</td>
-      <td><span style={{ fontFamily: 'monospace' }}>{sku.skuCode}</span></td>
-      <td style={{ fontWeight: 600, color: qty <= 5 ? 'var(--danger)' : 'var(--success)' }}>
-          {qty}
-      </td>
-      <td>{formatVnd(sku.cost)}</td>
-      <td style={{ fontWeight: 600 }}>{formatVnd(sku.price)}</td>
-      <td>
-        <div style={{ fontSize: 13, fontWeight: 500, color: profit > 0 ? 'var(--success)' : 'var(--danger)' }}>
-            {profitPercent.toFixed(1)}%
-        </div>
-      </td>
-      <td>
-        {product?.isHidden ? (
-           <span className="badge badge-neutral">Đang ẩn</span>
-        ) : (product?.active && sku.active ? (
-          <span className="badge badge-success">Đang bán</span>
-        ) : (
-          <span className="badge badge-danger">Ngưng bán</span>
-        ))}
-      </td>
-      <td className="cell-actions">
-        {canWrite ? (
-          <div className="row" style={{ gap: 4 }}>
-            {product && (
-              <button className="btn btn-small" onClick={() => onEditProduct(product)} title="Sửa sản phẩm">
-                <Edit size={14} />
-              </button>
-            )}
-            <button className="btn btn-small" onClick={() => onEditSku(sku)} title="Sửa SKU">
-              <Edit size={14} />
-            </button>
-            {product && (
-              <button className="btn btn-small" onClick={() => onAddSku(product.id)} title="Thêm biến thể">
-                <Plus size={14} />
-              </button>
-            )}
-          </div>
-        ) : null}
-      </td>
-    </tr>
-  )
-})
 
 export function ProductsPage() {
   const state = useAppState()
@@ -172,11 +85,15 @@ export function ProductsPage() {
   const [skuForm, setSkuForm] = useState(emptySkuForm)
 
   // Filter states
-  const [search, setSearch] = useState('')
-  const [filterCategory, setFilterCategory] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterLocationId, setFilterLocationId] = useState('')
+  const [filterValues, setFilterValues] = useState<Record<string, any>>({})
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', direction: 'asc' })
   const [activeTab, setActiveTab] = useState('products')
+
+  // Derived filters
+  const search = (filterValues.search as string) || ''
+  const filterCategory = (filterValues.category as string) || ''
+  const filterStatus = (filterValues.status as string) || ''
+  const filterLocationId = (filterValues.location as string) || ''
 
   // Import State
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -184,10 +101,7 @@ export function ProductsPage() {
   const [importStep, setImportStep] = useState<'upload' | 'preview'>('upload')
 
   const categoriesById = useMemo(() => new Map(state.categories.map((c) => [c.id, c.name])), [state.categories])
-  const suppliersById = useMemo(
-    () => new Map(state.suppliers.map((s) => [s.id, `${s.code} - ${s.name}`])),
-    [state.suppliers],
-  )
+  // const suppliersById removed
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
   const productObjById = useMemo(() => new Map(state.products.map((p) => [p.id, p])), [state.products])
 
@@ -277,15 +191,220 @@ export function ProductsPage() {
        list = list.filter(s => s.active === isActive)
     }
 
-    // Default Sort
+    // Sort
     return list.sort((a, b) => {
-      const pa = productsById.get(a.productId) ?? a.productId
-      const pb = productsById.get(b.productId) ?? b.productId
-      const c = pa.localeCompare(pb)
-      if (c !== 0) return c
-      return skuTitle(pa, a).localeCompare(skuTitle(pb, b))
+      const pa = productObjById.get(a.productId)
+      const pb = productObjById.get(b.productId)
+      
+      let valA: any = ''
+      let valB: any = ''
+
+      switch (sortConfig.key) {
+        case 'internalCode':
+          valA = pa?.internalCode ?? ''
+          valB = pb?.internalCode ?? ''
+          break
+        case 'name':
+          valA = pa?.name ?? ''
+          valB = pb?.name ?? ''
+          break
+        case 'skuCode':
+          valA = a.skuCode
+          valB = b.skuCode
+          break
+        case 'qty':
+          valA = availableQtyBySkuId.get(a.id) ?? 0
+          valB = availableQtyBySkuId.get(b.id) ?? 0
+          break
+        case 'cost':
+          valA = a.cost
+          valB = b.cost
+          break
+        case 'price':
+          valA = a.price
+          valB = b.price
+          break
+        case 'profit':
+           valA = a.price - a.cost
+           valB = b.price - b.cost
+           break
+        default:
+          return 0
+      }
+
+      if (typeof valA === 'string') {
+        return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA)
+      }
+      return sortConfig.direction === 'asc' ? valA - valB : valB - valA
     })
-  }, [state.skus, search, filterCategory, filterStatus, productObjById, productsById])
+  }, [state.skus, search, filterCategory, filterStatus, productObjById, productsById, sortConfig, availableQtyBySkuId])
+
+  // Columns Definition
+  const columns = useMemo<Column<Sku>[]>(() => [
+    {
+      key: 'image',
+      title: 'Ảnh',
+      width: 60,
+      render: () => (
+        <div style={{ width: 40, height: 40, background: 'var(--neutral-100)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>IMG</span>
+        </div>
+      )
+    },
+    {
+      key: 'internalCode',
+      title: 'Mã nội bộ',
+      width: 120,
+      sortable: true,
+      render: (s) => <span className="text-muted" style={{ fontFamily: 'monospace' }}>{productObjById.get(s.productId)?.internalCode}</span>
+    },
+    {
+      key: 'name',
+      title: 'Tên sản phẩm',
+      sortable: true,
+      render: (s) => {
+        const p = productObjById.get(s.productId)
+        const variant = [
+            s.color.trim(),
+            s.size.trim(),
+            s.material?.trim(),
+            s.volume?.trim(),
+            s.capacity?.trim(),
+            s.power?.trim()
+          ].filter(Boolean).join(' / ')
+        return (
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--primary-700)' }}>{p?.name}</div>
+            {variant && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{variant}</div>}
+          </div>
+        )
+      }
+    },
+    {
+      key: 'category',
+      title: 'Danh mục',
+      render: (s) => {
+        const p = productObjById.get(s.productId)
+        const catName = p?.categoryId ? categoriesById.get(p.categoryId) : ''
+        return catName ? <span className="badge badge-neutral">{catName}</span> : null
+      }
+    },
+    {
+      key: 'skuCode',
+      title: 'Mã SKU',
+      width: 150,
+      sortable: true,
+      render: (s) => <span style={{ fontFamily: 'monospace' }}>{s.skuCode}</span>
+    },
+    {
+      key: 'qty',
+      title: 'Tồn kho',
+      align: 'right',
+      sortable: true,
+      render: (s) => {
+        const qty = availableQtyBySkuId.get(s.id) ?? 0
+        return <span style={{ fontWeight: 600, color: qty <= 5 ? 'var(--danger)' : 'var(--success)' }}>{qty}</span>
+      }
+    },
+    {
+      key: 'cost',
+      title: 'Giá vốn',
+      align: 'right',
+      sortable: true,
+      render: (s) => formatVnd(s.cost)
+    },
+    {
+      key: 'price',
+      title: 'Giá bán',
+      align: 'right',
+      sortable: true,
+      render: (s) => <span style={{ fontWeight: 600 }}>{formatVnd(s.price)}</span>
+    },
+    {
+      key: 'profit',
+      title: 'Lợi nhuận',
+      align: 'right',
+      sortable: true,
+      render: (s) => {
+        const profit = s.price - s.cost
+        const percent = s.price > 0 ? (profit / s.price) * 100 : 0
+        return (
+           <div style={{ fontSize: 13, fontWeight: 500, color: profit > 0 ? 'var(--success)' : 'var(--danger)' }}>
+              {percent.toFixed(1)}%
+           </div>
+        )
+      }
+    },
+    {
+      key: 'status',
+      title: 'Trạng thái',
+      render: (s) => {
+        const p = productObjById.get(s.productId)
+        if (p?.isHidden) return <span className="badge badge-neutral">Đang ẩn</span>
+        if (p?.active && s.active) return <span className="badge badge-success">Đang bán</span>
+        return <span className="badge badge-danger">Ngưng bán</span>
+      }
+    },
+    {
+      key: 'actions',
+      title: 'Thao tác',
+      align: 'right',
+      width: 120,
+      render: (s) => {
+         if (!canWrite) return null
+         const p = productObjById.get(s.productId)
+         return (
+            <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+                {p && (
+                  <button className="btn btn-small" onClick={() => startEditProduct(p)} title="Sửa sản phẩm">
+                    <Edit size={14} />
+                  </button>
+                )}
+                <button className="btn btn-small" onClick={() => startEditSku(s)} title="Sửa SKU">
+                  <Edit size={14} />
+                </button>
+                {p && (
+                   <button className="btn btn-small" onClick={() => startCreateSku(p.id)} title="Thêm biến thể">
+                     <Plus size={14} />
+                   </button>
+                 )}
+                 <button className="btn btn-small text-danger" onClick={() => removeSku(s.id)} title="Xóa SKU">
+                   <Trash2 size={14} />
+                 </button>
+                 {p && (
+                   <button className="btn btn-small text-danger" onClick={() => removeProduct(p.id)} title="Xóa sản phẩm">
+                     <Trash2 size={14} />
+                   </button>
+                 )}
+             </div>
+          )
+       }
+     }
+   ], [productObjById, categoriesById, availableQtyBySkuId, canWrite])
+
+  const filterDefs: FilterDef[] = [
+    {
+      key: 'category',
+      label: 'Danh mục',
+      type: 'select',
+      options: state.categories.map(c => ({ label: c.name, value: c.id }))
+    },
+    {
+      key: 'status',
+      label: 'Trạng thái',
+      type: 'status',
+      options: [
+        { label: 'Đang bán', value: '1' },
+        { label: 'Ngưng bán', value: '0' }
+      ]
+    },
+    {
+      key: 'location',
+      label: 'Kho hàng',
+      type: 'select',
+      options: state.locations.map(l => ({ label: `${l.code} - ${l.name}`, value: l.id }))
+    }
+  ]
 
   function startCreateProduct() {
     const internalCode = autoInternalCode()
@@ -582,7 +701,7 @@ export function ProductsPage() {
       </div>
 
       {activeTab === 'products' && (
-      <div className="card">
+      <div className="card" style={{ height: 'calc(100vh - 180px)', display: 'flex', flexDirection: 'column' }}>
         <div className="card-title">
            Danh sách sản phẩm
            <div className="row">
@@ -595,102 +714,23 @@ export function ProductsPage() {
            </div>
         </div>
         
-        {/* Toolbar / Filters */}
-        <div className="row" style={{ marginBottom: 16, gap: 12 }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-             <input 
-               placeholder="Tìm kiếm..." 
-               value={search}
-               onChange={e => setSearch(e.target.value)}
-               style={{ paddingLeft: 36 }}
-             />
-             <Search size={18} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-muted)' }} />
-          </div>
-          
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ position: 'relative' }}>
-              <select 
-                 value={filterCategory} 
-                 onChange={e => setFilterCategory(e.target.value)}
-                 style={{ width: 180, paddingLeft: 32 }}
-              >
-                <option value="">Tất cả danh mục</option>
-                {state.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <Filter size={16} style={{ position: 'absolute', left: 10, top: 12, color: 'var(--text-muted)' }} />
-            </div>
+        <AdvancedFilter
+          filters={filterDefs}
+          values={filterValues}
+          onChange={setFilterValues}
+          onSearchChange={(text) => setFilterValues(prev => ({ ...prev, search: text }))}
+          searchValue={search}
+        />
 
-            <div style={{ position: 'relative' }}>
-              <select 
-                 value={filterLocationId} 
-                 onChange={e => setFilterLocationId(e.target.value)}
-                 style={{ width: 180, paddingLeft: 32 }}
-              >
-                <option value="">Tất cả kho</option>
-                {state.locations.map(l => <option key={l.id} value={l.id}>{l.code} - {l.name}</option>)}
-              </select>
-              <Filter size={16} style={{ position: 'absolute', left: 10, top: 12, color: 'var(--text-muted)' }} />
-            </div>
-            
-            <select 
-               value={filterStatus} 
-               onChange={e => setFilterStatus(e.target.value)}
-               style={{ width: 150 }}
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="1">Đang bán</option>
-              <option value="0">Ngưng bán</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 60 }}>Ảnh</th>
-                <th>Mã nội bộ</th>
-                <th>Tên sản phẩm</th>
-                <th>Danh mục</th>
-                <th>Mã SKU</th>
-                <th>Tồn kho</th>
-                <th>Giá vốn</th>
-                <th>Giá bán</th>
-                <th>Lợi nhuận</th>
-                <th>Trạng thái</th>
-                <th style={{ width: 120 }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {skus.map((s) => {
-                const p = productObjById.get(s.productId)
-                const qty = availableQtyBySkuId.get(s.id) ?? 0
-                return (
-                  <ProductRow
-                    key={s.id}
-                    sku={s}
-                    product={p}
-                    categoryName={p?.categoryId ? categoriesById.get(p.categoryId) ?? '' : ''}
-                    supplierName={p?.supplierId ? suppliersById.get(p.supplierId) ?? '' : ''}
-                    qty={qty}
-                    canWrite={canWrite}
-                    onEditProduct={startEditProduct}
-                    onAddSku={startCreateSku}
-                    onEditSku={startEditSku}
-                    onRemoveSku={removeSku}
-                    onRemoveProduct={removeProduct}
-                  />
-                )
-              })}
-              {skus.length === 0 && (
-                <tr>
-                   <td colSpan={11} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-                      Không tìm thấy sản phẩm nào
-                   </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <SmartTable
+            columns={columns}
+            data={skus}
+            keyField="id"
+            emptyText="Không tìm thấy sản phẩm nào"
+            sort={sortConfig}
+            onSort={setSortConfig}
+          />
         </div>
       </div>
       )}

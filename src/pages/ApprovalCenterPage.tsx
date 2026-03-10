@@ -21,6 +21,8 @@ function statusLabel(status: InventoryRequestStatus) {
       return <span className="badge badge-warning">Chờ quản lý duyệt</span>
     case 'pending_accountant':
       return <span className="badge badge-info">Chờ kế toán duyệt</span>
+    case 'pending_ceo':
+      return <span className="badge badge-danger">Chờ CEO duyệt (High Value)</span>
     case 'approved':
       return <span className="badge badge-success">Đã duyệt</span>
     case 'rejected':
@@ -84,7 +86,8 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
 
   const canApproveManager = request.status === 'pending_manager' && (user?.role === 'admin' || user?.role === 'manager')
   const canApproveAccountant = request.status === 'pending_accountant' && (user?.role === 'admin' || user?.role === 'accountant')
-  const canReject = (canApproveManager || canApproveAccountant)
+  const canApproveCEO = request.status === 'pending_ceo' && (user?.role === 'admin') // Assuming Admin acts as CEO for now
+  const canReject = (canApproveManager || canApproveAccountant || canApproveCEO)
   const canCancel = request.status.startsWith('pending') && user?.id === request.createdBy
 
   const handleCancel = async () => {
@@ -121,8 +124,18 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
           nextStatus = 'pending_accountant'
           action = 'approve_manager'
       } else if (request.status === 'pending_accountant') {
+          // Check for High Value Transfer logic
+          const totalValue = request.items.reduce((sum, item) => sum + (item.qty * (item.unitCost || 0)), 0)
+          if (request.type === 'transfer' && totalValue > 200000000) {
+              nextStatus = 'pending_ceo'
+              action = 'approve_accountant' // Accountant approved, now waiting for CEO
+          } else {
+              nextStatus = 'approved'
+              action = 'approve_accountant'
+          }
+      } else if (request.status === 'pending_ceo') {
           nextStatus = 'approved'
-          action = 'approve_accountant'
+          action = 'approve_ceo' as any
       }
 
       // Update Request
@@ -326,6 +339,7 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
                                     {log.action === 'create' ? 'Tạo yêu cầu' : 
                                      log.action === 'approve_manager' ? 'Quản lý duyệt' :
                                      log.action === 'approve_accountant' ? 'Kế toán duyệt' :
+                                     log.action === 'approve_ceo' ? 'CEO duyệt' :
                                      log.action === 'reject' ? 'Từ chối' : 'Hủy'}
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -342,9 +356,9 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
                 {canReject && (
                     <button className="btn btn-danger" onClick={handleReject}>Từ chối</button>
                 )}
-                {(canApproveManager || canApproveAccountant) && (
+                {(canApproveManager || canApproveAccountant || canApproveCEO) && (
                     <button className="btn btn-primary" onClick={handleApprove}>
-                        <CheckCircle size={16} /> Duyệt
+                        <CheckCircle size={16} /> Duyệt {canApproveCEO ? '(CEO)' : ''}
                     </button>
                 )}
                 {canCancel && (

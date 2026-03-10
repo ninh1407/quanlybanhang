@@ -124,6 +124,21 @@ export const rolePermissions: Record<Role, Permission[]> = {
     'finance:read',
     'finance:write',
     'customers:read',
+  ],
+  ceo: [
+    'dashboard:read',
+    'products:read',
+    'products:write',
+    'orders:read',
+    'orders:write',
+    'inventory:read',
+    'inventory:write',
+    'finance:read',
+    'finance:write',
+    'customers:read',
+    'customers:write',
+    'staff:read',
+    'staff:write',
   ]
 }
 

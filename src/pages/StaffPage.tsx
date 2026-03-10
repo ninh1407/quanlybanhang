@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
-import bcrypt from 'bcryptjs'
 import { useAuth } from '../auth/auth'
+import { fetchApi } from '../api/client'
 import { groupPermissions, rolePermissions } from '../domain/permissions'
 import type { Location, Role, User } from '../domain/types'
-import { formatDateTime, nowIso } from '../lib/date'
+import { formatDateTime } from '../lib/date'
 import { newId } from '../lib/id'
 import { useStore } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
+import { useDialogs } from '../ui-kit/Dialogs'
 
 const roles: Role[] = ['admin', 'manager', 'region_manager', 'accountant', 'staff']
 
@@ -48,6 +49,8 @@ export function StaffPage() {
     return new Map<string, Location>(state.locations.map((l) => [l.id, l]))
   }, [state.locations])
 
+  const dialogs = useDialogs()
+
   function startCreate() {
     setEditingId(null)
     setForm(emptyForm)
@@ -67,7 +70,7 @@ export function StaffPage() {
     })
   }
 
-  function save() {
+  async function save() {
     if (!canWrite) return
     setError('')
     if (!form.username.trim() || !form.fullName.trim()) return
@@ -77,28 +80,27 @@ export function StaffPage() {
     }
     const existing = editingId ? state.users.find((u) => u.id === editingId) : undefined
     
-    let password = form.password
-    if (password) {
-      password = bcrypt.hashSync(password, 10)
-    } else if (existing) {
-      password = existing.password
-    } else {
-      setError('Vui lòng nhập mật khẩu.')
-      return
-    }
-
-    const next: User = {
+    const payload = {
       id: existing?.id ?? newId('usr'),
-      createdAt: existing?.createdAt ?? nowIso(),
       username: form.username.trim(),
       fullName: form.fullName.trim(),
       role: form.role,
       active: form.active,
       allowedLocationIds: (form.allowedLocationIds ?? []).slice(),
-      password: password || undefined
+      password: form.password || undefined
     }
-    dispatch({ type: 'users/upsert', user: next })
-    startCreate()
+
+    try {
+      const savedUser = await fetchApi<User>('/api/users', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      dispatch({ type: 'users/upsert', user: savedUser })
+      startCreate()
+      await dialogs.alert({ message: 'Lưu nhân sự thành công.' })
+    } catch (e: any) {
+      setError(e.message || 'Lỗi khi lưu nhân sự')
+    }
   }
 
   function toggleAllowed(id: string) {
@@ -107,10 +109,19 @@ export function StaffPage() {
     setForm({ ...form, allowedLocationIds: next })
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
     if (!canWrite) return
     if (currentUser?.id === id) return
-    dispatch({ type: 'users/delete', id })
+    
+    const ok = await dialogs.confirm({ message: 'Bạn có chắc chắn muốn xóa nhân sự này?', dangerous: true })
+    if (!ok) return
+
+    try {
+      await fetchApi(`/api/users/${id}`, { method: 'DELETE' })
+      dispatch({ type: 'users/delete', id })
+    } catch (e: any) {
+      await dialogs.alert({ message: e.message || 'Lỗi khi xóa nhân sự' })
+    }
   }
 
   return (

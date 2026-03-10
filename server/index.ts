@@ -59,9 +59,9 @@ const limiter = rateLimit({
 })
 
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 5, // 5 login attempts per 15 mins
-    message: { error: 'Too many login attempts, please try again later.' }
+    windowMs: 1 * 60 * 1000, // 1 minute
+    limit: 20, // 20 login attempts per 1 minute (More lenient for internal use)
+    message: { error: 'Quá nhiều lần thử đăng nhập sai. Vui lòng thử lại sau 1 phút.' }
 })
 
 app.use(limiter) // Apply global rate limit
@@ -206,6 +206,70 @@ app.get('/api/analytics/channels', authenticateToken, async (req, res) => {
 })
 
 // Login Endpoint (Updated)
+app.post('/api/users', authenticateToken, async (req, res) => {
+    // Check permissions
+    if (req.user?.role !== 'admin' && req.user?.role !== 'manager') {
+         return res.status(403).json({ error: 'Không có quyền quản lý nhân sự' })
+    }
+
+    const { id, username, password, fullName, role, active, allowedLocationIds } = req.body
+
+    if (!username || !fullName || !role) {
+        return res.status(400).json({ error: 'Thiếu thông tin bắt buộc' })
+    }
+
+    try {
+        const data: any = {
+            username,
+            fullName,
+            role,
+            active,
+            allowedLocationIds: allowedLocationIds || []
+        }
+
+        if (password && password.trim()) {
+            data.password = await bcrypt.hash(password, 10)
+        }
+
+        // Check if user exists
+        const existing = await prisma.user.findUnique({ where: { id } })
+        
+        let user;
+        if (existing) {
+            user = await prisma.user.update({
+                where: { id },
+                data
+            })
+        } else {
+            // For create, password is required if not provided
+            if (!data.password && !password) {
+                 return res.status(400).json({ error: 'Mật khẩu là bắt buộc cho nhân viên mới' })
+            }
+            if (id) data.id = id
+            user = await prisma.user.create({ data })
+        }
+
+        const safeUser = { ...user, password: undefined }
+        res.json(safeUser)
+    } catch (e: any) {
+        console.error('User upsert error:', e)
+        res.status(500).json({ error: e.message })
+    }
+})
+
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+    if (req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'Chỉ Admin mới được xóa nhân sự' })
+    }
+    
+    try {
+        await prisma.user.delete({ where: { id: req.params.id } })
+        res.json({ status: 'ok' })
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
 app.post('/api/login', loginLimiter, async (req: express.Request, res: express.Response) => {
   const { username, password } = req.body
   

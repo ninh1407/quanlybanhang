@@ -56,6 +56,9 @@ export function LoginPage() {
         return
       }
 
+      // Important: Add user to state before login
+      dispatch({ type: 'users/upsert', user })
+
       loginAs(user.id)
 
       if (allowed.length === 1) {

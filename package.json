@@ -4,7 +4,7 @@
   "description": "Phần mềm quản lý bán hàng đa kho",
   "author": "Ninh <ninh1407@github.com>",
   "private": true,
-  "version": "3.0.2",
+  "version": "3.0.3",
   "type": "module",
   "main": "electron/main.js",
   "repository": {

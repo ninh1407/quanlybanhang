@@ -1,0 +1,305 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums matching TypeScript types
+enum Role {
+  admin
+  staff
+  manager
+  accountant
+  region_manager
+  ceo
+}
+
+enum OrderStatus {
+  draft
+  confirmed
+  paid
+  picking
+  packed
+  ready_to_ship
+  shipped
+  delivered
+  returned
+  cancelled
+  pending_cancel
+}
+
+enum StockTxType {
+  in
+  out
+  adjust
+}
+
+enum FinanceTxType {
+  income
+  expense
+}
+
+// Models
+
+model User {
+  id                 String   @id @default(uuid())
+  username           String   @unique
+  password           String?
+  fullName           String
+  role               Role
+  active             Boolean  @default(true)
+  allowedLocationIds String[] // Stored as array of strings
+  scope              String?  // 'all' | 'region' | 'location'
+  region             String?
+  createdAt          DateTime @default(now())
+
+  // Relations
+  ordersCreated      Order[] @relation("OrderCreator")
+  stockVouchersCreated StockVoucher[] @relation("StockVoucherCreator")
+}
+
+model Location {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  province  String?
+  note      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // Relations
+  stockTransactions StockTransaction[]
+  stockCounts       StockCount[]
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  products  Product[]
+}
+
+model Supplier {
+  id                   String   @id @default(uuid())
+  code                 String   @unique
+  name                 String
+  phone                String?
+  email                String?
+  address              String?
+  note                 String?
+  country              String?
+  manufacturingCountry String?
+  segment              String?
+  createdAt            DateTime @default(now())
+  products             Product[]
+}
+
+model Product {
+  id                    String   @id @default(uuid())
+  internalCode          String   @unique
+  manualInternalCode    String?
+  barcode               String?
+  manufacturerBatchCode String?
+  specs                 String?
+  internalBatchCode     String?
+  name                  String
+  categoryId            String?
+  supplierId            String?
+  isMaterial            Boolean  @default(false)
+  active                Boolean  @default(true)
+  isHidden              Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  // Relations
+  category Category? @relation(fields: [categoryId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  skus     Sku[]
+}
+
+model Sku {
+  id         String   @id @default(uuid())
+  productId  String
+  skuCode    String   @unique
+  color      String?
+  size       String?
+  material   String?
+  volume     String?
+  capacity   String?
+  power      String?
+  unit       String   @default("cái")
+  cost       Float    @default(0)
+  price      Float    @default(0)
+  active     Boolean  @default(true)
+  kind       String   @default("single") // 'single' | 'bundle'
+  components Json?    // Array of {skuId, qty} for bundles
+  createdAt  DateTime @default(now())
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id])
+  stockTransactions StockTransaction[]
+  orderItems OrderItem[]
+}
+
+model Customer {
+  id              String   @id @default(uuid())
+  name            String
+  phone           String?
+  email           String?
+  address         String?
+  note            String?
+  discountPercent Float    @default(0)
+  loyaltyPoints   Float    @default(0)
+  createdAt       DateTime @default(now())
+  orders          Order[]
+}
+
+model Order {
+  id                      String   @id @default(uuid())
+  code                    String   @unique
+  customerId              String?
+  fulfillmentLocationId   String?
+  warehouseId             String? // BOLA
+  type                    String   @default("internal")
+  source                  String   @default("pos")
+  paymentMethod           String   @default("cod")
+  status                  OrderStatus @default(draft)
+  subTotalOverride        Float?
+  shippingFee             Float    @default(0)
+  carrierName             String?
+  trackingCode            String?
+  platformOrderId         String?
+  dropshipBrand           String?
+  partnerVoucherCode      String?
+  discountPercent         Float    @default(0)
+  discountAmount          Float    @default(0)
+  vatAmount               Float    @default(0)
+  otherFees               Float    @default(0)
+  otherFeesNote           String?
+  note                    String?
+  cancelReason            String?
+  isReconciledCarrier     String   @default("unreconciled")
+  isReconciledSupplier    String   @default("unreconciled")
+  reconciliationResultAmount Float?
+  createdAt               DateTime @default(now())
+  createdByUserId         String?
+  
+  // Relations
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  createdBy     User?     @relation("OrderCreator", fields: [createdByUserId], references: [id])
+  items         OrderItem[]
+  attachments   Json?     // Array of OrderAttachment
+}
+
+model OrderItem {
+  id      String @id @default(uuid())
+  orderId String
+  skuId   String
+  qty     Int
+  price   Float
+
+  order Order @relation(fields: [orderId], references: [id])
+  sku   Sku   @relation(fields: [skuId], references: [id])
+}
+
+model StockTransaction {
+  id          String   @id @default(uuid())
+  code        String   // Not unique?
+  type        StockTxType
+  skuId       String
+  locationId  String?
+  warehouseId String?
+  qty         Int
+  unitCost    Float?
+  note        String?
+  createdAt   DateTime @default(now())
+  refType     String   // 'manual' | 'order' | ...
+  refId       String?
+  
+  sku      Sku       @relation(fields: [skuId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+}
+
+model StockVoucher {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  type            String   // 'in' | 'out' | 'transfer'
+  status          String   @default("draft")
+  fromLocationId  String?
+  toLocationId    String?
+  note            String?
+  invoiceNumber   String?
+  vat             String?
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+  finalizedAt     DateTime?
+  lines           Json     // Array of StockVoucherLine
+
+  createdBy User? @relation("StockVoucherCreator", fields: [createdByUserId], references: [id])
+}
+
+model FinanceTransaction {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  type        FinanceTxType
+  amount      Float
+  category    String
+  note        String?
+  createdAt   DateTime @default(now())
+  locationId  String?
+  refType     String?
+  refId       String?
+  attachments Json?
+}
+
+model Debt {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  type        String   // 'receivable' | 'payable'
+  partnerId   String?
+  partnerName String?
+  amount      Float
+  status      String   @default("open")
+  dueDate     DateTime?
+  note        String?
+  createdAt   DateTime @default(now())
+  settledAt   DateTime?
+}
+
+model StockCount {
+  id                String   @id @default(uuid())
+  code              String   @unique
+  locationId        String
+  status            String   @default("draft")
+  note              String?
+  createdAt         DateTime @default(now())
+  createdByUserId   String?
+  responsibleUserId String?
+  compensationAmount Float   @default(0)
+  lines             Json     // StockCountLine[]
+  pendingItems      Json     // StockCountPendingItem[]
+  attachments       Json?    // StockCountAttachment[]
+
+  location Location @relation(fields: [locationId], references: [id])
+}
+
+model InventoryRequest {
+  id                String   @id @default(uuid())
+  code              String   @unique
+  type              String
+  status            String
+  warehouseId       String
+  targetWarehouseId String?
+  items             Json
+  note              String?
+  attachments       Json?
+  logs              Json
+  createdBy         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now())
+}

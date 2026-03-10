@@ -23,7 +23,7 @@
     "desktop:build": "cross-env DESKTOP=true npm run build",
     "desktop:dist": "npm run gen:icon && npm run desktop:build && electron-builder --win --x64 -p never",
     "db:setup": "npx prisma@5.22.0 generate && npx prisma@5.22.0 db push",
-    "db:migrate-data": "ts-node scripts/migrate-json-to-pg.ts"
+    "db:migrate-data": "npx tsx scripts/migrate-json-to-pg.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

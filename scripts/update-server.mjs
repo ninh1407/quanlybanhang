@@ -47,7 +47,7 @@ try {
   if (fs.existsSync(dataPath)) {
       console.log('🚚 4. Đang đồng bộ dữ liệu cũ (JSON) sang Database...')
       try {
-        execSync('npx ts-node scripts/migrate-json-to-pg.ts', { stdio: 'inherit' })
+        execSync('npm run db:migrate-data', { stdio: 'inherit' })
       } catch (e) {
           console.warn('⚠️ Cảnh báo: Lỗi khi migrate dữ liệu (có thể bỏ qua nếu đã migrate xong).')
       }

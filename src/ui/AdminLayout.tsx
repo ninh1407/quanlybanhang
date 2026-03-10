@@ -3,7 +3,6 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { RequirePermission } from '../auth/RequirePermission'
 import { useAuth } from '../auth/auth'
 import { useTheme } from '../ui-kit/ThemeProvider'
-import { UpdateManager } from '../ui-kit/UpdateManager'
 import { ErrorBoundary } from './ErrorBoundary'
 import {
   LayoutDashboard,
@@ -468,7 +467,6 @@ export function AdminLayout() {
             </button>
           </div>
         ) : null}
-        <UpdateManager />
       </main>
     </div>
   )

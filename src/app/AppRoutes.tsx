@@ -43,6 +43,10 @@ import { OrderPrintPage } from '../pages/OrderPrintPage'
 import { DocumentCenterPage } from '../pages/DocumentCenterPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 
+import { AnalyticsSalesPage } from '../pages/AnalyticsSalesPage'
+import { AnalyticsInventoryPage } from '../pages/AnalyticsInventoryPage'
+import { ChannelReconciliationPage } from '../pages/ChannelReconciliationPage'
+
 export function AppRoutes() {
   return (
     <HashRouter>
@@ -343,10 +347,18 @@ export function AppRoutes() {
               }
             />
             <Route
-              path="/analytics/*"
+              path="/analytics/sales"
               element={
                 <RequirePermissionRoute permission="dashboard:read">
-                  <ComingSoonPage title="Báo cáo (Analytics)" module="Advanced Reporting & BI" />
+                  <AnalyticsSalesPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/analytics/inventory"
+              element={
+                <RequirePermissionRoute permission="dashboard:read">
+                  <AnalyticsInventoryPage />
                 </RequirePermissionRoute>
               }
             />
@@ -354,7 +366,7 @@ export function AppRoutes() {
               path="/channel-reconciliation"
               element={
                 <RequirePermissionRoute permission="orders:write">
-                  <ComingSoonPage title="Đối soát (Reconciliation)" module="Channel Reconciliation" />
+                  <ChannelReconciliationPage />
                 </RequirePermissionRoute>
               }
             />

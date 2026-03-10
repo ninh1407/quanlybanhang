@@ -72,6 +72,8 @@ export function UpdateManager() {
       setDownloading(false)
       setProgress(0)
       setUpdateAvailable((info && typeof info === 'object' ? (info as UpdateInfo) : {}) as UpdateInfo)
+      // Auto show when update found
+      setShow(true)
     })
 
     window.desktop.onUpdateNotAvailable(() => {
@@ -109,6 +111,10 @@ export function UpdateManager() {
     }
 
     window.addEventListener('app:update:open', onOpen)
+    
+    // Check on mount (silent check)
+    checkForUpdates()
+
     return () => window.removeEventListener('app:update:open', onOpen)
   }, [checkForUpdates])
 

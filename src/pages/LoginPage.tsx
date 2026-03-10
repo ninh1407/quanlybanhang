@@ -4,7 +4,7 @@ import { createEmptyWarehouseState } from '../state/seed'
 import { useStore } from '../state/Store'
 import { useAuth } from '../auth/auth'
 import { accessibleLocations } from '../domain/warehouseAccess'
-import { Store, User, Lock, ArrowRight, Settings } from 'lucide-react'
+import { Store, User, Lock, ArrowRight, Settings, RefreshCw } from 'lucide-react'
 import { getServerUrl, getSavedIp, saveServerIp, DEFAULT_SERVER_IP } from '../config'
 
 export function LoginPage() {
@@ -172,6 +172,26 @@ export function LoginPage() {
             <Settings size={14} />
             Cấu hình IP Server
           </button>
+          {window.desktop && (
+            <button
+              onClick={() => window.dispatchEvent(new Event('app:update:open'))}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: 13,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                opacity: 0.7,
+                marginLeft: 16
+              }}
+            >
+              <RefreshCw size={14} />
+              Cập nhật
+            </button>
+          )}
         </div>
 
         {showConfig && (

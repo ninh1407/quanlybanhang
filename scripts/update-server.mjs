@@ -28,6 +28,13 @@ try {
       console.log('🗑️  Đang xóa file prisma.config.ts thừa...')
       fs.unlinkSync(configPath)
   }
+  
+  // Also try to delete in 'prisma' folder just in case
+  const configPath2 = path.resolve('prisma/prisma.config.ts')
+  if (fs.existsSync(configPath2)) {
+      console.log('🗑️  Đang xóa file prisma/prisma.config.ts thừa...')
+      fs.unlinkSync(configPath2)
+  }
 
   // 3. Database Setup (Prisma)
   console.log('🗄️ 3. Đang cập nhật cấu trúc Database...')

@@ -17,7 +17,7 @@ import { queue } from './queue'
 import { ShopeeClient } from './integrations/shopee'
 import { rateLimit } from 'express-rate-limit'
 
-import { store } from './store'
+import { store, prisma } from './store' // Import prisma
 import { analyticsService } from './services/analytics'
 
 import { authService } from './services/auth'
@@ -70,7 +70,7 @@ app.use(cors()) // Enable CORS for all routes
 app.use(express.json()) // Parse JSON bodies
 
 // System Endpoints
-app.get('/api/version', (req, res) => res.json({ version: '3.0.0', name: 'Enterprise Server' }))
+app.get('/api/version', (req, res) => res.json({ version: '3.0.1', name: 'Enterprise Server' }))
 app.get('/api/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }))
 
 // Backup Endpoint (Protected)
@@ -220,12 +220,17 @@ app.post('/api/login', loginLimiter, async (req: express.Request, res: express.R
       return
   }
 
+  // Lấy danh sách locations từ Database để trả về cho Frontend
+  const locations = await prisma.location.findMany({
+    where: { active: true }
+  })
+
   res.json({ 
-    token: result.accessToken, // Keep 'token' key for backward compatibility if client expects it
+    token: result.accessToken, 
     accessToken: result.accessToken,
     refreshToken: result.refreshToken,
     user: result.user,
-    locations: store.state.locations
+    locations: locations // Dùng data từ DB thay vì store.state.locations
   })
 })
 

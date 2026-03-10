@@ -10,7 +10,13 @@ export function RequireWarehouse(props: { children: ReactNode }) {
   const { user } = useAuth()
 
   const id = state.currentLocationId
-  const ok = Boolean(id) && state.locations.some((l) => l.id === id && l.active) && userCanAccessLocation(user, id as string)
+  
+  // If no location selected, redirect to select page without error (normal flow)
+  if (!id) {
+    return <Navigate to="/select-warehouse" replace state={{ from: location.pathname }} />
+  }
+
+  const ok = state.locations.some((l) => l.id === id && l.active) && userCanAccessLocation(user, id)
 
   if (!ok) {
     return <Navigate to="/select-warehouse" replace state={{ from: location.pathname, error: 'Không có quyền truy cập kho này' }} />

@@ -6,6 +6,7 @@ import type { AuditLog } from '../domain/types'
 
 const entityLabels: Record<AuditLog['entityType'], string> = {
   order: 'Đơn hàng',
+  purchase_order: 'Đơn mua hàng',
   stock_tx: 'Giao dịch kho',
   stock_voucher: 'Phiếu kho',
   stock_count: 'Phiếu kiểm kho',

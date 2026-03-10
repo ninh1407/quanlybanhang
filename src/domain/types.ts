@@ -298,6 +298,7 @@ export type StockCount = {
 
 export type AuditEntityType =
   | 'order'
+  | 'purchase_order'
   | 'stock_tx'
   | 'stock_voucher'
   | 'stock_count'
@@ -453,6 +454,36 @@ export type TransferOrder = {
     createdByUserId: Id
     createdAt: string
     updatedAt: string
+}
+
+export type PurchaseOrderStatus = 
+  | 'draft' 
+  | 'approval_pending' 
+  | 'approved' 
+  | 'ordered' 
+  | 'receiving' 
+  | 'received' 
+  | 'completed' 
+  | 'cancelled'
+
+export type PurchaseOrderLine = {
+  skuId: Id
+  qty: number
+  receivedQty: number
+  unitCost: number
+}
+
+export type PurchaseOrder = {
+  id: Id
+  code: string
+  status: PurchaseOrderStatus
+  supplierId: Id
+  warehouseId: Id
+  items: PurchaseOrderLine[]
+  totalAmount: number
+  note?: string
+  createdAt: string
+  updatedAt: string
 }
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error'

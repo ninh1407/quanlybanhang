@@ -22,6 +22,7 @@ import type {
   SkuMapping,
   WarehouseRegionMapping,
   AllocationRule,
+  PurchaseOrder,
 } from '../domain/types'
 
 export type AppState = {
@@ -32,6 +33,7 @@ export type AppState = {
   skus: Sku[]
   customers: Customer[]
   orders: Order[]
+  purchaseOrders: PurchaseOrder[]
   stockTransactions: StockTransaction[]
   stockVouchers: StockVoucher[]
   stockCounts: StockCount[]
@@ -74,6 +76,8 @@ export type AppAction =
   | { type: 'customers/delete'; id: string }
   | { type: 'orders/upsert'; order: Order }
   | { type: 'orders/delete'; id: string }
+  | { type: 'purchaseOrders/upsert'; order: PurchaseOrder }
+  | { type: 'purchaseOrders/delete'; id: string }
   | { type: 'stock/add'; tx: StockTransaction }
   | { type: 'stockVouchers/upsert'; voucher: StockVoucher }
   | { type: 'stockVouchers/delete'; id: string }

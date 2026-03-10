@@ -46,6 +46,7 @@ export function toWarehouseState(state: AppState): WarehouseState {
     skus: state.skus,
     customers: state.customers,
     orders: state.orders,
+    purchaseOrders: state.purchaseOrders,
     stockTransactions: state.stockTransactions,
     stockVouchers: state.stockVouchers,
     stockCounts: state.stockCounts,
@@ -123,6 +124,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         stockLedger: state.stockLedger.filter((l) => !(l.note.includes(action.id))), // Simplistic cleanup
         financeTransactions: state.financeTransactions.filter((t) => !(t.refType === 'order' && t.refId === action.id)),
       }
+    case 'purchaseOrders/upsert':
+      return { ...state, purchaseOrders: upsertById(state.purchaseOrders, action.order) }
+    case 'purchaseOrders/delete':
+      return { ...state, purchaseOrders: removeById(state.purchaseOrders, action.id) }
     case 'stock/add':
       {
         const tx = action.tx

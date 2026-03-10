@@ -263,7 +263,7 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
     }
     
     try {
-        await prisma.user.delete({ where: { id: req.params.id } })
+        await prisma.user.delete({ where: { id: req.params.id as string } })
         res.json({ status: 'ok' })
     } catch (e: any) {
         res.status(500).json({ error: e.message })

@@ -20,6 +20,7 @@ import { LocationsPage } from '../pages/LocationsPage'
 import { MaterialsPage } from '../pages/MaterialsPage'
 import { OrdersPage } from '../pages/OrdersPage'
 import { ProductsPage } from '../pages/ProductsPage'
+import { PurchaseOrderPage } from '../pages/PurchaseOrderPage'
 import { StaffPage } from '../pages/StaffPage'
 import { SuppliersPage } from '../pages/SuppliersPage'
 import { StockCountsPage } from '../pages/StockCountsPage'
@@ -41,7 +42,6 @@ import { PickingPackingPage } from '../pages/PickingPackingPage'
 import { HelpPage } from '../pages/HelpPage'
 import { OrderPrintPage } from '../pages/OrderPrintPage'
 import { DocumentCenterPage } from '../pages/DocumentCenterPage'
-import { ComingSoonPage } from '../pages/ComingSoonPage'
 
 import { AnalyticsSalesPage } from '../pages/AnalyticsSalesPage'
 import { AnalyticsInventoryPage } from '../pages/AnalyticsInventoryPage'
@@ -339,10 +339,10 @@ export function AppRoutes() {
               }
             />
             <Route
-              path="/purchasing/*"
+              path="/purchasing/orders"
               element={
                 <RequirePermissionRoute permission="products:read">
-                  <ComingSoonPage title="Mua hàng (Purchasing)" module="Purchase Orders & Inbound" />
+                  <PurchaseOrderPage />
                 </RequirePermissionRoute>
               }
             />

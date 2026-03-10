@@ -22,6 +22,13 @@ try {
       process.exit(1)
   }
 
+  // FORCE DELETE prisma.config.ts if it exists (Fix for Prisma v7 P1012 error)
+  const configPath = path.resolve('prisma.config.ts')
+  if (fs.existsSync(configPath)) {
+      console.log('🗑️  Đang xóa file prisma.config.ts thừa...')
+      fs.unlinkSync(configPath)
+  }
+
   // 3. Database Setup (Prisma)
   console.log('🗄️ 3. Đang cập nhật cấu trúc Database...')
   execSync('npx prisma generate', { stdio: 'inherit' })

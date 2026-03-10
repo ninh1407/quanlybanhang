@@ -1,10 +1,10 @@
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
-import { store } from '../store'
+import { prisma } from '../store' // Use prisma instead of store
 import type { User } from '../../src/domain/types'
 
-const JWT_SECRET = 'dmx-secret-key-2024-secure-v1' // Should be env var
+const JWT_SECRET = process.env.JWT_SECRET || 'dmx-secret-key-2024-secure-v1'
 const ACCESS_TOKEN_EXPIRY = '15m'
 const REFRESH_TOKEN_EXPIRY_DAYS = 7
 
@@ -22,17 +22,35 @@ export class AuthService {
   
   // 1. Login
   async login(username: string, password: string): Promise<{ user: User; accessToken: string; refreshToken: string } | null> {
-    const user = store.state.users.find(u => u.username === username && u.active)
+    const user = await prisma.user.findFirst({
+      where: { 
+        username, 
+        active: true 
+      }
+    })
+    
     if (!user || !user.password) return null
 
-    const valid = bcrypt.compareSync(password, user.password)
+    const valid = await bcrypt.compare(password, user.password)
     if (!valid) return null
 
-    const accessToken = this.generateAccessToken(user)
-    const refreshToken = this.generateRefreshToken(user.id)
+    // Map Prisma User to Domain User
+    const domainUser: User = {
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role as any,
+      active: user.active,
+      allowedLocationIds: user.allowedLocationIds,
+      scope: user.scope as any,
+      password: user.password
+    }
+
+    const accessToken = this.generateAccessToken(domainUser)
+    const refreshToken = this.generateRefreshToken(domainUser.id)
 
     // Strip sensitive data
-    const safeUser = { ...user, password: undefined }
+    const safeUser = { ...domainUser, password: undefined }
 
     return { user: safeUser, accessToken, refreshToken }
   }
@@ -49,14 +67,29 @@ export class AuthService {
       return null
     }
 
-    const user = store.state.users.find(u => u.id === stored.userId)
+    const user = await prisma.user.findUnique({
+      where: { id: stored.userId }
+    })
+
     if (!user || !user.active) return null
+
+    // Map Prisma User to Domain User
+    const domainUser: User = {
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role as any,
+      active: user.active,
+      allowedLocationIds: user.allowedLocationIds,
+      scope: user.scope as any,
+      password: user.password
+    }
 
     // Rotate: Delete old, create new
     refreshTokens.delete(token)
     
-    const accessToken = this.generateAccessToken(user)
-    const newRefreshToken = this.generateRefreshToken(user.id, stored.familyId) // Pass familyId
+    const accessToken = this.generateAccessToken(domainUser)
+    const newRefreshToken = this.generateRefreshToken(domainUser.id, stored.familyId) // Pass familyId
 
     return { accessToken, refreshToken: newRefreshToken }
   }

@@ -13,6 +13,15 @@ try {
   console.log('📦 2. Đang cài đặt thư viện mới...')
   execSync('npm install', { stdio: 'inherit' })
 
+  // Check if schema.prisma exists
+  const schemaPath = path.resolve('prisma/schema.prisma')
+  if (!fs.existsSync(schemaPath)) {
+      console.error('❌ LỖI: Không tìm thấy file "prisma/schema.prisma"!')
+      console.error('👉 Nguyên nhân: Bạn chưa push file này lên GitHub.')
+      console.error('👉 Cách sửa: Tại máy tính của bạn (Local), hãy chạy "git add ." -> "git commit" -> "git push".')
+      process.exit(1)
+  }
+
   // 3. Database Setup (Prisma)
   console.log('🗄️ 3. Đang cập nhật cấu trúc Database...')
   execSync('npx prisma generate', { stdio: 'inherit' })

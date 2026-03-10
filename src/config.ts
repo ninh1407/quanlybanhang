@@ -2,22 +2,43 @@
 export const DEFAULT_SERVER_IP = 'localhost'
 export const SERVER_PORT = 3000
 export const HTTPS_PORT = 3443
-export const USE_HTTPS = true // Default to secure
+export const USE_HTTPS = false // Chuyển về false để dễ kết nối ban đầu
 
-// Hàm lấy địa chỉ Server
+// Key lưu trữ
+const STORAGE_KEY_SERVER_IP = 'app_server_ip'
+
+// Hàm lấy địa chỉ IP đã lưu
+export function getSavedIp() {
+  return localStorage.getItem(STORAGE_KEY_SERVER_IP) || DEFAULT_SERVER_IP
+}
+
+// Hàm lưu địa chỉ IP mới
+export function saveServerIp(ip: string) {
+  if (!ip) {
+    localStorage.removeItem(STORAGE_KEY_SERVER_IP)
+  } else {
+    localStorage.setItem(STORAGE_KEY_SERVER_IP, ip)
+  }
+}
+
+// Hàm lấy URL Server đầy đủ
 export function getServerUrl() {
-  // If running in Vite dev, use env or default
-  // In production (Electron), this might be hardcoded or loaded from a config file
+  const ip = getSavedIp()
+  
+  // Nếu người dùng nhập full URL (có http/https), dùng luôn
+  if (ip.startsWith('http://') || ip.startsWith('https://')) {
+      // Loại bỏ dấu / ở cuối nếu có
+      return ip.replace(/\/$/, '')
+  }
+
+  // Nếu chỉ nhập IP/Domain, tự thêm protocol và port
   const protocol = USE_HTTPS ? 'https' : 'http'
   const port = USE_HTTPS ? HTTPS_PORT : SERVER_PORT
-  return `${protocol}://${DEFAULT_SERVER_IP}:${port}`
-}
+  
+  // Nếu nhập IP có port rồi (vd: 1.2.3.4:5000) thì không thêm port mặc định
+  if (ip.includes(':')) {
+      return `${protocol}://${ip}`
+  }
 
-export function getSavedIp() {
-  return DEFAULT_SERVER_IP
-}
-
-export function saveServerIp(ip: string) {
-  // Disabled: Không cho phép lưu IP tùy chỉnh
-  console.warn('Changing server IP is disabled', ip)
+  return `${protocol}://${ip}:${port}`
 }

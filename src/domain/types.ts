@@ -549,3 +549,17 @@ export type AllocationRule = {
         allowBranchOnlineSales?: boolean
     }
 }
+
+export type DocumentType = 'PO' | 'Invoice' | 'Contract' | 'DeliveryNote' | 'Other'
+
+export type Document = {
+  id: Id
+  code: string
+  name: string
+  type: DocumentType
+  size: string
+  url: string
+  status: 'active' | 'archived'
+  createdAt: string
+  createdByUserId: Id
+}

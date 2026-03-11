@@ -24,6 +24,7 @@ export function createEmptyWarehouseState(): WarehouseState {
     stockLedger: [],
     financeTransactions: [],
     debts: [],
+    documents: [],
     requests: [],
     transferOrders: [],
     notifications: [],
@@ -61,6 +62,7 @@ export function createSeedState(): AppState {
     stockLedger: [],
     financeTransactions: [],
     debts: [],
+    documents: [],
     users: [
       {
         id: 'usr_admin',

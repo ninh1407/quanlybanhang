@@ -60,6 +60,7 @@ export function toWarehouseState(state: AppState): WarehouseState {
     auditLogs: state.auditLogs,
     sequences: state.sequences,
     allocationRules: state.allocationRules,
+    documents: state.documents,
   }
 }
 

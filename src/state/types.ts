@@ -23,6 +23,7 @@ import type {
   WarehouseRegionMapping,
   AllocationRule,
   PurchaseOrder,
+  Document,
 } from '../domain/types'
 
 export type AppState = {
@@ -40,6 +41,7 @@ export type AppState = {
   stockLedger: StockLedgerEntry[]
   financeTransactions: FinanceTransaction[]
   debts: Debt[]
+  documents: Document[]
   users: User[]
   requests: InventoryRequest[]
   transferOrders: TransferOrder[]
@@ -104,6 +106,8 @@ export type AppAction =
   | { type: 'warehouseRegionMappings/delete'; id: string }
   | { type: 'allocationRules/upsert'; rule: AllocationRule }
   | { type: 'allocationRules/delete'; id: string }
+  | { type: 'documents/upsert'; document: Document }
+  | { type: 'documents/delete'; id: string }
   | { type: 'sync'; state: AppState }
 
 export type AppActionWithMeta = AppAction & {

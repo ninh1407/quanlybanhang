@@ -1,39 +1,46 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { 
   BookOpen, 
   Search, 
   Box, 
   ShoppingCart, 
   Users, 
-  // BarChart2, 
-  // Settings,
   HelpCircle,
   Info,
-  // Layers,
   Truck,
   DollarSign,
-  // Activity,
   Globe,
   UserCog,
   FileText,
   ClipboardList,
-  Target
+  Target,
+  BarChart2,
+  Settings,
+  Bell,
+  Activity
 } from 'lucide-react'
+import { useAuth } from '../auth/auth'
 
 export function HelpPage() {
+  const { can } = useAuth()
   const [activeSection, setActiveSection] = useState('intro')
   const [searchTerm, setSearchTerm] = useState('')
 
-  const sections = [
-    { id: 'intro', title: 'Giới thiệu chung', icon: <BookOpen size={18} /> },
-    { id: 'products', title: 'Sản phẩm', icon: <Box size={18} /> },
-    { id: 'sales', title: 'Bán hàng', icon: <ShoppingCart size={18} /> },
-    { id: 'omni', title: 'Đa kênh (Omnichannel)', icon: <Globe size={18} /> },
-    { id: 'inventory', title: 'Kho hàng & Vận hành', icon: <Truck size={18} /> },
-    { id: 'finance', title: 'Tài chính', icon: <DollarSign size={18} /> },
-    { id: 'staff', title: 'Nhân sự & Hệ thống', icon: <UserCog size={18} /> },
-    { id: 'troubleshoot', title: 'Xử lý sự cố', icon: <HelpCircle size={18} /> },
+  const allSections = [
+    { id: 'intro', title: 'Giới thiệu chung', icon: <BookOpen size={18} />, permission: null },
+    { id: 'sales', title: 'Bán hàng (Sales)', icon: <ShoppingCart size={18} />, permission: 'orders:read' },
+    { id: 'warehouse', title: 'Kho vận (Warehouse)', icon: <Truck size={18} />, permission: 'inventory:read' },
+    { id: 'purchasing', title: 'Mua hàng (Purchasing)', icon: <Box size={18} />, permission: 'products:read' },
+    { id: 'finance', title: 'Tài chính (Finance)', icon: <DollarSign size={18} />, permission: 'finance:read' },
+    { id: 'channels', title: 'Đa kênh (Channels)', icon: <Globe size={18} />, permission: 'orders:write' },
+    { id: 'analytics', title: 'Báo cáo (Analytics)', icon: <BarChart2 size={18} />, permission: 'dashboard:read' },
+    { id: 'system', title: 'Hệ thống (System)', icon: <Settings size={18} />, permission: 'staff:read' },
+    { id: 'troubleshoot', title: 'Xử lý sự cố', icon: <HelpCircle size={18} />, permission: null },
   ]
+
+  const sections = useMemo(() => {
+    return allSections.filter(s => !s.permission || can(s.permission as any))
+  }, [can])
 
   const scrollToSection = (id: string) => {
     setActiveSection(id)
@@ -43,7 +50,7 @@ export function HelpPage() {
     }
   }
 
-  // Inline Styles
+  // Styles
   const styles = {
     container: { display: 'flex', height: '100%', background: '#fff', overflow: 'hidden', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
     sidebar: { width: 280, background: '#F8F9FA', borderRight: '1px solid #E9ECEF', display: 'flex', flexDirection: 'column' as const, flexShrink: 0 },
@@ -85,13 +92,10 @@ export function HelpPage() {
     featureCard: { padding: 20, borderRadius: 12, background: '#F9F9F9', border: '1px solid #E5E5EA' },
     featureTitle: { fontSize: 16, fontWeight: 600, color: '#1C1C1E', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 },
     featureText: { fontSize: 13, color: '#636366', lineHeight: 1.5 },
-    detailBox: { border: '1px solid #E5E5EA', borderRadius: 12, overflow: 'hidden', marginBottom: 12 },
-    summary: { padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontWeight: 500, color: '#1C1C1E', background: '#fff' },
-    detailContent: { padding: '0 16px 16px 16px', fontSize: 14, color: '#636366', lineHeight: 1.6 },
+    ul: { paddingLeft: 20, margin: '8px 0 0 0', fontSize: 13, color: '#636366', lineHeight: 1.6 },
+    subModuleTitle: { fontSize: 14, fontWeight: 700, color: '#007AFF', marginBottom: 8, marginTop: 16, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
     footer: { marginTop: 60, padding: 40, background: 'linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)', borderRadius: 20, color: '#fff', textAlign: 'center' as const },
     contactBtn: { display: 'inline-block', padding: '10px 20px', background: 'rgba(255,255,255,0.1)', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 500, margin: '0 8px' },
-    ul: { paddingLeft: 20, margin: '8px 0 0 0', fontSize: 13, color: '#636366', lineHeight: 1.6 },
-    subModuleTitle: { fontSize: 14, fontWeight: 700, color: '#007AFF', marginBottom: 4, marginTop: 16 }
   }
 
   return (
@@ -130,7 +134,7 @@ export function HelpPage() {
         </div>
         
         <div style={{ padding: 20, borderTop: '1px solid #E9ECEF', textAlign: 'center' }}>
-          <div style={{ fontSize: 11, color: '#8E8E93' }}>Phiên bản 2.0.7 • 09/03/2026</div>
+          <div style={{ fontSize: 11, color: '#8E8E93' }}>Phiên bản 3.0.8 • 11/03/2026</div>
         </div>
       </div>
 
@@ -145,189 +149,217 @@ export function HelpPage() {
             <p style={styles.lead}>Tài liệu chi tiết từng bước cho mọi tính năng trong hệ thống quản lý bán hàng.</p>
           </div>
 
-          {/* Section 1: Sản phẩm */}
-          <section id="products" style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div style={styles.sectionIcon('#007AFF', '#E5F1FF')}><Box size={24} /></div>
-              <div><h2 style={styles.h2}>Sản phẩm</h2><div style={styles.h2Sub}>Quản lý danh mục hàng hóa</div></div>
-            </div>
-            
-            <div style={styles.card}>
-              <div style={styles.cardHeader}>1. Thêm mới sản phẩm</div>
-              <div style={styles.cardBody}>
-                <div style={styles.step}>
-                  <div style={styles.stepNum}>1</div>
-                  <div><h4 style={styles.stepTitle}>Thông tin cơ bản</h4><p style={styles.stepDesc}>Vào <strong>Danh sách sản phẩm</strong> → Bấm <strong>+ Thêm sản phẩm</strong>. Nhập Tên, Mã (bỏ trống để tự sinh), Danh mục.</p></div>
-                </div>
-                <div style={styles.step}>
-                  <div style={styles.stepNum}>2</div>
-                  <div><h4 style={styles.stepTitle}>Biến thể (Màu/Size)</h4><p style={styles.stepDesc}>Tại phần "Thuộc tính", chọn Màu sắc, Kích thước. Hệ thống sẽ tạo ra bảng SKU con. Nhập giá bán/giá vốn cho từng dòng.</p></div>
-                </div>
-                <div style={styles.step}>
-                   <div style={styles.stepNum}>3</div>
-                   <div><h4 style={styles.stepTitle}>Hình ảnh</h4><p style={styles.stepDesc}>Upload ảnh đại diện và ảnh chi tiết cho từng biến thể để dễ nhận diện khi bán hàng.</p></div>
-                </div>
+          {/* Module: SALES */}
+          {can('orders:read') && (
+            <section id="sales" style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <div style={styles.sectionIcon('#34C759', '#E6F9EA')}><ShoppingCart size={24} /></div>
+                <div><h2 style={styles.h2}>Bán hàng (Sales)</h2><div style={styles.h2Sub}>Nghiệp vụ bán hàng tại quầy và quản lý đơn hàng</div></div>
               </div>
-            </div>
-
-            <div style={styles.grid2}>
-              <div style={styles.featureCard}>
-                <h3 style={styles.featureTitle}><Target size={16}/> Danh mục & Thương hiệu</h3>
-                <p style={styles.featureText}>Vào menu con tương ứng để tạo trước khi thêm sản phẩm.</p>
-                <ul style={styles.ul}>
-                  <li><strong>Thương hiệu:</strong> Hỗ trợ nhập "Xuất xứ thương hiệu" và "Nơi sản xuất".</li>
-                  <li><strong>Danh mục:</strong> Phân nhóm hàng hóa (Điện thoại, Tủ lạnh...).</li>
-                </ul>
-              </div>
-              <div style={styles.featureCard}>
-                <h3 style={styles.featureTitle}><FileText size={16}/> Nhập/Xuất Excel</h3>
-                <p style={styles.featureText}>Dùng khi cần tạo hàng loạt sản phẩm.</p>
-                <ul style={styles.ul}>
-                  <li>Bấm nút <strong>Export JSON</strong> để lấy mẫu.</li>
-                  <li>Nhập dữ liệu và Import lại (liên hệ Admin để được cấp quyền Import).</li>
-                </ul>
-              </div>
-            </div>
-          </section>
-
-          {/* Section 2: Bán hàng */}
-          <section id="sales" style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div style={styles.sectionIcon('#34C759', '#E6F9EA')}><ShoppingCart size={24} /></div>
-              <div><h2 style={styles.h2}>Bán hàng</h2><div style={styles.h2Sub}>Xử lý đơn hàng và khách hàng</div></div>
-            </div>
-            
-            <div style={styles.card}>
-              <div style={styles.cardHeader}>Quy trình bán hàng tại quầy (POS)</div>
-              <div style={styles.cardBody}>
-                <div style={styles.step}>
-                  <div style={styles.stepNum}>1</div>
-                  <div><h4 style={styles.stepTitle}>Chọn hàng</h4><p style={styles.stepDesc}>Quét mã vạch hoặc tìm tên sản phẩm trên thanh tìm kiếm.</p></div>
-                </div>
-                <div style={styles.step}>
-                  <div style={styles.stepNum}>2</div>
-                  <div><h4 style={styles.stepTitle}>Chọn khách</h4><p style={styles.stepDesc}>Nhập SĐT khách. Nếu khách mới, bấm nút <strong>+</strong> để tạo nhanh (Chỉ cần Tên & SĐT).</p></div>
-                </div>
-                <div style={styles.step}>
-                  <div style={styles.stepNum}>3</div>
-                  <div><h4 style={styles.stepTitle}>Thanh toán</h4><p style={styles.stepDesc}>Nhập số tiền khách đưa. Chọn phương thức (Tiền mặt/Chuyển khoản). Bấm <strong>Thanh toán (F9)</strong> để in hóa đơn.</p></div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Section 3: Omnichannel */}
-          <section id="omni" style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div style={styles.sectionIcon('#5856D6', '#E0E0F8')}><Globe size={24} /></div>
-              <div><h2 style={styles.h2}>Đa kênh (Omnichannel)</h2><div style={styles.h2Sub}>Kết nối sàn TMĐT</div></div>
-            </div>
-            <div style={styles.featureCard}>
-               <h3 style={styles.featureTitle}>Cấu hình & Kết nối</h3>
-               <p style={styles.featureText}>Để đồng bộ đơn hàng từ Shopee/Lazada/TikTok:</p>
-               <ol style={{...styles.ul, paddingLeft: 20, listStyleType: 'decimal'}}>
-                 <li>Vào menu <strong>Đa kênh</strong> → <strong>Cấu hình & Kết nối</strong>.</li>
-                 <li>Chọn sàn muốn kết nối → Bấm <strong>Thêm kết nối</strong>.</li>
-                 <li>Đăng nhập tài khoản Shop của bạn trên sàn.</li>
-                 <li>Hệ thống sẽ tự động tải sản phẩm và đơn hàng về sau 5-10 phút.</li>
-                 <li><strong>Liên kết SKU:</strong> Ghép đôi sản phẩm trên sàn với sản phẩm trên phần mềm để trừ kho chính xác.</li>
-               </ol>
-            </div>
-          </section>
-
-          {/* Section 4: Kho (Chi tiết) */}
-          <section id="inventory" style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div style={styles.sectionIcon('#FF9500', '#FFF5E0')}><Truck size={24} /></div>
-              <div><h2 style={styles.h2}>Kho hàng & Vận hành</h2><div style={styles.h2Sub}>Nghiệp vụ kho chuyên sâu</div></div>
-            </div>
-            
-            <div style={styles.grid2}>
+              
               <div style={styles.card}>
-                <div style={styles.cardHeader}>1. Nhập & Xuất</div>
+                <div style={styles.cardHeader}>Quy trình tạo đơn hàng</div>
                 <div style={styles.cardBody}>
-                  <div style={styles.subModuleTitle}>Nhập hàng (Inbound)</div>
-                  <p style={styles.featureText}>Vào <strong>Phiếu kho</strong> → Tạo phiếu Nhập mua. Chọn NCC, nhập số lượng thực tế. Tồn kho tăng khi trạng thái là "Hoàn thành".</p>
-                  
-                  <div style={styles.subModuleTitle}>Xuất hàng (Outbound)</div>
-                  <p style={styles.featureText}>Tự động tạo phiếu xuất khi có đơn bán hàng. Hoặc tạo phiếu Xuất hủy/Xuất khác thủ công.</p>
+                  <div style={styles.step}>
+                    <div style={styles.stepNum}>1</div>
+                    <div><h4 style={styles.stepTitle}>Tạo đơn mới</h4><p style={styles.stepDesc}>Vào menu <strong>Đơn hàng</strong>, nhấn nút <strong>+ Tạo đơn</strong> hoặc sử dụng phím tắt để mở giao diện POS.</p></div>
+                  </div>
+                  <div style={styles.step}>
+                    <div style={styles.stepNum}>2</div>
+                    <div><h4 style={styles.stepTitle}>Chọn khách hàng & Sản phẩm</h4><p style={styles.stepDesc}>Tìm kiếm khách hàng bằng SĐT hoặc Tên. Quét mã vạch sản phẩm hoặc tìm kiếm theo tên/mã SKU.</p></div>
+                  </div>
+                  <div style={styles.step}>
+                    <div style={styles.stepNum}>3</div>
+                    <div><h4 style={styles.stepTitle}>Thanh toán & Giao hàng</h4><p style={styles.stepDesc}>Chọn phương thức thanh toán (Tiền mặt, Chuyển khoản, Công nợ). Cập nhật thông tin giao hàng nếu là đơn online.</p></div>
+                  </div>
                 </div>
+              </div>
+
+              <div style={styles.grid2}>
+                <div style={styles.featureCard}>
+                  <h3 style={styles.featureTitle}><Users size={16}/> Khách hàng</h3>
+                  <p style={styles.featureText}>Quản lý thông tin khách hàng, lịch sử mua hàng và công nợ.</p>
+                  <ul style={styles.ul}>
+                    <li>Tự động tích điểm khi mua hàng.</li>
+                    <li>Phân nhóm khách hàng (VIP, Thân thiết).</li>
+                  </ul>
+                </div>
+                <div style={styles.featureCard}>
+                   <h3 style={styles.featureTitle}><Box size={16}/> Sản phẩm & Danh mục</h3>
+                   <p style={styles.featureText}>Quản lý danh sách hàng hóa kinh doanh.</p>
+                   <ul style={styles.ul}>
+                     <li>Thiết lập giá vốn, giá bán.</li>
+                     <li>Quản lý theo SKU, màu sắc, kích thước.</li>
+                   </ul>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Module: WAREHOUSE */}
+          {can('inventory:read') && (
+            <section id="warehouse" style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <div style={styles.sectionIcon('#FF9500', '#FFF5E0')}><Truck size={24} /></div>
+                <div><h2 style={styles.h2}>Kho vận (Warehouse)</h2><div style={styles.h2Sub}>Quản trị tồn kho và vận hành kho thông minh</div></div>
+              </div>
+
+              <div style={styles.grid2}>
+                 <div style={styles.featureCard}>
+                    <h3 style={styles.featureTitle}><Activity size={16}/> Control Tower</h3>
+                    <p style={styles.featureText}>Trung tâm chỉ huy, giám sát toàn bộ hoạt động kho theo thời gian thực.</p>
+                 </div>
+                 <div style={styles.featureCard}>
+                    <h3 style={styles.featureTitle}><ClipboardList size={16}/> Duyệt yêu cầu</h3>
+                    <p style={styles.featureText}>Phê duyệt các phiếu nhập/xuất/điều chuyển từ nhân viên cấp dưới.</p>
+                 </div>
               </div>
 
               <div style={styles.card}>
-                <div style={styles.cardHeader}>2. Kiểm kê & Điều chuyển</div>
+                <div style={styles.cardHeader}>Nghiệp vụ kho cốt lõi</div>
                 <div style={styles.cardBody}>
-                  <div style={styles.subModuleTitle}>Kiểm kho</div>
-                  <p style={styles.featureText}>Vào <strong>Kiểm kho</strong> → Tạo phiếu kiểm. Quét mã từng sản phẩm. Hệ thống tự tính lệch và đề xuất cân bằng.</p>
-                  
-                  <div style={styles.subModuleTitle}>Chuyển kho (DN)</div>
-                  <p style={styles.featureText}>Vào <strong>Chuyển kho</strong>. Tạo lệnh chuyển từ Kho A sang Kho B. Kho B phải vào xác nhận "Nhận hàng".</p>
+                   <div style={styles.subModuleTitle}>1. Quản lý Tồn kho & Vị trí</div>
+                   <p style={styles.featureText}>Xem báo cáo tồn kho tức thời (Real-time). Quản lý hàng hóa theo Vị trí (Bin/Slot) để tối ưu việc nhặt hàng.</p>
+                   
+                   <div style={styles.subModuleTitle}>2. Phiếu kho (Nhập/Xuất/Chuyển)</div>
+                   <p style={styles.featureText}>Tạo các phiếu biến động kho thủ công hoặc tự động từ đơn hàng. Hỗ trợ quy trình: <strong>Duyệt phiếu</strong> → <strong>Thực hiện</strong> → <strong>Hoàn thành</strong>.</p>
+
+                   <div style={styles.subModuleTitle}>3. Kiểm kho & Cân bằng</div>
+                   <p style={styles.featureText}>Thực hiện kiểm kê định kỳ hoặc đột xuất. Hệ thống tự động tính toán chênh lệch và tạo phiếu cân bằng kho.</p>
+
+                   <div style={styles.subModuleTitle}>4. Pick & Pack</div>
+                   <p style={styles.featureText}>Quy trình đóng gói hàng hóa chuẩn hóa. Hỗ trợ in phiếu nhặt hàng (Picking List) và phiếu đóng gói (Packing List).</p>
                 </div>
               </div>
-            </div>
 
-            <div style={styles.grid2}>
-               <div style={styles.featureCard}>
-                  <h4 style={styles.featureTitle}><Target size={16}/> Control Tower & KPI</h4>
-                  <p style={styles.featureText}>Trung tâm giám sát vận hành:</p>
-                  <ul style={styles.ul}>
-                    <li><strong>Giám sát đơn hàng:</strong> Theo dõi đơn nào đang trễ, chưa đóng gói.</li>
-                    <li><strong>KPIs Kho:</strong> Đo lường hiệu suất nhân viên kho (số đơn đóng/giờ, tỷ lệ sai sót).</li>
-                    <li><strong>Phân tích rủi ro:</strong> Cảnh báo hàng sắp hết hạn (Date), hàng nằm kho quá lâu (Slow moving).</li>
-                  </ul>
-               </div>
-               <div style={styles.featureCard}>
-                  <h4 style={styles.featureTitle}><ClipboardList size={16}/> Tiện ích kho</h4>
-                  <ul style={styles.ul}>
-                    <li><strong>Gợi ý nhập hàng:</strong> Dựa trên tốc độ bán trung bình 30 ngày để đề xuất số lượng cần nhập.</li>
-                    <li><strong>Vị trí kho:</strong> Quản lý sơ đồ Bin/Kệ/Line. Biết chính xác hàng nằm ở ô nào.</li>
-                    <li><strong>Pick & Pack:</strong> Quy trình đi nhặt hàng theo sóng (Wave Picking) tối ưu đường đi.</li>
-                  </ul>
-               </div>
-            </div>
-          </section>
+              <div style={styles.grid2}>
+                 <div style={styles.featureCard}>
+                    <h3 style={styles.featureTitle}><Target size={16}/> Phân tích rủi ro & Gợi ý nhập hàng</h3>
+                    <ul style={styles.ul}>
+                      <li>Cảnh báo hàng sắp hết (Low stock).</li>
+                      <li>Dự báo nhu cầu nhập hàng dựa trên lịch sử bán.</li>
+                    </ul>
+                 </div>
+                 <div style={styles.featureCard}>
+                    <h3 style={styles.featureTitle}><BarChart2 size={16}/> KPIs Kho & Giám sát</h3>
+                    <ul style={styles.ul}>
+                      <li>Đo lường hiệu suất nhân viên kho.</li>
+                      <li>Giám sát tiến độ xử lý đơn hàng (SLA).</li>
+                    </ul>
+                 </div>
+              </div>
+            </section>
+          )}
 
-          {/* Section 5: Tài chính */}
-          <section id="finance" style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div style={styles.sectionIcon('#FF2D55', '#FFECEF')}><DollarSign size={24} /></div>
-              <div><h2 style={styles.h2}>Tài chính</h2><div style={styles.h2Sub}>Quản trị dòng tiền</div></div>
-            </div>
-            <div style={styles.grid3}>
-              <div style={styles.featureCard}>
-                <h4 style={styles.featureTitle}>Tổng quan (P&L)</h4>
-                <p style={styles.featureText}>Xem báo cáo Lãi/Lỗ ước tính. Doanh thu - Giá vốn - Chi phí = Lợi nhuận.</p>
+          {/* Module: PURCHASING */}
+          {can('products:read') && (
+            <section id="purchasing" style={styles.section}>
+               <div style={styles.sectionHeader}>
+                <div style={styles.sectionIcon('#5856D6', '#E0E0F8')}><Box size={24} /></div>
+                <div><h2 style={styles.h2}>Mua hàng (Purchasing)</h2><div style={styles.h2Sub}>Quản lý nhà cung cấp và nhập hàng</div></div>
               </div>
               <div style={styles.featureCard}>
-                <h4 style={styles.featureTitle}>Dòng tiền</h4>
-                <p style={styles.featureText}>Quản lý Sổ quỹ (Tiền mặt/Ngân hàng). Tạo phiếu Thu/Chi thủ công cho các khoản phí ngoài bán hàng (Tiền điện, nước...).</p>
+                <h3 style={styles.featureTitle}>Quy trình mua hàng</h3>
+                <ol style={{...styles.ul, paddingLeft: 20, listStyleType: 'decimal'}}>
+                  <li><strong>Nhà cung cấp:</strong> Quản lý danh sách đối tác cung ứng hàng hóa.</li>
+                  <li><strong>Đơn mua hàng (PO):</strong> Lập đơn đặt hàng gửi nhà cung cấp, theo dõi tiến độ giao hàng và công nợ phải trả.</li>
+                </ol>
               </div>
-              <div style={styles.featureCard}>
-                <h4 style={styles.featureTitle}>Công nợ</h4>
-                <p style={styles.featureText}><strong>Phải thu:</strong> Khách mua nợ.<br/><strong>Phải trả:</strong> Mua nợ NCC.<br/>Theo dõi hạn thanh toán và lịch sử trả nợ.</p>
+            </section>
+          )}
+
+          {/* Module: FINANCE */}
+          {can('finance:read') && (
+             <section id="finance" style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <div style={styles.sectionIcon('#FF2D55', '#FFECEF')}><DollarSign size={24} /></div>
+                <div><h2 style={styles.h2}>Tài chính (Finance)</h2><div style={styles.h2Sub}>Quản trị dòng tiền doanh nghiệp</div></div>
               </div>
-            </div>
-          </section>
+              <div style={styles.grid3}>
+                <div style={styles.featureCard}>
+                  <h4 style={styles.featureTitle}>Tổng quan</h4>
+                  <p style={styles.featureText}>Báo cáo lãi lỗ (P&L) ước tính theo thời gian thực.</p>
+                </div>
+                <div style={styles.featureCard}>
+                  <h4 style={styles.featureTitle}>Dòng tiền</h4>
+                  <p style={styles.featureText}>Quản lý thu chi tiền mặt, ngân hàng. Sổ quỹ chi tiết.</p>
+                </div>
+                <div style={styles.featureCard}>
+                  <h4 style={styles.featureTitle}>Công nợ</h4>
+                  <p style={styles.featureText}>Theo dõi công nợ khách hàng (Phải thu) và Nhà cung cấp (Phải trả).</p>
+                </div>
+              </div>
+             </section>
+          )}
 
-          {/* Section 6: Nhân sự */}
-          <section id="staff" style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <div style={styles.sectionIcon('#AF52DE', '#F2E6FF')}><Users size={24} /></div>
-              <div><h2 style={styles.h2}>Nhân sự & Hệ thống</h2><div style={styles.h2Sub}>Quản trị và phân quyền</div></div>
-            </div>
-            <div style={styles.featureCard}>
-                <h4 style={styles.featureTitle}>Phân quyền chi tiết</h4>
-                <p style={styles.featureText}>Vào <strong>Nhân sự</strong> → <strong>Phân quyền</strong>.</p>
-                <ul style={styles.ul}>
-                  <li>Tạo nhóm quyền (VD: Kho, Kế toán, Sale).</li>
-                  <li>Tích chọn các chức năng được phép truy cập.</li>
-                  <li><strong>Nhật ký (Audit Log):</strong> Xem lại lịch sử thao tác của nhân viên (Ai đã sửa giá? Ai đã xóa đơn?).</li>
-                </ul>
-            </div>
-          </section>
+          {/* Module: CHANNELS */}
+          {can('orders:write') && (
+            <section id="channels" style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <div style={styles.sectionIcon('#00C7BE', '#E0F8F7')}><Globe size={24} /></div>
+                <div><h2 style={styles.h2}>Đa kênh (Channels)</h2><div style={styles.h2Sub}>Kết nối sàn TMĐT và đối soát</div></div>
+              </div>
+              <div style={styles.card}>
+                 <div style={styles.cardBody}>
+                    <div style={styles.subModuleTitle}>1. Cấu hình & Kết nối</div>
+                    <p style={styles.featureText}>Liên kết tài khoản Shopee, Lazada, TikTok Shop để đồng bộ đơn hàng và tồn kho tự động.</p>
+                    <div style={styles.subModuleTitle}>2. Đối soát</div>
+                    <p style={styles.featureText}>Tải lên file đối soát từ sàn hoặc đơn vị vận chuyển để khớp số liệu, tìm ra các đơn lệch tiền hoặc mất hàng.</p>
+                 </div>
+              </div>
+            </section>
+          )}
 
-          {/* Footer */}
-          <div style={styles.footer}>
+          {/* Module: ANALYTICS */}
+          {can('dashboard:read') && (
+             <section id="analytics" style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <div style={styles.sectionIcon('#FF3B30', '#FFE5E5')}><BarChart2 size={24} /></div>
+                <div><h2 style={styles.h2}>Báo cáo (Analytics)</h2><div style={styles.h2Sub}>Phân tích số liệu kinh doanh</div></div>
+              </div>
+              <div style={styles.grid2}>
+                <div style={styles.featureCard}>
+                  <h3 style={styles.featureTitle}>Báo cáo bán hàng</h3>
+                  <p style={styles.featureText}>Phân tích doanh thu theo thời gian, nhân viên, chi nhánh. Top sản phẩm bán chạy.</p>
+                </div>
+                <div style={styles.featureCard}>
+                  <h3 style={styles.featureTitle}>Báo cáo kho</h3>
+                  <p style={styles.featureText}>Giá trị tồn kho, tốc độ luân chuyển hàng hóa (Turnover rate), Tỷ lệ lấp đầy (Fill rate).</p>
+                </div>
+              </div>
+             </section>
+          )}
+
+          {/* Module: SYSTEM */}
+          {can('staff:read') && (
+             <section id="system" style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <div style={styles.sectionIcon('#8E8E93', '#F2F2F7')}><Settings size={24} /></div>
+                <div><h2 style={styles.h2}>Hệ thống (System)</h2><div style={styles.h2Sub}>Cấu hình và quản trị</div></div>
+              </div>
+              <div style={styles.grid2}>
+                 <div style={styles.featureCard}>
+                    <h3 style={styles.featureTitle}><UserCog size={16}/> Nhân sự & Phân quyền</h3>
+                    <p style={styles.featureText}>Quản lý danh sách nhân viên. Phân quyền chi tiết theo chức năng và phạm vi dữ liệu.</p>
+                 </div>
+                 <div style={styles.featureCard}>
+                    <h3 style={styles.featureTitle}><FileText size={16}/> Nhật ký hoạt động</h3>
+                    <p style={styles.featureText}>Ghi lại toàn bộ thao tác của người dùng trên hệ thống để tra cứu khi cần thiết.</p>
+                 </div>
+                 <div style={styles.featureCard}>
+                    <h3 style={styles.featureTitle}><BookOpen size={16}/> Tài liệu</h3>
+                    <p style={styles.featureText}>Kho lưu trữ quy trình, biểu mẫu, tài liệu hướng dẫn nội bộ.</p>
+                 </div>
+                 <div style={styles.featureCard}>
+                    <h3 style={styles.featureTitle}><Bell size={16}/> Thông báo & Cấu hình</h3>
+                    <p style={styles.featureText}>Cài đặt thông tin cửa hàng, mẫu in hóa đơn, cấu hình thông báo hệ thống.</p>
+                 </div>
+              </div>
+             </section>
+          )}
+
+           {/* Footer */}
+           <div style={styles.footer}>
             <h3 style={{ fontSize: 20, margin: '0 0 8px 0' }}>Cần hỗ trợ kỹ thuật?</h3>
             <p style={{ margin: '0 0 24px 0', opacity: 0.8 }}>Vui lòng liên hệ bộ phận IT để được giải đáp</p>
             <div>

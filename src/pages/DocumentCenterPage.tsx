@@ -1,188 +1,161 @@
-import { useState, useMemo, useRef } from 'react'
-import { FileText, Download, Search, Upload, Trash2 } from 'lucide-react'
-import { useAppState, useAppDispatch } from '../state/Store'
-import { useAuth } from '../auth/auth'
-import { newId } from '../lib/id'
-import { nowIso } from '../lib/date'
-import type { Document, DocumentType } from '../domain/types'
+import { useMemo, useState } from 'react'
+import { useAppState } from '../state/Store'
+import { PageHeader } from '../ui-kit/PageHeader'
+import { File, Folder, Download, Trash2, Upload, FileText, Image as ImageIcon, Search } from 'lucide-react'
+import { formatDateTime } from '../lib/date'
 import { useDialogs } from '../ui-kit/Dialogs'
 
 export function DocumentCenterPage() {
   const state = useAppState()
-  const dispatch = useAppDispatch()
-  const { user } = useAuth()
+  const [activeFolder, setActiveFolder] = useState('all')
+  const [query, setQuery] = useState('')
   const dialogs = useDialogs()
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterType, setFilterType] = useState<DocumentType | 'all'>('all')
+  const folders = [
+      { id: 'all', name: 'Tất cả tài liệu' },
+      { id: 'contracts', name: 'Hợp đồng' },
+      { id: 'invoices', name: 'Hóa đơn' },
+      { id: 'po', name: 'Đơn mua hàng (PO)' },
+      { id: 'policies', name: 'Chính sách' },
+  ]
 
-  const documents = useMemo(() => {
-    return state.documents
-      .filter(d => d.status === 'active')
-      .filter(d => filterType === 'all' || d.type === filterType)
-      .filter(d => !searchTerm || d.name.toLowerCase().includes(searchTerm.toLowerCase()) || d.code.toLowerCase().includes(searchTerm.toLowerCase()))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  }, [state.documents, searchTerm, filterType])
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // In a real app, we would upload to S3/Blob storage.
-    // Here we will just simulate it by reading as DataURL (base64)
-    // Warning: Large files will crash local storage. Limit size.
-    
-    if (file.size > 2 * 1024 * 1024) { // 2MB limit
-        await dialogs.alert({ message: 'File quá lớn (>2MB). Vui lòng chọn file nhỏ hơn.' })
-        return
-    }
-
-    const reader = new FileReader()
-    reader.onload = async () => {
-        const url = reader.result as string
-        const typeStr = file.name.split('.').pop()?.toUpperCase() || 'OTHER'
-        let docType: DocumentType = 'Other'
-        if (['PDF'].includes(typeStr)) docType = 'Contract' // Guessing logic
-        
-        const doc: Document = {
-            id: newId('doc'),
-            code: `DOC-${nowIso().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 1000)}`,
-            name: file.name,
-            type: docType,
-            size: `${(file.size / 1024).toFixed(1)} KB`,
-            url,
-            status: 'active',
-            createdAt: nowIso(),
-            createdByUserId: user?.id || 'unknown'
-        }
-        
-        dispatch({ type: 'documents/upsert', document: doc })
-        await dialogs.alert({ message: 'Upload thành công!' })
-    }
-    reader.readAsDataURL(file)
-    
-    // Reset input
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  const handleDelete = async (doc: Document) => {
-      const ok = await dialogs.confirm({ message: `Xóa tài liệu ${doc.name}?`, dangerous: true })
-      if (ok) {
-          dispatch({ type: 'documents/delete', id: doc.id })
+  const filteredDocs = useMemo(() => {
+      // Mock documents if state.documents is empty or just use what's there
+      // Let's assume we use state.documents. 
+      // If none, we can show empty state or some mock data for UI demo if user wants "Upgrade"
+      
+      let docs = state.documents || []
+      
+      // Filter by folder (mock logic: if document type matches or just all for now)
+      if (activeFolder !== 'all') {
+          // In real app, filter by folder/category
       }
+
+      if (query) {
+          const lower = query.toLowerCase()
+          docs = docs.filter(d => d.name.toLowerCase().includes(lower))
+      }
+      
+      return docs
+  }, [state.documents, activeFolder, query])
+
+  function handleUpload() {
+      dialogs.alert({ message: 'Tính năng Upload đang phát triển' })
   }
 
-  const handleDownload = (doc: Document) => {
-      const link = document.createElement('a')
-      link.href = doc.url
-      link.download = doc.name
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+  function getFileIcon(type: string) {
+      if (type.includes('image')) return <ImageIcon size={32} color="var(--purple-600)" />
+      if (type.includes('pdf')) return <FileText size={32} color="var(--danger)" />
+      return <File size={32} color="var(--primary-600)" />
   }
 
   return (
     <div className="page">
-      <div className="page-header">
-        <div className="page-title">
-          <h1>Tài liệu (Document Center)</h1>
-          <div className="breadcrumbs">
-            <span>Hệ thống</span>
-            <span className="separator">/</span>
-            <span className="current">Tài liệu</span>
-          </div>
-        </div>
-        <div className="page-actions">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            style={{ display: 'none' }} 
-            onChange={handleUpload}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png"
-          />
-          <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={16} />
-            Upload tài liệu
-          </button>
-        </div>
-      </div>
+      <PageHeader 
+        title="Trung tâm tài liệu" 
+        subtitle="Quản lý hợp đồng, hóa đơn và tài liệu nội bộ"
+        actions={
+            <button className="btn btn-primary" onClick={handleUpload}>
+                <Upload size={16} />
+                Tải lên
+            </button>
+        }
+      />
 
-      <div className="card">
-        <div className="toolbar">
-          <div className="search-box">
-            <Search size={16} />
-            <input 
-                placeholder="Tìm kiếm tài liệu..." 
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-            />
+      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 24 }}>
+          {/* Sidebar */}
+          <div className="card" style={{ padding: 0, overflow: 'hidden', alignSelf: 'start' }}>
+              <div style={{ padding: 16, borderBottom: '1px solid var(--border-color)', fontWeight: 600 }}>Thư mục</div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {folders.map(f => (
+                      <button 
+                        key={f.id}
+                        onClick={() => setActiveFolder(f.id)}
+                        style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 12, 
+                            padding: '12px 16px', 
+                            background: activeFolder === f.id ? 'var(--primary-50)' : 'transparent',
+                            color: activeFolder === f.id ? 'var(--primary-700)' : 'var(--text-main)',
+                            border: 'none',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontWeight: activeFolder === f.id ? 600 : 400
+                        }}
+                      >
+                          <Folder size={18} fill={activeFolder === f.id ? 'currentColor' : 'none'} />
+                          {f.name}
+                      </button>
+                  ))}
+              </div>
           </div>
-          <div className="actions">
-            <select 
-                className="select" 
-                value={filterType} 
-                onChange={e => setFilterType(e.target.value as any)}
-                style={{ height: 36, borderColor: '#ddd', borderRadius: 6 }}
-            >
-                <option value="all">Tất cả loại</option>
-                <option value="Contract">Hợp đồng</option>
-                <option value="Invoice">Hóa đơn</option>
-                <option value="PO">Đơn mua hàng</option>
-                <option value="DeliveryNote">Phiếu giao hàng</option>
-                <option value="Other">Khác</option>
-            </select>
-          </div>
-        </div>
 
-        {documents.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
-                <FileText size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
-                <p>Chưa có tài liệu nào. Hãy upload tài liệu mới.</p>
-            </div>
-        ) : (
-            <table className="table">
-            <thead>
-                <tr>
-                <th>Mã tài liệu</th>
-                <th>Tên file</th>
-                <th>Loại</th>
-                <th>Ngày tạo</th>
-                <th>Kích thước</th>
-                <th>Người tạo</th>
-                <th>Thao tác</th>
-                </tr>
-            </thead>
-            <tbody>
-                {documents.map((d) => (
-                <tr key={d.id}>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 700 }}>{d.code}</td>
-                    <td style={{ fontWeight: 500 }}>{d.name}</td>
-                    <td>
-                        <span className="badge">{d.type}</span>
-                    </td>
-                    <td>{d.createdAt.slice(0, 16).replace('T', ' ')}</td>
-                    <td>{d.size}</td>
-                    <td>{state.users.find(u => u.id === d.createdByUserId)?.fullName || d.createdByUserId}</td>
-                    <td>
-                        <div className="row" style={{ gap: 8 }}>
-                            <button className="btn btn-small btn-secondary" title="Tải xuống" onClick={() => handleDownload(d)}>
-                                <Download size={14} />
-                            </button>
-                            <button className="btn btn-small btn-danger" title="Xóa" onClick={() => handleDelete(d)}>
-                                <Trash2 size={14} />
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                ))}
-            </tbody>
-            </table>
-        )}
-        
-        <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, borderTop: '1px solid #eee' }}>
-          Đây là module lưu trữ tập trung các chứng từ, hóa đơn, hợp đồng của hệ thống.
-        </div>
+          {/* Main Content */}
+          <div className="card" style={{ minHeight: 500 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                  <div style={{ fontWeight: 600, fontSize: 16 }}>
+                    {folders.find(f => f.id === activeFolder)?.name} 
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: 8 }}>({filteredDocs.length} file)</span>
+                  </div>
+                  <div style={{ position: 'relative', width: 240 }}>
+                      <Search size={16} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
+                      <input 
+                        placeholder="Tìm tài liệu..." 
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
+                        style={{ paddingLeft: 36, width: '100%' }}
+                      />
+                  </div>
+              </div>
+
+              {filteredDocs.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 20 }}>
+                      {filteredDocs.map(doc => (
+                          <div 
+                            key={doc.id} 
+                            style={{ 
+                                border: '1px solid var(--border-color)', 
+                                borderRadius: 12, 
+                                padding: 16, 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                alignItems: 'center', 
+                                textAlign: 'center',
+                                transition: 'all 0.2s',
+                                cursor: 'pointer',
+                                background: 'var(--bg-surface)'
+                            }}
+                            className="hover:shadow-md hover:border-primary-300"
+                          >
+                              <div style={{ marginBottom: 12 }}>
+                                  {getFileIcon(doc.type || '')}
+                              </div>
+                              <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 4, width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {doc.name}
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                                  {(Number(doc.size) / 1024).toFixed(1)} KB • {formatDateTime(doc.createdAt).split(' ')[0]}
+                              </div>
+                              <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
+                                  <button className="btn btn-small btn-ghost" title="Tải xuống">
+                                      <Download size={14} />
+                                  </button>
+                                  <button className="btn btn-small btn-ghost text-danger" title="Xóa">
+                                      <Trash2 size={14} />
+                                  </button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              ) : (
+                  <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <Folder size={48} style={{ marginBottom: 16, opacity: 0.2 }} />
+                      <div>Thư mục trống</div>
+                      <div style={{ fontSize: 13, marginTop: 4 }}>Chưa có tài liệu nào trong thư mục này</div>
+                  </div>
+              )}
+          </div>
       </div>
     </div>
   )

@@ -1,3 +1,4 @@
+import { ArrowDownCircle, ArrowUpCircle, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/auth'
@@ -10,16 +11,18 @@ import { Pagination } from '../ui-kit/listing/Pagination'
 import { SavedViewsBar } from '../ui-kit/listing/SavedViewsBar'
 import { useListView } from '../ui-kit/listing/useListView'
 import { useDialogs } from '../ui-kit/Dialogs'
+import { differenceInDays, parseISO } from 'date-fns'
 
 type VoucherFilters = {
   type: 'all' | StockVoucherType
   status: 'all' | StockVoucherStatus
+  dateRange: 'all' | 'today' | '7d' | '30d'
 }
 
-function voucherTypeLabel(t: StockVoucherType): string {
-  if (t === 'in') return 'Nhập kho'
-  if (t === 'out') return 'Xuất kho'
-  return 'Điều chuyển'
+function VoucherTypeBadge({ type }: { type: StockVoucherType }) {
+  if (type === 'in') return <span className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowDownCircle size={14} /> Nhập kho</span>
+  if (type === 'out') return <span className="badge badge-danger" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowUpCircle size={14} /> Xuất kho</span>
+  return <span className="badge badge-warning" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><RefreshCw size={14} /> Điều chuyển</span>
 }
 
 function voucherStatusLabel(s: StockVoucherStatus): string {
@@ -60,7 +63,7 @@ export function StockVouchersPage() {
     sortDir: 'desc',
     page: 1,
     pageSize: 20,
-    filters: { type: 'all', status: 'all' },
+    filters: { type: 'all', status: 'all', dateRange: 'all' },
   })
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -71,9 +74,20 @@ export function StockVouchersPage() {
 
   const vouchers = useMemo(() => {
     const needle = list.state.q.trim().toLowerCase()
+    const now = new Date()
+    
     const filtered = state.stockVouchers
       .filter((v) => (list.state.filters.type === 'all' ? true : v.type === list.state.filters.type))
       .filter((v) => (list.state.filters.status === 'all' ? true : v.status === list.state.filters.status))
+      .filter((v) => {
+          if (list.state.filters.dateRange === 'all') return true
+          const d = parseISO(v.createdAt)
+          const diff = differenceInDays(now, d)
+          if (list.state.filters.dateRange === 'today') return diff === 0
+          if (list.state.filters.dateRange === '7d') return diff <= 7
+          if (list.state.filters.dateRange === '30d') return diff <= 30
+          return true
+      })
       .filter((v) => {
         if (!needle) return true
         const hay = [v.code, v.type, v.status, v.note].join(' ').toLowerCase()
@@ -86,7 +100,7 @@ export function StockVouchersPage() {
         return dir * (toMs(String(a.createdAt)) - toMs(String(b.createdAt)))
       })
     return filtered
-  }, [list.state.filters.status, list.state.filters.type, list.state.q, list.state.sortDir, list.state.sortKey, state.stockVouchers])
+  }, [list.state.filters, list.state.q, list.state.sortDir, list.state.sortKey, state.stockVouchers])
 
   const paged = useMemo(() => {
     const start = (list.state.page - 1) * list.state.pageSize
@@ -218,6 +232,15 @@ export function StockVouchersPage() {
             </select>
           </div>
           <div className="field">
+            <label>Thời gian</label>
+            <div className="row" style={{ gap: 4 }}>
+                <button className={`btn btn-small ${list.state.filters.dateRange === 'all' ? 'btn-primary' : ''}`} onClick={() => list.patchFilters({ dateRange: 'all' })}>Tất cả</button>
+                <button className={`btn btn-small ${list.state.filters.dateRange === 'today' ? 'btn-primary' : ''}`} onClick={() => list.patchFilters({ dateRange: 'today' })}>Hôm nay</button>
+                <button className={`btn btn-small ${list.state.filters.dateRange === '7d' ? 'btn-primary' : ''}`} onClick={() => list.patchFilters({ dateRange: '7d' })}>7 ngày</button>
+                <button className={`btn btn-small ${list.state.filters.dateRange === '30d' ? 'btn-primary' : ''}`} onClick={() => list.patchFilters({ dateRange: '30d' })}>30 ngày</button>
+            </div>
+          </div>
+          <div className="field">
             <label>Sắp xếp</label>
             <select value={list.state.sortKey} onChange={(e) => list.patch({ sortKey: e.target.value })}>
               <option value="createdAt">Ngày tạo</option>
@@ -265,7 +288,7 @@ export function StockVouchersPage() {
               {paged.map((v) => (
                 <tr key={v.id}>
                   <td style={{ fontFamily: 'monospace', fontWeight: 700 }}>{v.code || v.id}</td>
-                  <td>{voucherTypeLabel(v.type)}</td>
+                  <td><VoucherTypeBadge type={v.type} /></td>
                   <td>{voucherStatusLabel(v.status)}</td>
                   <td>{v.createdAt.slice(0, 19).replace('T', ' ')}</td>
                   <td>{v.note}</td>

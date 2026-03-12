@@ -8,7 +8,7 @@ import { soldQtyBySku } from '../domain/analytics'
 import { newId } from '../lib/id'
 import { nowIso } from '../lib/date'
 import { useAuth } from '../auth/auth'
-import { Settings, ArrowRight, ShoppingCart, Truck } from 'lucide-react'
+import { Settings, ArrowRight, ShoppingCart, Truck, ShoppingBag } from 'lucide-react'
 import { SkuSettings } from '../domain/types'
 
 export function ReplenishmentPage() {
@@ -133,7 +133,9 @@ export function ReplenishmentPage() {
                 suggestedQty,
                 estimatedCost: suggestedQty * s.cost,
                 type: isBranchView ? 'transfer' : 'purchase',
-                centralStock // Pass for UI to show availability
+                centralStock,
+                effectiveLeadTime,
+                effectiveSafetyStock
             }
         })
         .filter(x => x.suggestedQty > 0)
@@ -230,7 +232,27 @@ export function ReplenishmentPage() {
                 title="Cấu hình định mức tồn kho (Replenishment Settings)" 
                 onBack={() => setViewMode('suggestion')}
               />
-              <div className="card">
+              <div className="card" style={{ background: 'linear-gradient(to right, #eff6ff, #fff)' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{ padding: 8, background: '#fff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <ShoppingBag size={20} color="var(--primary-600)" />
+              </div>
+              <div>
+                  <h4 style={{ marginTop: 0, marginBottom: 4, color: 'var(--primary-700)' }}>Logic gợi ý nhập hàng</h4>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      Hệ thống tính toán dựa trên công thức: <br/>
+                      <code>Gợi ý = (Tốc độ bán × (Lead Time + Safety Stock)) - Tồn hiện tại</code>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary-500)' }}/> Tốc độ bán: Trung bình {analysisPeriod} ngày</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-500)' }}/> Lead time: Thời gian đặt hàng</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success-500)' }}/> Safety stock: Tồn an toàn</span>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      <div className="card">
                   <div className="field">
                       <label>Chọn kho để cấu hình</label>
                       <select value={settingsFilterLoc} onChange={e => setSettingsFilterLoc(e.target.value)}>
@@ -330,6 +352,35 @@ export function ReplenishmentPage() {
         }
       />
 
+      <div className="card" style={{ background: 'linear-gradient(to right, #eff6ff, #fff)', border: '1px solid var(--primary-100)' }}>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+              <div style={{ padding: 12, background: '#fff', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', color: 'var(--primary-600)' }}>
+                  <ShoppingBag size={24} />
+              </div>
+              <div style={{ flex: 1 }}>
+                  <h4 style={{ marginTop: 0, marginBottom: 4, color: 'var(--primary-800)' }}>Logic gợi ý nhập hàng</h4>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      Hệ thống tự động tính toán số lượng cần nhập để đảm bảo không bị đứt hàng trong thời gian chờ nhập (Lead Time).<br/>
+                      Công thức: <code>Gợi ý = (Tốc độ bán × (Lead Time + Safety Stock)) - Tồn hiện tại</code>
+                  </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: 'var(--text-secondary)', minWidth: 200 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary-500)' }}/> 
+                      <span>Tốc độ bán: TB {analysisPeriod} ngày</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-500)' }}/> 
+                      <span>Lead time: Thời gian đặt hàng</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success-500)' }}/> 
+                      <span>Safety stock: Tồn an toàn (Ngày)</span>
+                  </div>
+              </div>
+          </div>
+      </div>
+
       <div className="card">
           <div className="grid-form" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 16 }}>
               <div className="field">
@@ -402,11 +453,11 @@ export function ReplenishmentPage() {
                   <thead>
                       <tr>
                           <th>SKU</th>
-                          <th>Tốc độ bán (ngày)</th>
+                          <th>Bán/ngày</th>
                           <th>Tồn hiện tại</th>
                           {selectedLocationId !== 'all' && selectedLocationId !== centralLocationId && <th>Tồn Kho TT</th>}
-                          <th>Điểm đặt hàng</th>
-                          <th>Gợi ý</th>
+                          <th>Safety Stock</th>
+                          <th>Gợi ý nhập</th>
                           <th>Hành động</th>
                       </tr>
                   </thead>
@@ -424,7 +475,10 @@ export function ReplenishmentPage() {
                                       {x.centralStock}
                                   </td>
                               )}
-                              <td>{x.reorderPoint.toFixed(0)}</td>
+                              <td>
+                                  <div style={{ fontSize: 13 }}>{Math.ceil(x.effectiveSafetyStock)} sp</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>({Math.ceil(x.effectiveSafetyStock / (x.velocity || 1))} ngày)</div>
+                              </td>
                               <td style={{ fontWeight: 700, color: x.type === 'transfer' ? 'var(--success-600)' : 'var(--primary-600)' }}>
                                   {x.suggestedQty}
                               </td>

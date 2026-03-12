@@ -25,6 +25,9 @@ export type Location = {
   code: string
   name: string
   province?: string
+  address?: string
+  lat?: number
+  lng?: number
   note: string
   active: boolean
   createdAt: string
@@ -82,6 +85,8 @@ export type Customer = {
   note: string
   discountPercent: number
   loyaltyPoints: number
+  customerScore?: number // 0-100
+  riskLevel?: 'low' | 'medium' | 'high'
   createdAt: string
 }
 
@@ -140,6 +145,7 @@ export type Order = {
   platformOrderId?: string
   dropshipBrand?: string
   partnerVoucherCode?: string
+  voucherCode?: string // Internal voucher
   discountPercent: number
   discountAmount: number
   loyaltyPointsUsed?: number
@@ -148,6 +154,7 @@ export type Order = {
   otherFees: number
   otherFeesNote?: string
   note: string
+  paidAmount?: number // Amount customer actually paid
   cancelReason?: string
   isReconciledCarrier: ReconcileStatus
   isReconciledSupplier: ReconcileStatus
@@ -312,6 +319,7 @@ export type AuditEntityType =
   | 'location'
   | 'user'
   | 'request'
+  | 'document'
 
 export type AuditActionType = 'create' | 'update' | 'delete'
 
@@ -552,7 +560,7 @@ export type AllocationRule = {
 
 export type DocumentType = 'PO' | 'Invoice' | 'Contract' | 'DeliveryNote' | 'Other'
 
-export type Document = {
+export type AppDocument = {
   id: Id
   code: string
   name: string

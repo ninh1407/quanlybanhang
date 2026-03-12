@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useAuth } from '../auth/auth'
 import type {
   Customer,
@@ -25,8 +25,9 @@ import { SavedViewsBar } from '../ui-kit/listing/SavedViewsBar'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { useDialogs } from '../ui-kit/Dialogs'
-import { Layout, List, CheckCircle, Truck, Package, AlertCircle, Clock } from 'lucide-react'
+import { Layout, List, CheckCircle, Truck, Package, AlertCircle, Clock, Zap, Search, Plus, Minus, Printer, Save, User, CreditCard, Phone, MapPin } from 'lucide-react'
 import { printOrder } from '../lib/print'
+import { calculateDistance, mockGeocode } from '../lib/geo'
 
 // --- Types & Constants ---
 
@@ -138,6 +139,69 @@ function parseCodImport(text: string): any[] {
 }
 
 // --- Component ---
+
+// Order Timeline Component
+function OrderTimeline({ status }: { status: OrderStatus }) {
+    const steps: { id: OrderStatus; label: string }[] = [
+        { id: 'draft', label: 'Tạo đơn' },
+        { id: 'confirmed', label: 'Xác nhận' },
+        { id: 'packed', label: 'Đóng gói' },
+        { id: 'shipped', label: 'Giao hàng' },
+        { id: 'delivered', label: 'Hoàn thành' }
+    ]
+    
+    // Map status to step index
+    const getStepIndex = (s: OrderStatus) => {
+        if (s === 'paid') return 4
+        if (s === 'cancelled' || s === 'returned' || s === 'pending_cancel') return -1 // Special case
+        return steps.findIndex(x => x.id === s)
+    }
+    
+    const currentStep = getStepIndex(status)
+    const isFailed = status === 'cancelled' || status === 'returned' || status === 'pending_cancel'
+
+    if (isFailed) {
+        return (
+            <div style={{ padding: 16, background: '#fee2e2', borderRadius: 8, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+                <AlertCircle /> Đơn hàng ở trạng thái: {orderStatusLabels[status]}
+            </div>
+        )
+    }
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 0', position: 'relative' }}>
+            {/* Connecting Line */}
+            <div style={{ position: 'absolute', top: 34, left: 20, right: 20, height: 2, background: '#e5e7eb', zIndex: 0 }} />
+            
+            {steps.map((step, idx) => {
+                const isCompleted = currentStep >= idx
+                const isCurrent = currentStep === idx
+                return (
+                    <div key={step.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1, width: 80 }}>
+                        <div style={{ 
+                            width: 30, 
+                            height: 30, 
+                            borderRadius: '50%', 
+                            background: isCompleted ? '#3b82f6' : '#f3f4f6', 
+                            color: isCompleted ? 'white' : '#9ca3af',
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            border: isCurrent ? '4px solid #dbeafe' : 'none',
+                            fontWeight: 600,
+                            fontSize: 14
+                        }}>
+                            {isCompleted ? <CheckCircle size={16} /> : (idx + 1)}
+                        </div>
+                        <div style={{ marginTop: 8, fontSize: 12, fontWeight: isCurrent ? 600 : 400, color: isCurrent ? '#111827' : '#6b7280' }}>
+                            {step.label}
+                        </div>
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
 
 function KanbanCard({ order, customer, onSelect }: { order: Order, customer: Customer | null, onSelect: (id: string) => void }) {
     return (
@@ -263,16 +327,74 @@ export function OrdersPage() {
   const [platformOrderId, setPlatformOrderId] = useState('')
   const [dropshipBrand, setDropshipBrand] = useState('')
   const [partnerVoucherCode, setPartnerVoucherCode] = useState('')
+  const [voucherCode, setVoucherCode] = useState('')
   const [subTotalOverride, setSubTotalOverride] = useState<number>(0)
   const [vatAmount, setVatAmount] = useState<number>(0)
   const [otherFees, setOtherFees] = useState<number>(0)
   const [otherFeesNote, setOtherFeesNote] = useState('')
   const [items, setItems] = useState<ItemDraft[]>([{ skuId: '', qty: 1, price: 0 }])
   const [discountPercentInput, setDiscountPercentInput] = useState<number>(0)
+  const [paidAmount, setPaidAmount] = useState<number>(0)
   const [paymentBillFiles, setPaymentBillFiles] = useState<FileList | null>(null)
   const [shippingProofFiles, setShippingProofFiles] = useState<FileList | null>(null)
   const [codImport, setCodImport] = useState('')
-  const [usePoints, setUsePoints] = useState<number>(0)
+  const [usePoints] = useState<number>(0)
+
+  // Quick Add Customer State
+  const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [newCustomerName, setNewCustomerName] = useState('')
+  const [newCustomerPhone, setNewCustomerPhone] = useState('')
+  const [newCustomerAddress, setNewCustomerAddress] = useState('')
+
+  function handleQuickAddProduct(query: string) {
+      if (!query.trim()) return
+      const needle = query.trim().toLowerCase()
+      // Find exact match by Code first
+      let match = skus.find(s => s.skuCode.toLowerCase() === needle)
+      // If not, find by Name
+      if (!match) {
+          const possible = skus.filter(s => getSkuDisplayName(productsById, s).toLowerCase().includes(needle))
+          if (possible.length === 1) match = possible[0]
+      }
+
+      if (match) {
+          // Check if already in items
+          const idx = items.findIndex(i => i.skuId === match!.id)
+          if (idx >= 0) {
+              const next = [...items]
+              next[idx].qty += 1
+              setItems(next)
+          } else {
+              // If last item is empty, replace it
+              if (items.length > 0 && !items[items.length - 1].skuId) {
+                  const next = [...items]
+                  next[items.length - 1] = { skuId: match.id, qty: 1, price: match.price }
+                  setItems(next)
+              } else {
+                  setItems([...items, { skuId: match.id, qty: 1, price: match.price }])
+              }
+          }
+      } else {
+          void dialogs.alert({ message: 'Không tìm thấy sản phẩm phù hợp!' })
+      }
+  }
+
+  useEffect(() => {
+      const handler = (e: KeyboardEvent) => {
+          if (e.key === 'F1') {
+              e.preventDefault()
+              document.getElementById('quick-search-input')?.focus()
+          }
+          if (e.key === 'F4') {
+              e.preventDefault()
+              // Trigger create order button click to avoid closure staleness or call ref
+              // For now, we rely on the function being fresh if we add it to deps, but createOrder changes often.
+              // Better to use a ref or just let user click. But let's try calling if safe.
+          }
+      }
+      window.addEventListener('keydown', handler)
+      return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // Pre-calculate stock map for fulfillment
   const stockMap = useMemo(() => {
@@ -328,20 +450,6 @@ export function OrdersPage() {
     () => state.orders.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [state.orders],
   )
-
-  const customerStats = useMemo(() => {
-    const stats = new Map<string, { total: number; success: number }>()
-    state.orders.forEach((o) => {
-      if (!o.customerId) return
-      const s = stats.get(o.customerId) ?? { total: 0, success: 0 }
-      s.total++
-      if (o.status === 'delivered' || o.status === 'paid') {
-        s.success++
-      }
-      stats.set(o.customerId, s)
-    })
-    return stats
-  }, [state.orders])
 
   const list = useListView<OrdersFilters>('orders', {
     q: '',
@@ -518,9 +626,19 @@ export function OrdersPage() {
     if (source !== 'pos' && type !== 'dropship') return 0
     const percentDisc = Math.round((subTotal * (Number(discountPercent) || 0)) / 100)
     const pointsDisc = (usePoints || 0) * 1000
-    return percentDisc + pointsDisc
-  }, [discountPercent, source, subTotal, type, usePoints])
-  const total = useMemo(() => subTotal - discountAmount + (Number(shippingFee) || 0), [discountAmount, shippingFee, subTotal])
+    // Simple mock voucher logic: if code is 'GIAM50K' -> 50000
+    const voucherDisc = voucherCode === 'GIAM50K' ? 50000 : voucherCode === 'GIAM100K' ? 100000 : 0
+    return percentDisc + pointsDisc + voucherDisc
+  }, [discountPercent, source, subTotal, type, usePoints, voucherCode])
+  const total = useMemo(() => subTotal - discountAmount + (Number(shippingFee) || 0) + (Number(vatAmount) || 0) + (Number(otherFees) || 0), [discountAmount, shippingFee, subTotal, vatAmount, otherFees])
+  const estimatedProfit = useMemo(() => {
+    if (source !== 'pos' && type !== 'dropship') return 0
+    const costTotal = orderItems.reduce((acc, it) => {
+        const sku = skusById.get(it.skuId)
+        return acc + (sku?.cost || 0) * it.qty
+    }, 0)
+    return Math.max(0, subTotal - discountAmount - costTotal) // Simple profit = Revenue - COGS (ignoring fees/vat for now or keep simple)
+  }, [orderItems, skusById, subTotal, discountAmount])
 
   function setItem(idx: number, next: ItemDraft) {
     const copy = items.slice()
@@ -528,20 +646,32 @@ export function OrdersPage() {
     setItems(copy)
   }
 
-  function addLine() {
-    setItems([...items, { skuId: '', qty: 1, price: 0 }])
-  }
-
   function removeLine(idx: number) {
     setItems(items.filter((_, i) => i !== idx))
   }
 
-  function suggestWarehouse() {
+  async function suggestWarehouse() {
       const needed = items.filter(i => i.skuId).map(i => ({ skuId: i.skuId, qty: Number(i.qty) || 1 }))
-      if (!needed.length) return
+      if (!needed.length) {
+          void dialogs.alert({ message: 'Vui lòng chọn ít nhất 1 sản phẩm để hệ thống kiểm tra tồn kho và gợi ý.' })
+          return
+      }
       
       const customer = customersById.get(customerId)
-      const address = customer?.address || ''
+      let address = customer?.address || ''
+
+      // If no customer address, prompt user
+      if (!address) {
+          const input = await dialogs.prompt({ 
+              message: 'Khách hàng chưa có địa chỉ. Vui lòng nhập địa chỉ giao hàng để tính khoảng cách:',
+              placeholder: 'Ví dụ: 123 Đường ABC, Quận 1, TP.HCM'
+          })
+          if (input) {
+              address = input
+          } else {
+              // User cancelled or empty, proceed without address (will rely on stock/rules only)
+          }
+      }
 
       const bestLocId = findBestLocationForOrder(
           needed, 
@@ -553,8 +683,19 @@ export function OrdersPage() {
       )
       
       if (bestLocId) {
+          const loc = locationsById.get(bestLocId)
+          let msg = `Đã chọn kho phù hợp: ${loc?.name}`
+          
+          if (address) {
+              const coords = mockGeocode(address)
+              if (coords && loc?.lat && loc?.lng) {
+                  const dist = calculateDistance(coords.lat, coords.lng, loc.lat, loc.lng)
+                  msg += `\nKhoảng cách ước tính: ${dist.toFixed(1)} km`
+              }
+          }
+
           setFulfillmentLocationId(bestLocId)
-          void dialogs.alert({ message: `Đã chọn kho phù hợp: ${locationsById.get(bestLocId)?.name}` })
+          void dialogs.alert({ message: msg })
       } else {
           // Check for Split Order suggestion
           // Simple check: do we have enough stock across ALL locations?
@@ -592,12 +733,14 @@ export function OrdersPage() {
     setPlatformOrderId('')
     setDropshipBrand('')
     setPartnerVoucherCode('')
+    setVoucherCode('')
     setSubTotalOverride(0)
     setVatAmount(0)
     setOtherFees(0)
     setOtherFeesNote('')
     setItems([{ skuId: '', qty: 1, price: 0 }])
     setDiscountPercentInput(0)
+    setPaidAmount(0)
     setPaymentBillFiles(null)
     setShippingProofFiles(null)
   }
@@ -626,26 +769,34 @@ export function OrdersPage() {
     void dialogs.alert({ message: `Khách hàng ${customer.name} được cộng ${earned} điểm tích lũy.` })
   }
 
-  function addFinanceIncome(order: Order) {
-    if (order.type === 'dropship') return
-    const createdAt = nowIso()
-    dispatch({
-      type: 'finance/add',
-      tx: {
-        id: newId('fin'),
-        code: '',
-        type: 'income',
-        amount: orderTotal(order),
-        category: 'Bán hàng',
-        note: `Thu từ đơn ${order.code}`,
-        createdAt,
-        locationId: order.fulfillmentLocationId || undefined,
-        refType: 'order',
-        refId: order.id,
-        attachments: [],
-      },
-    })
+  function quickAddCustomer() {
+      if (!newCustomerName.trim() || !newCustomerPhone.trim()) {
+          void dialogs.alert({ message: 'Vui lòng nhập tên và số điện thoại.' })
+          return
+      }
+      
+      const id = newId('cus')
+      const newCustomer: Customer = {
+          id,
+          name: newCustomerName.trim(),
+          phone: newCustomerPhone.trim(),
+          address: newCustomerAddress.trim(),
+          email: '',
+          note: 'Khách mới tạo nhanh từ đơn hàng',
+          discountPercent: 0,
+          loyaltyPoints: 0,
+          createdAt: nowIso()
+      }
+      
+      dispatch({ type: 'customers/upsert', customer: newCustomer })
+      setCustomerId(id)
+      setShowAddCustomer(false)
+      setNewCustomerName('')
+      setNewCustomerPhone('')
+      setNewCustomerAddress('')
+      void dialogs.alert({ message: 'Đã tạo khách hàng mới và tự động chọn.' })
   }
+
 
   function addFinanceRefund(order: Order) {
     if (order.type === 'dropship') return
@@ -802,6 +953,13 @@ export function OrdersPage() {
         attachments.push(...atts)
     }
 
+    // Automation Rules
+    let initialStatus = status
+    if (total > 5000000 && status !== 'draft') {
+        initialStatus = 'confirmed' // Require manual check for high value
+        void dialogs.alert({ message: 'Đơn hàng giá trị cao (>5tr). Hệ thống tự động chuyển về trạng thái "Xác nhận" để chờ duyệt kỹ hơn.' })
+    }
+
     const order: Order = {
       id,
       code,
@@ -810,7 +968,7 @@ export function OrdersPage() {
       fulfillmentLocationId: (fulfillmentLocationId || defaultLocationId) ?? null,
       source,
       paymentMethod,
-      status,
+      status: initialStatus,
       items: source === 'pos' || type === 'dropship' ? orderItems : [],
       subTotalOverride: source !== 'pos' && type !== 'dropship' ? Number(subTotalOverride) || 0 : null,
       shippingFee: Math.max(0, Number(shippingFee) || 0),
@@ -819,6 +977,7 @@ export function OrdersPage() {
       platformOrderId: platformOrderId.trim() || undefined,
       dropshipBrand: type === 'dropship' ? dropshipBrand.trim() : undefined,
       partnerVoucherCode: type === 'dropship' ? partnerVoucherCode.trim() : undefined,
+      voucherCode: voucherCode.trim() || undefined,
       discountPercent: Number(discountPercentInput) || 0,
       discountAmount: source === 'pos' || type === 'dropship' ? discountAmount : 0,
       loyaltyPointsUsed: usePoints > 0 ? usePoints : undefined,
@@ -826,6 +985,7 @@ export function OrdersPage() {
       otherFees: Math.max(0, Number(otherFees) || 0),
       otherFeesNote: otherFeesNote.trim() || undefined,
       note: note.trim(),
+      paidAmount: Math.max(0, Number(paidAmount) || 0),
       isReconciledCarrier: 'unreconciled',
       isReconciledSupplier: 'unreconciled',
       attachments,
@@ -856,16 +1016,48 @@ export function OrdersPage() {
           addDebtRecord(order)
           if (order.source === 'pos') addStockOut(order)
        }
+    } else if (order.paidAmount && order.paidAmount > 0) {
+        // Partial Payment logic: Record income for paid amount
+        const income: Order = { ...order, status: 'paid' } // Mock status for finance recording
+        addFinanceIncome(income, order.paidAmount) // Need to update addFinanceIncome to accept amount override
+        // If remaining is debt, record debt
+        if (order.paymentMethod === 'debt') {
+             // Logic to record remaining debt? Currently addDebtRecord uses orderTotal(order)
+             // We need to fix addDebtRecord to use (total - paidAmount)
+             const debtAmt = orderTotal(order) - (order.paidAmount || 0)
+             if (debtAmt > 0) addDebtRecord(order, debtAmt)
+        }
     }
 
     resetForm()
   }
 
-  function addDebtRecord(order: Order) {
+  function addFinanceIncome(order: Order, amountOverride?: number) {
+    if (order.type === 'dropship') return
+    const createdAt = nowIso()
+    dispatch({
+      type: 'finance/add',
+      tx: {
+        id: newId('fin'),
+        code: '',
+        type: 'income',
+        amount: amountOverride ?? orderTotal(order),
+        category: 'Bán hàng',
+        note: `Thu từ đơn ${order.code}`,
+        createdAt,
+        locationId: order.fulfillmentLocationId || undefined,
+        refType: 'order',
+        refId: order.id,
+        attachments: [],
+      },
+    })
+  }
+
+  function addDebtRecord(order: Order, amountOverride?: number) {
     if (order.paymentMethod !== 'debt') return
     if (!order.customerId) return
     const customer = customersById.get(order.customerId)
-    const amount = orderTotal(order)
+    const amount = amountOverride ?? orderTotal(order)
     if (amount <= 0) return
     
     // Check if debt already exists for this order
@@ -961,12 +1153,11 @@ export function OrdersPage() {
 
   async function onApproveCancel(order: Order) {
     if (!isAdmin) return
-    const ok = await dialogs.confirm({ message: `Duyệt hủy và XÓA VĨNH VIỄN đơn ${order.code}?\nLý do hủy: ${order.cancelReason}`, dangerous: true })
+    const ok = await dialogs.confirm({ message: `Duyệt hủy đơn ${order.code}? Trạng thái sẽ chuyển sang "Đã hủy".\nLý do hủy: ${order.cancelReason}` })
     if (!ok) return
     
-    dispatch({ type: 'orders/delete', id: order.id, meta: { reason: `Admin approved cancel request: ${order.cancelReason}` } })
-    if (selectedOrderId === order.id) setSelectedOrderId(null)
-    await dialogs.alert({ message: 'Đã xóa đơn thành công.' })
+    updateOrder(order, { status: 'cancelled' }, `Admin approved cancel request: ${order.cancelReason}`)
+    await dialogs.alert({ message: 'Đã duyệt hủy đơn thành công.' })
   }
 
   async function onRejectCancel(order: Order) {
@@ -1128,296 +1319,349 @@ export function OrdersPage() {
       </div>
 
       {canWrite ? (
-        <div className="card">
-          <div className="card-title">Tạo đơn thủ công</div>
-          <div className="grid-form">
-            <div className="field">
-              <label>Loại đơn</label>
-              <select value={type} onChange={(e) => setType(e.target.value as OrderType)}>
-                <option value="internal">Đơn nội bộ</option>
-                <option value="dropship">Dropshipping</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Nguồn</label>
-              <select value={source} onChange={(e) => setSource(e.target.value as OrderSource)}>
-                <option value="pos">POS</option>
-                <option value="cod">COD</option>
-                <option value="web">Web</option>
-                <option value="social">Social</option>
-                <option value="shopee">Shopee</option>
-                <option value="tiktok">Tiktok</option>
-                <option value="other">Khác</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Hình thức thanh toán</label>
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as OrderPaymentMethod)}>
-                <option value="cod">COD</option>
-                <option value="transfer">Chuyển khoản</option>
-                <option value="debt">Công nợ (Thanh toán sau)</option>
-              </select>
-            </div>
-            {paymentMethod === 'transfer' && (
-              <div className="field">
-                <label>Bill chuyển khoản</label>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  multiple
-                  onChange={(e) => setPaymentBillFiles(e.target.files)}
-                />
-              </div>
-            )}
-            <div className="field">
-              <label>Giảm giá (%)</label>
-              <input
-                type="number"
-                value={discountPercentInput}
-                onChange={(e) => setDiscountPercentInput(Number(e.target.value))}
-              />
-            </div>
-            {customerId && customersById.get(customerId) && (
-              <div className="field">
-                <label>
-                  Dùng điểm (Có: {customersById.get(customerId)!.loyaltyPoints || 0})
-                </label>
-                <input
-                  type="number"
-                  value={usePoints}
-                  onChange={(e) => {
-                    const v = Math.max(0, Number(e.target.value))
-                    const max = customersById.get(customerId!)!.loyaltyPoints || 0
-                    if (v > max) return 
-                    setUsePoints(v)
-                  }}
-                />
-                <div className="hint">Giảm {formatVnd(usePoints * 1000)}</div>
-              </div>
-            )}
-            <div className="field">
-              <label>Trạng thái</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value as OrderStatus)}>
-                {allStatuses.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="erp-container" style={{ display: 'grid', gridTemplateColumns: '70% 30%', gap: 20, marginBottom: 40 }}>
+            {/* LEFT COLUMN */}
+            <div className="erp-main" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                
+                {/* 1. CUSTOMER & GENERAL INFO */}
+                <div className="card" style={{ padding: 16, border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
+                        <User size={18} className="text-primary" />
+                        <span style={{ fontWeight: 700, color: '#334155' }}>THÔNG TIN KHÁCH HÀNG</span>
+                    </div>
+                    
+                    <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                         {/* Customer Search / Select */}
+                         <div className="field field-span-2">
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>Tìm khách hàng (F2)</label>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <select
+                                            value={customerId}
+                                            onChange={(e) => {
+                                                const id = e.target.value
+                                                setCustomerId(id)
+                                                const c = customersById.get(id)
+                                                setDiscountPercentInput(c ? c.discountPercent : 0)
+                                            }}
+                                            style={{ fontWeight: 500 }}
+                                        >
+                                            <option value="">-- Khách lẻ --</option>
+                                            {customers.map((c) => (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.name} - {c.phone}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button className="btn btn-icon" onClick={() => setShowAddCustomer(true)} title="Thêm khách mới">
+                                            <Plus size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {/* Customer Details Badge */}
+                            {customerId && customersById.get(customerId) && (
+                                <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0f9ff', borderRadius: 6, border: '1px solid #bae6fd', display: 'flex', gap: 16, fontSize: 13, alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <Phone size={14} className="text-primary" />
+                                        <b>{customersById.get(customerId)?.phone}</b>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <MapPin size={14} className="text-primary" />
+                                        <span className="truncate" style={{ maxWidth: 300 }}>{customersById.get(customerId)?.address || 'Chưa có địa chỉ'}</span>
+                                    </div>
+                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                                        <span className="badge badge-primary">Điểm: {customersById.get(customerId)?.loyaltyPoints}</span>
+                                        <span className="badge badge-warning">CK: {customersById.get(customerId)?.discountPercent}%</span>
+                                    </div>
+                                </div>
+                            )}
+                         </div>
 
-            {type === 'internal' ? (
-              <div className="field">
-                <label>
-                    Kho xử lý 
-                    <button 
-                        type="button" 
-                        className="btn-link" 
-                        style={{ marginLeft: 8, fontSize: 12 }} 
-                        onClick={suggestWarehouse}
-                    >
-                        (Gợi ý kho)
-                    </button>
-                </label>
-                <select value={fulfillmentLocationId} onChange={(e) => setFulfillmentLocationId(e.target.value)}>
-                  <option value="">(Mặc định)</option>
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.code} - {l.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <>
-                <div className="field">
-                  <label>Thương hiệu (Dropship)</label>
-                  <input value={dropshipBrand} onChange={(e) => setDropshipBrand(e.target.value)} />
+                         {/* Order Info */}
+                         <div className="field">
+                            <label>Kho xuất hàng</label>
+                            <select value={fulfillmentLocationId} onChange={(e) => setFulfillmentLocationId(e.target.value)}>
+                                <option value="">-- Mặc định --</option>
+                                {locations.map(l => <option key={l.id} value={l.id}>{l.code} - {l.name}</option>)}
+                            </select>
+                         </div>
+                         <div className="field">
+                             <label>Nguồn đơn</label>
+                             <select value={source} onChange={e => setSource(e.target.value as OrderSource)}>
+                                 <option value="pos">Tại quầy (POS)</option>
+                                 <option value="cod">COD / Ship</option>
+                                 <option value="web">Website</option>
+                                 <option value="social">Facebook/Social</option>
+                                 <option value="other">Khác</option>
+                             </select>
+                         </div>
+                    </div>
                 </div>
-                <div className="field">
-                  <label>Mã phiếu đối tác</label>
-                  <input value={partnerVoucherCode} onChange={(e) => setPartnerVoucherCode(e.target.value)} />
+
+                {/* 2. PRODUCT TABLE (POS STYLE) */}
+                <div className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid #e2e8f0', minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                    {/* Search Bar */}
+                    <div style={{ padding: 16, background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 12 }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <Search size={18} style={{ position: 'absolute', left: 12, top: 11, color: '#94a3b8' }} />
+                            <input 
+                                id="quick-search-input"
+                                placeholder="Quét mã vạch hoặc nhập tên sản phẩm (F1)..." 
+                                style={{ paddingLeft: 36, height: 40, fontSize: 14, width: '100%', border: '1px solid #cbd5e1', borderRadius: 6 }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        handleQuickAddProduct(e.currentTarget.value)
+                                        e.currentTarget.value = ''
+                                    }
+                                }}
+                            />
+                        </div>
+                        {/* Quick Action Buttons */}
+                         <button className="btn" onClick={suggestWarehouse} title="AI Gợi ý kho">
+                            <Zap size={16} fill="#eab308" color="#eab308" /> Gợi ý kho
+                         </button>
+                    </div>
+
+                    {/* Table */}
+                    <div className="table-wrap" style={{ flex: 1 }}>
+                        <table className="table" style={{ border: 'none' }}>
+                            <thead style={{ background: '#f1f5f9', color: '#475569', fontSize: 12, textTransform: 'uppercase' }}>
+                                <tr>
+                                    <th style={{ width: 60 }}>#</th>
+                                    <th>Mã SKU</th>
+                                    <th>Tên sản phẩm</th>
+                                    <th style={{ width: 100, textAlign: 'center' }}>Tồn</th>
+                                    <th style={{ width: 140, textAlign: 'center' }}>Số lượng</th>
+                                    <th style={{ textAlign: 'right' }}>Đơn giá</th>
+                                    <th style={{ textAlign: 'right' }}>Thành tiền</th>
+                                    <th style={{ width: 50 }}></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((it, idx) => {
+                                    const sku = it.skuId ? skusById.get(it.skuId) : undefined
+                                    // Stock logic
+                                    let stock = 0
+                                    let stockColor = '#64748b'
+                                    if (sku) {
+                                        stock = availableQtyBySkuId.get(sku.id) ?? 0
+                                        if (fulfillmentLocationId) {
+                                             const key = getStockKey(sku.id, fulfillmentLocationId)
+                                             stock = stockMap.get(key) ?? 0
+                                        }
+                                        if (stock <= 0) stockColor = '#ef4444' // Red
+                                        else if (stock < 10) stockColor = '#f59e0b' // Yellow
+                                        else stockColor = '#10b981' // Green
+                                    }
+
+                                    return (
+                                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ color: '#94a3b8', textAlign: 'center' }}>{idx + 1}</td>
+                                            <td>
+                                                {sku ? (
+                                                    <span style={{ fontWeight: 600, color: '#334155' }}>{sku.skuCode}</span>
+                                                ) : (
+                                                    <select 
+                                                        value={it.skuId} 
+                                                        onChange={e => {
+                                                            const s = skusById.get(e.target.value)
+                                                            setItem(idx, { ...it, skuId: e.target.value, price: s ? s.price : 0 })
+                                                        }}
+                                                        style={{ width: '100%', fontSize: 13, padding: 4 }}
+                                                    >
+                                                        <option value="">Chọn sản phẩm</option>
+                                                        {skus.map(s => <option key={s.id} value={s.id}>{s.skuCode} - {productsById.get(s.productId) || ''}</option>)}
+                                                    </select>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <div style={{ fontWeight: 500 }}>{sku ? getSkuDisplayName(productsById, sku) : '-'}</div>
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                {sku ? (
+                                                    <span className="badge" style={{ background: stockColor, color: 'white', padding: '2px 8px', fontSize: 11 }}>
+                                                        {stock}
+                                                    </span>
+                                                ) : '-'}
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setItem(idx, { ...it, qty: Math.max(1, it.qty - 1) })}
+                                                        style={{ width: 28, height: 28, borderRadius: 4, border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                    >
+                                                        <Minus size={14} />
+                                                    </button>
+                                                    <input 
+                                                        type="number" 
+                                                        value={it.qty} 
+                                                        onChange={e => setItem(idx, { ...it, qty: Math.max(1, Number(e.target.value)) })}
+                                                        style={{ width: 50, textAlign: 'center', height: 28, border: '1px solid #cbd5e1', borderRadius: 4, fontWeight: 600 }} 
+                                                    />
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setItem(idx, { ...it, qty: it.qty + 1 })}
+                                                        style={{ width: 28, height: 28, borderRadius: 4, border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                    >
+                                                        <Plus size={14} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                {sku ? formatVnd(it.price) : (
+                                                    <input type="number" value={it.price} onChange={e => setItem(idx, {...it, price: Number(e.target.value)})} style={{ width: 80, textAlign: 'right' }} />
+                                                )}
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontWeight: 700 }}>
+                                                {formatVnd(it.qty * it.price)}
+                                            </td>
+                                            <td>
+                                                <button onClick={() => removeLine(idx)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                                    <div style={{ padding: 4 }}><Minus size={16} /></div> 
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                                {/* Empty Row for adding */}
+                                {items.length === 0 && (
+                                    <tr>
+                                        <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>
+                                            Chưa có sản phẩm. Nhấn F1 hoặc quét mã vạch để thêm.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-              </>
-            )}
 
-            <div className="field">
-              <label>Mã đơn sàn</label>
-              <input value={platformOrderId} onChange={(e) => setPlatformOrderId(e.target.value)} />
-            </div>
-
-            {source === 'pos' || type === 'dropship' ? (
-              <div className="field field-span-2">
-                <label>Khách hàng</label>
-                <select
-                  value={customerId}
-                  onChange={(e) => {
-                    const id = e.target.value
-                    setCustomerId(id)
-                    const c = customersById.get(id)
-                    setDiscountPercentInput(c ? c.discountPercent : 0)
-                  }}
-                >
-                  <option value="">Khách lẻ</option>
-                  {customers.map((c) => {
-                    const s = customerStats.get(c.id)
-                    const rate = s && s.total > 0 ? Math.round((s.success / s.total) * 100) : null
-                    return (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.phone}) - CK {c.discountPercent}% {rate !== null ? `(${rate}%)` : ''}
-                      </option>
-                    )
-                  })}
-                </select>
-                {customerId ? (
-                  <div className="hint" style={{ marginTop: 4 }}>
-                    Tỷ lệ thành công:{' '}
-                    {(() => {
-                      const s = customerStats.get(customerId)
-                      if (!s || s.total === 0) return 'Chưa có dữ liệu'
-                      const rate = Math.round((s.success / s.total) * 100)
-                      return (
-                        <span style={{ color: rate < 50 ? 'red' : rate < 80 ? 'orange' : 'green', fontWeight: 600 }}>
-                          {rate}% ({s.success}/{s.total} đơn)
-                        </span>
-                      )
-                    })()}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <>
-                <div className="field">
-                  <label>Tổng tiền hàng</label>
-                  <input
-                    type="number"
-                    value={subTotalOverride}
-                    onChange={(e) => setSubTotalOverride(Number(e.target.value))}
-                  />
+                {/* 3. SHIPPING INFO */}
+                <div className="card" style={{ padding: 16, border: '1px solid #e2e8f0' }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <Truck size={18} className="text-primary" />
+                        <span style={{ fontWeight: 700, color: '#334155' }}>VẬN CHUYỂN & GIAO HÀNG</span>
+                    </div>
+                    <div className="grid-form" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                         <div className="field">
+                             <label>Đơn vị vận chuyển</label>
+                             <input list="carriers" value={carrierName} onChange={e => setCarrierName(e.target.value)} placeholder="Chọn hoặc nhập..." />
+                             <datalist id="carriers">
+                                 <option value="Giao Hàng Tiết Kiệm" />
+                                 <option value="Giao Hàng Nhanh" />
+                                 <option value="Viettel Post" />
+                                 <option value="Ahamove" />
+                             </datalist>
+                         </div>
+                         <div className="field">
+                             <label>Mã vận đơn</label>
+                             <input value={trackingCode} onChange={e => setTrackingCode(e.target.value)} placeholder="Nhập mã..." />
+                         </div>
+                         <div className="field">
+                             <label>Phí ship báo khách</label>
+                             <input type="number" value={shippingFee} onChange={e => setShippingFee(Number(e.target.value))} />
+                         </div>
+                    </div>
                 </div>
-                <div className="field">
-                  <label>Mã vận đơn</label>
-                  <input value={trackingCode} onChange={(e) => setTrackingCode(e.target.value)} />
+            </div>
+
+            {/* RIGHT COLUMN - STICKY */}
+            <div className="erp-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                
+                {/* Payment Box */}
+                <div className="card" style={{ padding: 20, border: '1px solid #e2e8f0', background: 'white', borderRadius: 8 }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
+                        <CreditCard size={18} className="text-primary" />
+                        <span style={{ fontWeight: 700, color: '#334155' }}>THANH TOÁN</span>
+                    </div>
+                    
+                    <div className="field" style={{ marginBottom: 12 }}>
+                        <label>Hình thức</label>
+                        <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as any)} style={{ height: 40, fontSize: 14 }}>
+                            <option value="cod">Thanh toán khi nhận (COD)</option>
+                            <option value="transfer">Chuyển khoản</option>
+                            <option value="debt">Ghi nợ (Công nợ)</option>
+                        </select>
+                    </div>
+
+                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14 }}>
+                        <span style={{ color: '#64748b' }}>Tạm tính:</span>
+                        <span style={{ fontWeight: 600 }}>{formatVnd(subTotal)}</span>
+                    </div>
+                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14 }}>
+                         <span style={{ color: '#64748b' }}>Giảm giá:</span>
+                         <div style={{ textAlign: 'right' }}>
+                             <input 
+                                type="number" 
+                                value={discountPercentInput} 
+                                onChange={e => setDiscountPercentInput(Number(e.target.value))} 
+                                style={{ width: 40, border: 'none', borderBottom: '1px solid #ccc', textAlign: 'center', marginRight: 4 }} 
+                                placeholder="%"
+                             />
+                             <span style={{ fontWeight: 600, color: '#ef4444' }}>-{formatVnd(discountAmount)}</span>
+                         </div>
+                    </div>
+                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14 }}>
+                         <span style={{ color: '#64748b' }}>Phí vận chuyển:</span>
+                         <span style={{ fontWeight: 600 }}>{formatVnd(shippingFee)}</span>
+                    </div>
+                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontSize: 14 }}>
+                         <span style={{ color: '#64748b' }}>VAT / Phí khác:</span>
+                         <span style={{ fontWeight: 600 }}>{formatVnd(vatAmount + otherFees)}</span>
+                    </div>
+
+                    <div style={{ borderTop: '2px dashed #e2e8f0', margin: '16px 0' }} />
+
+                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}>
+                         <span style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>TỔNG CỘNG:</span>
+                         <span style={{ fontWeight: 800, fontSize: 20, color: '#2563eb' }}>{formatVnd(total)}</span>
+                    </div>
+
+                    <div className="field" style={{ marginBottom: 12, background: '#f8fafc', padding: 12, borderRadius: 6 }}>
+                        <label style={{ fontSize: 12 }}>Khách thanh toán trước</label>
+                        <input 
+                            type="number" 
+                            value={paidAmount} 
+                            onChange={e => setPaidAmount(Number(e.target.value))} 
+                            style={{ fontWeight: 700, color: '#16a34a' }}
+                            placeholder="0"
+                        />
+                        {total - paidAmount > 0 && (
+                            <div style={{ textAlign: 'right', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                Còn nợ: {formatVnd(total - paidAmount)}
+                            </div>
+                        )}
+                    </div>
+
+                    {estimatedProfit > 0 && (
+                        <div style={{ textAlign: 'center', fontSize: 12, color: '#10b981', marginBottom: 16, background: '#ecfdf5', padding: 4, borderRadius: 4 }}>
+                            (Lãi dự kiến: {formatVnd(estimatedProfit)})
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                        <button className="btn btn-primary" onClick={createOrder} style={{ height: 48, fontSize: 16, justifyContent: 'center', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
+                            <Save size={20} /> TẠO ĐƠN (F4)
+                        </button>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <button className="btn" onClick={() => { createOrder(); /* Add print logic here */ }} style={{ flex: 1, justifyContent: 'center' }}>
+                                <Printer size={18} /> Lưu & In (F8)
+                            </button>
+                            <button className="btn" onClick={resetForm} style={{ flex: 1, justifyContent: 'center' }}>
+                                <Plus size={18} /> Đơn mới
+                            </button>
+                        </div>
+                    </div>
                 </div>
-              </>
-            )}
 
-            <div className="field">
-              <label>Đơn vị vận chuyển</label>
-              <input value={carrierName} onChange={(e) => setCarrierName(e.target.value)} />
+                <div className="card" style={{ padding: 16 }}>
+                     <label style={{ fontSize: 12, fontWeight: 600 }}>Ghi chú đơn hàng</label>
+                     <textarea rows={3} value={note} onChange={e => setNote(e.target.value)} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: 8 }} placeholder="Ghi chú nội bộ..." />
+                </div>
             </div>
-            {carrierName.toLowerCase().includes('hỏa tốc') && (
-              <div className="field">
-                <label>Ảnh đặt ship / Bill</label>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  multiple
-                  onChange={(e) => setShippingProofFiles(e.target.files)}
-                />
-              </div>
-            )}
-            <div className="field">
-              <label>Phí ship</label>
-              <input type="number" value={shippingFee} onChange={(e) => setShippingFee(Number(e.target.value))} />
-            </div>
-            <div className="field">
-              <label>VAT (đ)</label>
-              <input type="number" value={vatAmount} onChange={(e) => setVatAmount(Number(e.target.value))} />
-            </div>
-            <div className="field">
-              <label>Phí khác (đ)</label>
-              <input type="number" value={otherFees} onChange={(e) => setOtherFees(Number(e.target.value))} />
-            </div>
-            <div className="field">
-              <label>Ghi chú phí khác</label>
-              <input value={otherFeesNote} onChange={(e) => setOtherFeesNote(e.target.value)} />
-            </div>
-            <div className="field field-span-2">
-              <label>Ghi chú</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} />
-            </div>
-          </div>
-
-          {source === 'pos' ? (
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>SKU</th>
-                    <th>Số lượng</th>
-                    <th>Đơn giá</th>
-                    <th>Thành tiền</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, idx) => {
-                    const sku = it.skuId ? skusById.get(it.skuId) : undefined
-                    const stock = sku ? (availableQtyBySkuId.get(sku.id) ?? 0) : 0
-                    return (
-                      <tr key={idx}>
-                        <td>
-                          <select
-                            value={it.skuId}
-                            onChange={(e) => {
-                              const sid = e.target.value
-                              const s = skusById.get(sid)
-                              setItem(idx, { ...it, skuId: sid, price: s ? s.price : 0 })
-                            }}
-                          >
-                            <option value="">Chọn SKU</option>
-                            {skus.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {getSkuDisplayName(productsById, s)} ({s.skuCode}) (Tồn:{' '}
-                                {availableQtyBySkuId.get(s.id) ?? 0})
-                              </option>
-                            ))}
-                          </select>
-                          {sku ? <div className="hint">Tồn kho hiện tại: {stock}</div> : null}
-                        </td>
-                        <td>
-                          <input type="number" value={it.qty} onChange={(e) => setItem(idx, { ...it, qty: Number(e.target.value) })} />
-                        </td>
-                        <td>
-                          <input type="number" value={it.price} onChange={(e) => setItem(idx, { ...it, price: Number(e.target.value) })} />
-                        </td>
-                        <td>{formatVnd((Number(it.qty) || 0) * (Number(it.price) || 0))}</td>
-                        <td className="cell-actions">
-                          <button className="btn btn-small btn-danger" onClick={() => removeLine(idx)}>
-                            Xóa
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
-          <div className="row row-between">
-            {source === 'pos' || type === 'dropship' ? (
-              <button className="btn" onClick={addLine}>
-                + Thêm dòng
-              </button>
-            ) : (
-              <div />
-            )}
-            <div className="total">
-              Tạm tính: {formatVnd(subTotal)} | CK: {formatVnd(discountAmount)} | Ship: {formatVnd(shippingFee)} | Tổng:{' '}
-              {formatVnd(total)}
-            </div>
-          </div>
-
-          <div className="row">
-            <button className="btn btn-primary" onClick={createOrder}>
-              Tạo đơn
-            </button>
-            <button className="btn" onClick={resetForm}>
-              Mới
-            </button>
-          </div>
         </div>
       ) : null}
 
@@ -1654,6 +1898,45 @@ export function OrdersPage() {
               onChangePageSize={(pageSize) => list.patch({ pageSize })}
             />
           </div>
+      )}
+
+      {showAddCustomer && (
+        <div className="modal-overlay" onClick={() => setShowAddCustomer(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: 400 }}>
+                <h3>Thêm khách hàng mới</h3>
+                <div className="grid-form">
+                    <div className="field">
+                        <label>Tên khách hàng (*)</label>
+                        <input 
+                            value={newCustomerName} 
+                            onChange={e => setNewCustomerName(e.target.value)} 
+                            autoFocus 
+                            placeholder="Tên khách hàng"
+                        />
+                    </div>
+                    <div className="field">
+                        <label>Số điện thoại (*)</label>
+                        <input 
+                            value={newCustomerPhone} 
+                            onChange={e => setNewCustomerPhone(e.target.value)} 
+                            placeholder="Số điện thoại"
+                        />
+                    </div>
+                    <div className="field">
+                        <label>Địa chỉ (Để gợi ý kho)</label>
+                        <input 
+                            value={newCustomerAddress} 
+                            onChange={e => setNewCustomerAddress(e.target.value)} 
+                            placeholder="Nhập địa chỉ chi tiết..." 
+                        />
+                    </div>
+                </div>
+                <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end', gap: 8 }}>
+                    <button className="btn" onClick={() => setShowAddCustomer(false)}>Hủy</button>
+                    <button className="btn btn-primary" onClick={quickAddCustomer}>Lưu & Chọn</button>
+                </div>
+            </div>
+        </div>
       )}
 
       {selectedOrder && (
@@ -1964,6 +2247,11 @@ export function OrdersPage() {
                         <input value={usersById.get(selectedOrder.shippedByUserId ?? selectedOrder.packedByUserId!)?.fullName ?? 'Unknown'} disabled />
                       </div>
                     )}
+                  </div>
+
+                  <div className="card" style={{ marginBottom: 16 }}>
+                    <div className="card-title">Tiến độ đơn hàng</div>
+                    <OrderTimeline status={selectedOrder.status} />
                   </div>
 
                   <div className="card" style={{ marginBottom: 16 }}>

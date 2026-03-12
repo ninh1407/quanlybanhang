@@ -41,8 +41,23 @@ export function createSeedState(): AppState {
   const locMain = {
     id: newId('loc'),
     code: 'MAIN',
-    name: 'Kho chính',
-    note: '',
+    name: 'Kho chính (HCM)',
+    province: 'Hồ Chí Minh',
+    lat: 10.8231,
+    lng: 106.6297,
+    note: 'Kho tổng miền Nam',
+    active: true,
+    createdAt,
+  }
+
+  const locHanoi = {
+    id: newId('loc'),
+    code: 'HN01',
+    name: 'Kho Hà Nội',
+    province: 'Hà Nội',
+    lat: 21.0285,
+    lng: 105.8542,
+    note: 'Chi nhánh miền Bắc',
     active: true,
     createdAt,
   }
@@ -50,7 +65,7 @@ export function createSeedState(): AppState {
   return {
     categories: [],
     suppliers: [],
-    locations: [locMain],
+    locations: [locMain, locHanoi],
     products: [],
     skus: [],
     customers: [],

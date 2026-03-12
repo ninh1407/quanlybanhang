@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react'
-import { useAuth } from '../auth/auth'
 import { fetchApi } from '../api/client'
+import { useAuth } from '../auth/auth'
 import { groupPermissions, rolePermissions } from '../domain/permissions'
-import type { Location, Role, User } from '../domain/types'
-import { formatDateTime } from '../lib/date'
+import type { Role, User } from '../domain/types'
 import { newId } from '../lib/id'
 import { useStore } from '../state/Store'
-import { PageHeader } from '../ui-kit/PageHeader'
 import { useDialogs } from '../ui-kit/Dialogs'
+import { PageHeader } from '../ui-kit/PageHeader'
 
 const roles: Role[] = ['admin', 'manager', 'region_manager', 'accountant', 'staff']
 
@@ -45,10 +44,6 @@ export function StaffPage() {
     return state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code))
   }, [state.locations])
 
-  const locationById = useMemo(() => {
-    return new Map<string, Location>(state.locations.map((l) => [l.id, l]))
-  }, [state.locations])
-
   const dialogs = useDialogs()
 
   function startCreate() {
@@ -74,7 +69,7 @@ export function StaffPage() {
     if (!canWrite) return
     setError('')
     if (!form.username.trim() || !form.fullName.trim()) return
-    if (form.role !== 'admin' && form.role !== 'manager' && form.role !== 'accountant' && (form.allowedLocationIds ?? []).length === 0) {
+    if (form.role !== 'admin' && (form.allowedLocationIds ?? []).length === 0) {
       setError('Vui lòng chọn ít nhất 1 kho cho nhân sự.')
       return
     }
@@ -128,196 +123,223 @@ export function StaffPage() {
     <div className="page">
       <PageHeader title="Phân quyền nhân sự" />
 
-      {canWrite ? (
-        <div className="card">
-          <div className="card-title">{editingId ? 'Sửa nhân sự' : 'Thêm nhân sự'}</div>
-          {error ? (
-            <div className="error" style={{ background: '#fef2f2', color: '#ef4444', padding: '10px 12px', borderRadius: 6, fontSize: 13 }}>
-              {error}
-            </div>
-          ) : null}
-          <div className="grid-form">
-            <div className="field">
-              <label>Username</label>
-              <input
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                placeholder="Tên đăng nhập"
-              />
-            </div>
-            <div className="field">
-              <label>Mật khẩu {editingId ? '(Để trống nếu không đổi)' : ''}</label>
-              <input
-                type="password"
-                value={form.password || ''}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder={editingId ? 'Nhập mật khẩu mới' : 'Nhập mật khẩu'}
-              />
-            </div>
-            <div className="field">
-              <label>Họ tên</label>
-              <input
-                value={form.fullName}
-                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                placeholder="Họ và tên"
-              />
-            </div>
-            <div className="field">
-              <label>Vai trò</label>
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
-              >
-                {roles.map((r) => (
-                  <option key={r} value={r}>
-                    {roleLabel(r)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Trạng thái</label>
-              <select
-                value={form.active ? '1' : '0'}
-                onChange={(e) => setForm({ ...form, active: e.target.value === '1' })}
-              >
-                <option value="1">Hoạt động</option>
-                <option value="0">Khóa</option>
-              </select>
-            </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: 24 }}>
+        {/* Left: Add/Edit Form */}
+        {canWrite ? (
+          <div>
+            <div className="card" style={{ position: 'sticky', top: 88 }}>
+              <div className="card-title">{editingId ? 'Sửa nhân sự' : 'Thêm nhân sự'}</div>
+              {error ? (
+                <div className="error" style={{ background: '#fef2f2', color: '#ef4444', padding: '10px 12px', borderRadius: 6, fontSize: 13, marginBottom: 16 }}>
+                  {error}
+                </div>
+              ) : null}
+              
+              <div className="grid-form" style={{ gap: 20 }}>
+                {/* Account Group */}
+                <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 }}>Tài khoản</div>
+                    <div style={{ display: 'grid', gap: 12 }}>
+                        <div className="field">
+                        <label>Username</label>
+                        <input
+                            value={form.username}
+                            onChange={(e) => setForm({ ...form, username: e.target.value })}
+                            placeholder="Tên đăng nhập"
+                        />
+                        </div>
+                        <div className="field">
+                        <label>Mật khẩu {editingId ? '(Để trống nếu không đổi)' : ''}</label>
+                        <input
+                            type="password"
+                            value={form.password || ''}
+                            onChange={(e) => setForm({ ...form, password: e.target.value })}
+                            placeholder={editingId ? 'Nhập mật khẩu mới' : 'Nhập mật khẩu'}
+                        />
+                        </div>
+                    </div>
+                </div>
 
-            <div className="field field-span-2">
-              <label>Kho được cấp</label>
-              <div style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 12 }}>
-                {activeLocations.length ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-                    {activeLocations.map((l) => {
-                      const checked = (form.allowedLocationIds ?? []).includes(l.id)
-                      return (
-                        <label key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleAllowed(l.id)} disabled={form.role === 'admin' || form.role === 'manager' || form.role === 'accountant'} />
-                          <span>
-                            <span style={{ fontWeight: 800 }}>{l.name}</span>
-                            <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>{l.code}</span>
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ color: 'var(--text-muted)' }}>Chưa có kho nào.</div>
-                )}
-                {form.role === 'admin' || form.role === 'manager' || form.role === 'accountant' ? (
-                  <div style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 12 }}>
-                    Vai trò này có quyền truy cập tất cả kho.
-                  </div>
-                ) : null}
+                <div style={{ height: 1, background: 'var(--border-color)' }}></div>
+
+                {/* Info Group */}
+                <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 }}>Thông tin</div>
+                    <div style={{ display: 'grid', gap: 12 }}>
+                        <div className="field">
+                        <label>Họ tên</label>
+                        <input
+                            value={form.fullName}
+                            onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                            placeholder="Họ và tên"
+                        />
+                        </div>
+                        <div className="field">
+                        <label>Vai trò</label>
+                        <select
+                            value={form.role}
+                            onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
+                        >
+                            {roles.map((r) => (
+                            <option key={r} value={r}>
+                                {roleLabel(r)}
+                            </option>
+                            ))}
+                        </select>
+                        </div>
+                        <div className="field">
+                        <label>Trạng thái</label>
+                        <select
+                            value={form.active ? '1' : '0'}
+                            onChange={(e) => setForm({ ...form, active: e.target.value === '1' })}
+                        >
+                            <option value="1">Hoạt động</option>
+                            <option value="0">Khóa</option>
+                        </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ height: 1, background: 'var(--border-color)' }}></div>
+
+                {/* Warehouse Group */}
+                <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 }}>Phạm vi kho</div>
+                    <div className="field">
+                    <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 8, maxHeight: 200, overflowY: 'auto' }}>
+                        {activeLocations.length ? (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                            {activeLocations.map((l) => {
+                            const checked = (form.allowedLocationIds ?? []).includes(l.id)
+                            return (
+                                <label key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, cursor: 'pointer' }}>
+                                <input type="checkbox" checked={checked} onChange={() => toggleAllowed(l.id)} disabled={form.role === 'admin'} />
+                                <span>
+                                    <span style={{ fontWeight: 600 }}>{l.name}</span>
+                                    <span style={{ marginLeft: 6, color: 'var(--text-muted)', fontSize: 11 }}>{l.code}</span>
+                                </span>
+                                </label>
+                            )
+                            })}
+                        </div>
+                        ) : (
+                        <div style={{ color: 'var(--text-muted)' }}>Chưa có kho nào.</div>
+                        )}
+                        {form.role === 'admin' ? (
+                        <div style={{ marginTop: 8, color: 'var(--success)', fontSize: 12, fontWeight: 500 }}>
+                            ✓ Admin có quyền truy cập tất cả kho.
+                        </div>
+                        ) : null}
+                    </div>
+                    </div>
+                </div>
+              </div>
+
+              <div className="row" style={{ marginTop: 24 }}>
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={save}>
+                  {editingId ? 'Cập nhật' : 'Tạo mới'}
+                </button>
+                <button className="btn" onClick={startCreate}>
+                  Hủy
+                </button>
               </div>
             </div>
           </div>
-          <div className="row">
-            <button className="btn btn-primary" onClick={save}>
-              Lưu
-            </button>
-            <button className="btn" onClick={startCreate}>
-              Mới
-            </button>
-          </div>
-        </div>
-      ) : null}
+        ) : <div></div>}
 
-      <div className="card">
-        <div className="card-title">Danh sách</div>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Username</th>
-                <th>Họ tên</th>
-                <th>Vai trò</th>
-                <th>Kho</th>
-                <th>Trạng thái</th>
-                <th>Ngày tạo</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.username}</td>
-                  <td>{u.fullName}</td>
-                  <td>{roleLabel(u.role)}</td>
-                  <td>
-                    {['admin', 'manager', 'accountant'].includes(u.role)
-                      ? 'Tất cả'
-                      : (u.allowedLocationIds ?? [])
-                          .map((id) => locationById.get(id)?.code ?? '')
-                          .filter((x) => x)
-                          .join(', ')}
-                  </td>
-                  <td>{u.active ? 'Hoạt động' : 'Khóa'}</td>
-                  <td>{formatDateTime(u.createdAt)}</td>
-                  <td className="cell-actions">
-                    {canWrite ? (
-                      <>
-                        <button className="btn btn-small" onClick={() => startEdit(u)}>
-                          Sửa
-                        </button>
-                        <button
-                          className="btn btn-small btn-danger"
-                          onClick={() => remove(u.id)}
-                          disabled={currentUser?.id === u.id}
-                        >
-                          Xóa
-                        </button>
-                      </>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        {/* Right: List & Matrix */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div className="card">
+                <div className="card-title">Danh sách nhân sự ({users.length})</div>
+                <div className="table-wrap">
+                <table className="table">
+                    <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Họ tên</th>
+                        <th>Vai trò</th>
+                        <th>Kho</th>
+                        <th>Trạng thái</th>
+                        <th />
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {users.map((u) => (
+                        <tr key={u.id}>
+                        <td style={{ fontWeight: 600 }}>{u.username}</td>
+                        <td>{u.fullName}</td>
+                        <td><span className="badge">{roleLabel(u.role).split('(')[0]}</span></td>
+                        <td>
+                            {['admin'].includes(u.role)
+                            ? 'All'
+                            : (u.allowedLocationIds ?? []).length + ' kho'}
+                        </td>
+                        <td>
+                            {u.active ? <span className="badge badge-success">Active</span> : <span className="badge badge-danger">Locked</span>}
+                        </td>
+                        <td className="cell-actions">
+                            {canWrite ? (
+                            <>
+                                <button className="btn btn-small" onClick={() => startEdit(u)}>
+                                Sửa
+                                </button>
+                                <button
+                                className="btn btn-small btn-danger"
+                                onClick={() => remove(u.id)}
+                                disabled={currentUser?.id === u.id}
+                                >
+                                Xóa
+                                </button>
+                            </>
+                            ) : null}
+                        </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+                </div>
+            </div>
 
-      <div className="card">
-        <div className="card-title">Ma trận quyền</div>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Role</th>
-                <th>Quyền</th>
-              </tr>
-            </thead>
-            <tbody>
-              {roles.map((r) => (
-                <tr key={r}>
-                  <td>{roleLabel(r)}</td>
-                  <td>
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {groupPermissions(rolePermissions[r]).map((g) => (
-                        <div
-                          key={g.moduleKey}
-                          style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'baseline' }}
-                        >
-                          <div style={{ fontWeight: 700 }}>{g.moduleLabel}</div>
-                          <div style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-                            {g.actions.map((a, idx) => (
-                              <span key={a.code} title={a.code}>
-                                {idx ? ', ' : ''}
-                                {a.label} ({a.detail})
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <div className="card">
+                <div className="card-title">Ma trận phân quyền</div>
+                <div className="table-wrap">
+                <table className="table">
+                    <thead>
+                    <tr>
+                        <th>Module</th>
+                        <th style={{ textAlign: 'center' }}>Xem (View)</th>
+                        <th style={{ textAlign: 'center' }}>Tạo (Create)</th>
+                        <th style={{ textAlign: 'center' }}>Sửa (Edit)</th>
+                        <th style={{ textAlign: 'center' }}>Xóa (Delete)</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {/* Just showing Admin/Staff diff for simplicity or iterate roles? Let's show currently selected role or generic matrix */}
+                    {/* The prompt asked for a matrix grid. We can show it for the 'Manager' role as example or make it selectable */}
+                    {groupPermissions(rolePermissions['manager']).map((g) => (
+                        <tr key={g.moduleKey}>
+                            <td style={{ fontWeight: 600 }}>{g.moduleLabel}</td>
+                            <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':read')) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                {g.actions.some(a => a.code.includes(':read')) ? '✓' : '—'}
+                            </td>
+                            <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':write')) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                {g.actions.some(a => a.code.includes(':write')) ? '✓' : '—'}
+                            </td>
+                            <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':write')) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                {g.actions.some(a => a.code.includes(':write')) ? '✓' : '—'}
+                            </td>
+                            <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':delete')) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                {g.actions.some(a => a.code.includes(':delete')) ? '✓' : '—'}
+                            </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+                <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                    * Bảng trên hiển thị quyền hạn mẫu của vai trò "Quản lý". Admin có toàn quyền.
+                </div>
+                </div>
+            </div>
         </div>
       </div>
     </div>

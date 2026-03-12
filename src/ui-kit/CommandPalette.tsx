@@ -85,34 +85,80 @@ export function CommandPalette() {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-[15vh] bg-black/40 backdrop-blur-sm transition-all" onClick={() => setOpen(false)}>
+    <div 
+        style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            paddingTop: '15vh',
+            background: 'rgba(0, 0, 0, 0.4)',
+            backdropFilter: 'blur(4px)',
+        }}
+        onClick={() => setOpen(false)}
+    >
       <div 
-        className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700 animate-in fade-in zoom-in-95 duration-100" 
+        style={{
+            width: '100%',
+            maxWidth: 600,
+            background: 'var(--bg-surface)',
+            borderRadius: 12,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            overflow: 'hidden',
+            border: '1px solid var(--border-color)',
+        }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-          <Search className="w-5 h-5 text-gray-400 mr-3" />
+        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--border-color)' }}>
+          <Search size={20} style={{ color: 'var(--text-muted)', marginRight: 12 }} />
           <input
             ref={inputRef}
-            className="flex-1 text-lg outline-none placeholder:text-gray-400 bg-transparent dark:text-white"
-            placeholder="Type a command or search... (Orders, SKUs, Customers)"
+            style={{
+                flex: 1,
+                fontSize: 16,
+                outline: 'none',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-main)',
+                padding: 0,
+            }}
+            placeholder="Tìm kiếm nhanh (Đơn hàng, SKU, Khách hàng)..."
             value={query}
             onChange={e => setQuery(e.target.value)}
           />
-          <kbd className="hidden sm:inline-block px-2 py-1 text-xs font-semibold text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-600">ESC</kbd>
+          <kbd style={{ 
+              fontSize: 12, 
+              fontWeight: 600, 
+              color: 'var(--text-muted)', 
+              background: 'var(--neutral-100)', 
+              padding: '2px 6px', 
+              borderRadius: 4, 
+              border: '1px solid var(--border-color)' 
+          }}>ESC</kbd>
         </div>
         
-        <div className="max-h-[60vh] overflow-y-auto py-2">
+        <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '8px 0' }}>
             {pages.length > 0 && (
-                <div className="mb-2">
-                    <div className="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Navigation</div>
+                <div style={{ marginBottom: 8 }}>
+                    <div style={{ padding: '4px 16px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Điều hướng</div>
                     {pages.map((item) => (
                         <div 
                             key={item.path}
-                            className="flex items-center px-4 py-2 mx-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '8px 16px',
+                                cursor: 'pointer',
+                                color: 'var(--text-main)',
+                                transition: 'background 0.2s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--neutral-50)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                             onClick={() => handleSelect(item.path)}
                         >
-                            <span className="mr-3 text-gray-400">{item.icon}</span>
+                            <span style={{ marginRight: 12, color: 'var(--text-muted)' }}>{item.icon}</span>
                             {item.name}
                         </div>
                     ))}
@@ -120,15 +166,24 @@ export function CommandPalette() {
             )}
 
             {orders.length > 0 && (
-                <div className="mb-2">
-                    <div className="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Orders</div>
+                <div style={{ marginBottom: 8 }}>
+                    <div style={{ padding: '4px 16px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Đơn hàng</div>
                     {orders.map((item) => (
                         <div 
                             key={item.id}
-                            className="flex items-center px-4 py-2 mx-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '8px 16px',
+                                cursor: 'pointer',
+                                color: 'var(--text-main)',
+                                transition: 'background 0.2s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--neutral-50)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                             onClick={() => handleSelect(item.path)}
                         >
-                            <ShoppingCart size={14} className="mr-3 text-blue-500" />
+                            <ShoppingCart size={14} style={{ marginRight: 12, color: 'var(--info)' }} />
                             {item.name}
                         </div>
                     ))}
@@ -136,15 +191,24 @@ export function CommandPalette() {
             )}
 
             {products.length > 0 && (
-                <div className="mb-2">
-                    <div className="px-4 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Products</div>
+                <div style={{ marginBottom: 8 }}>
+                    <div style={{ padding: '4px 16px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Sản phẩm</div>
                     {products.map((item) => (
                         <div 
                             key={item.id}
-                            className="flex items-center px-4 py-2 mx-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200 transition-colors"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '8px 16px',
+                                cursor: 'pointer',
+                                color: 'var(--text-main)',
+                                transition: 'background 0.2s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--neutral-50)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                             onClick={() => handleSelect(item.path)}
                         >
-                            <Package size={14} className="mr-3 text-green-500" />
+                            <Package size={14} style={{ marginRight: 12, color: 'var(--success)' }} />
                             {item.name}
                         </div>
                     ))}
@@ -152,15 +216,15 @@ export function CommandPalette() {
             )}
             
             {allItems.length === 0 && (
-                <div className="px-4 py-8 text-center text-gray-500">
-                    No results found for "{query}"
+                <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    Không tìm thấy kết quả cho "{query}"
                 </div>
             )}
         </div>
         
-        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-700 flex justify-between text-xs text-gray-400">
-            <span>ProTip: Use arrows to navigate, Enter to select</span>
-            <span>Powered by Enterprise Search</span>
+        <div style={{ padding: '8px 16px', background: 'var(--neutral-50)', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
+            <span>Sử dụng phím mũi tên để di chuyển, Enter để chọn</span>
+            <span>Hệ thống tìm kiếm thông minh</span>
         </div>
       </div>
     </div>

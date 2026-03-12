@@ -1,129 +1,162 @@
 import { useMemo, useState } from 'react'
 import { useAppState } from '../state/Store'
-import { formatDateTime } from '../lib/date'
 import { PageHeader } from '../ui-kit/PageHeader'
-import type { AuditLog } from '../domain/types'
+import { Pagination } from '../ui-kit/listing/Pagination'
+import { useListView } from '../ui-kit/listing/useListView'
+import { formatDateTime } from '../lib/date'
+import { ChevronDown, ChevronRight, Activity, Clock, User } from 'lucide-react'
 
-const entityLabels: Record<AuditLog['entityType'], string> = {
-  order: 'Đơn hàng',
-  purchase_order: 'Đơn mua hàng',
-  stock_tx: 'Giao dịch kho',
-  stock_voucher: 'Phiếu kho',
-  stock_count: 'Phiếu kiểm kho',
-  finance_tx: 'Giao dịch thu/chi',
-  debt: 'Công nợ',
-  product: 'Sản phẩm',
-  sku: 'SKU',
-  customer: 'Khách hàng',
-  supplier: 'Thương hiệu',
-  category: 'Danh mục',
-  location: 'Vị trí kho',
-  user: 'Nhân sự',
-  request: 'Yêu cầu duyệt',
-}
+function JsonDiff({ before, after }: { before?: any; after?: any }) {
+    const [expanded, setExpanded] = useState(false)
+    
+    if (!before && !after) return null
 
-const actionLabels: Record<AuditLog['action'], string> = {
-  create: 'Tạo',
-  update: 'Sửa',
-  delete: 'Xóa',
-}
-
-function stringifyShort(v: unknown): string {
-  try {
-    const s = JSON.stringify(v)
-    if (!s) return ''
-    return s.length > 600 ? `${s.slice(0, 600)}…` : s
-  } catch {
-    return ''
-  }
+    return (
+        <div style={{ marginTop: 8 }}>
+            <button 
+                className="btn btn-small btn-ghost" 
+                onClick={() => setExpanded(!expanded)}
+                style={{ fontSize: 12, padding: '4px 8px', height: 'auto' }}
+            >
+                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                {expanded ? 'Thu gọn chi tiết' : 'Xem chi tiết thay đổi'}
+            </button>
+            
+            {expanded && (
+                <div style={{ 
+                    marginTop: 8, 
+                    display: 'grid', 
+                    gridTemplateColumns: '1fr 1fr', 
+                    gap: 12, 
+                    fontSize: 12, 
+                    fontFamily: 'monospace',
+                    background: 'var(--bg-subtle)',
+                    padding: 12,
+                    borderRadius: 8
+                }}>
+                    <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Trước</div>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>
+                            {JSON.stringify(before, null, 2) || '-'}
+                        </pre>
+                    </div>
+                    <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Sau</div>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--text-main)' }}>
+                            {JSON.stringify(after, null, 2) || '-'}
+                        </pre>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
 }
 
 export function AuditLogPage() {
   const state = useAppState()
-  const [entity, setEntity] = useState<AuditLog['entityType'] | 'all'>('all')
-  const [q, setQ] = useState('')
-
-  const usersById = useMemo(() => new Map(state.users.map((u) => [u.id, u.fullName || u.username])), [state.users])
+  const list = useListView('audit', {
+    q: '',
+    filters: {},
+    page: 1,
+    pageSize: 20,
+    sortKey: 'timestamp',
+    sortDir: 'desc',
+  })
 
   const logs = useMemo(() => {
-    const needle = q.trim().toLowerCase()
     return state.auditLogs
-      .filter((l) => (entity === 'all' ? true : l.entityType === entity))
-      .filter((l) => {
-        if (!needle) return true
-        const actor = l.actorUserId ? usersById.get(l.actorUserId) ?? '' : ''
-        const hay = [
-          actor,
-          l.entityType,
-          l.entityId,
-          l.entityCode ?? '',
-          l.action,
-          l.reason ?? '',
-          stringifyShort(l.before),
-          stringifyShort(l.after),
-        ]
-          .join(' ')
-          .toLowerCase()
-        return hay.includes(needle)
-      })
-  }, [entity, q, state.auditLogs, usersById])
+      .slice()
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }, [state.auditLogs])
+
+  const paginatedLogs = logs.slice(
+    (list.state.page - 1) * list.state.pageSize,
+    list.state.page * list.state.pageSize
+  )
 
   return (
     <div className="page">
-      <PageHeader title="Nhật ký hệ thống" />
+      <PageHeader title="Nhật ký hoạt động" subtitle="Theo dõi mọi thay đổi trong hệ thống" />
 
       <div className="card">
-        <div className="card-title">Bộ lọc</div>
-        <div className="grid-form">
-          <div className="field">
-            <label>Đối tượng</label>
-            <select value={entity} onChange={(e) => setEntity(e.target.value as AuditLog['entityType'] | 'all')}>
-              <option value="all">Tất cả</option>
-              {Object.keys(entityLabels).map((k) => (
-                <option key={k} value={k}>
-                  {entityLabels[k as AuditLog['entityType']]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field field-span-2">
-            <label>Tìm kiếm</label>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Mã/ID, người thao tác, nội dung..." />
-          </div>
+        <div className="card-title" style={{ marginBottom: 24 }}>Dòng thời gian (Timeline)</div>
+        
+        <div className="timeline" style={{ paddingLeft: 16 }}>
+            {paginatedLogs.map((log, idx) => {
+                const user = state.users.find(u => u.id === log.actorUserId)
+                const isLast = idx === paginatedLogs.length - 1
+                
+                return (
+                    <div key={log.id} style={{ display: 'flex', gap: 24, position: 'relative', paddingBottom: isLast ? 0 : 32 }}>
+                        {/* Line */}
+                        {!isLast && (
+                            <div style={{ 
+                                position: 'absolute', 
+                                left: 19, 
+                                top: 40, 
+                                bottom: 0, 
+                                width: 2, 
+                                background: 'var(--border-color)' 
+                            }} />
+                        )}
+
+                        {/* Icon */}
+                        <div style={{ 
+                            width: 40, 
+                            height: 40, 
+                            borderRadius: '50%', 
+                            background: 'var(--neutral-100)', 
+                            border: '4px solid var(--bg-surface)',
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            zIndex: 1,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                        }}>
+                            <Activity size={18} color="var(--primary-600)" />
+                        </div>
+
+                        {/* Content */}
+                        <div style={{ flex: 1, background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 12, padding: 16, marginTop: -4 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontWeight: 600, fontSize: 14 }}>{log.action}</span>
+                                    <span style={{ 
+                                        fontSize: 12, 
+                                        padding: '2px 8px', 
+                                        borderRadius: 12, 
+                                        background: 'var(--neutral-100)', 
+                                        color: 'var(--text-secondary)' 
+                                    }}>
+                                        {log.entityType}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                                    <Clock size={14} />
+                                    {formatDateTime(log.createdAt)}
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                                <User size={14} />
+                                <span style={{ fontWeight: 500 }}>{user?.username || 'Unknown'}</span>
+                                {log.reason && <span>— {log.reason}</span>}
+                            </div>
+
+                            <JsonDiff before={log.before} after={log.after} />
+                        </div>
+                    </div>
+                )
+            })}
         </div>
-      </div>
 
-      <div className="card">
-        <div className="card-title">Danh sách ({logs.length})</div>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Thời gian</th>
-                <th>Người</th>
-                <th>Thao tác</th>
-                <th>Đối tượng</th>
-                <th>Lý do</th>
-                <th>Trước</th>
-                <th>Sau</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((l) => (
-                <tr key={l.id}>
-                  <td>{formatDateTime(l.createdAt)}</td>
-                  <td>{l.actorUserId ? usersById.get(l.actorUserId) ?? l.actorUserId : '—'}</td>
-                  <td>{actionLabels[l.action]}</td>
-                  <td>
-                    {entityLabels[l.entityType]} {l.entityCode ? `(${l.entityCode})` : ''}
-                  </td>
-                  <td>{l.reason ?? ''}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>{stringifyShort(l.before)}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>{stringifyShort(l.after)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-color)' }}>
+            <Pagination
+            page={list.state.page}
+            pageSize={list.state.pageSize}
+            totalItems={logs.length}
+            onChangePage={(page) => list.patch({ page })}
+            />
         </div>
       </div>
     </div>

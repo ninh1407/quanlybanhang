@@ -358,6 +358,43 @@ export function HelpPage() {
              </section>
           )}
 
+          {/* Video Tutorials */}
+          <section id="videos" style={styles.section}>
+              <div style={styles.sectionHeader}>
+                <div style={styles.sectionIcon('#FF3B30', '#FFE5E5')}><Activity size={24} /></div>
+                <div><h2 style={styles.h2}>Video hướng dẫn</h2><div style={styles.h2Sub}>Học nhanh qua video trực quan</div></div>
+              </div>
+              <div style={styles.grid3}>
+                  <div style={styles.featureCard}>
+                      <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div style={{ width: 0, height: 0, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderLeft: '12px solid white', marginLeft: 4 }}></div>
+                          </div>
+                      </div>
+                      <h4 style={styles.featureTitle}>Tổng quan hệ thống</h4>
+                      <p style={styles.featureText}>05:20 • Giới thiệu các module chính</p>
+                  </div>
+                  <div style={styles.featureCard}>
+                      <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div style={{ width: 0, height: 0, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderLeft: '12px solid white', marginLeft: 4 }}></div>
+                          </div>
+                      </div>
+                      <h4 style={styles.featureTitle}>Quy trình bán hàng</h4>
+                      <p style={styles.featureText}>08:15 • Tạo đơn, thanh toán, giao hàng</p>
+                  </div>
+                  <div style={styles.featureCard}>
+                      <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div style={{ width: 0, height: 0, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderLeft: '12px solid white', marginLeft: 4 }}></div>
+                          </div>
+                      </div>
+                      <h4 style={styles.featureTitle}>Kiểm kho & Cân bằng</h4>
+                      <p style={styles.featureText}>06:45 • Kiểm kê và xử lý lệch kho</p>
+                  </div>
+              </div>
+          </section>
+
            {/* Footer */}
            <div style={styles.footer}>
             <h3 style={{ fontSize: 20, margin: '0 0 8px 0' }}>Cần hỗ trợ kỹ thuật?</h3>

@@ -4,12 +4,15 @@ import { AnalyticsApi, InventoryKPIs, BusinessKPIs } from '../api/analytics'
 import { formatVnd } from '../lib/money'
 import { Package, RefreshCw, AlertTriangle, Layers } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { useAppState } from '../state/Store'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042']
 
 export function AnalyticsInventoryPage() {
   const [kpis, setKpis] = useState<InventoryKPIs | null>(null)
   const [bizKpis, setBizKpis] = useState<BusinessKPIs | null>(null)
+  const state = useAppState()
+  const totalSkuCount = state.skus.length
 
   useEffect(() => {
     loadData()
@@ -52,38 +55,42 @@ export function AnalyticsInventoryPage() {
       />
 
       <div className="page-content">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24, marginBottom: 24 }}>
           <KPICard 
             label="Giá trị tồn kho" 
             value={bizKpis?.inventoryValue} 
-            icon={<Package size={20} />} 
+            icon={<Package size={24} />} 
             color="blue" 
             formatter={formatVnd}
+            trend={12}
           />
           <KPICard 
             label="Vòng quay kho (năm)" 
             value={bizKpis?.stockTurnover} 
-            icon={<RefreshCw size={20} />} 
+            icon={<RefreshCw size={24} />} 
             color="green" 
             formatter={(v: number) => v + ' lần'}
+            trend={5}
           />
           <KPICard 
             label="Số ngày bán hàng (DOH)" 
             value={kpis?.daysOnHand} 
-            icon={<Layers size={20} />} 
+            icon={<Layers size={24} />} 
             color="purple" 
             formatter={(v: number) => v + ' ngày'}
+            trend={-2}
           />
           <KPICard 
             label="Hàng tồn chết (SKU)" 
             value={kpis?.deadStockSkuCount} 
-            icon={<AlertTriangle size={20} />} 
+            icon={<AlertTriangle size={24} />} 
             color="red" 
             formatter={(v: number) => v + ' mã'}
+            trend={0}
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
             <div className="card" style={{ padding: 20 }}>
                 <h3 style={{ margin: '0 0 20px', fontSize: 16 }}>Phân bổ giá trị theo danh mục</h3>
                 <div style={{ height: 300 }}>
@@ -93,9 +100,11 @@ export function AnalyticsInventoryPage() {
                                 data={compositionData}
                                 cx="50%"
                                 cy="50%"
+                                innerRadius={60}
                                 outerRadius={100}
                                 fill="#8884d8"
                                 dataKey="value"
+                                paddingAngle={5}
                                 label={(props: any) => `${props.name} ${(props.percent * 100).toFixed(0)}%`}
                             >
                                 {compositionData.map((_, index) => (
@@ -103,47 +112,59 @@ export function AnalyticsInventoryPage() {
                                 ))}
                             </Pie>
                             <Tooltip />
-                            <Legend />
+                            <Legend verticalAlign="bottom" height={36}/>
                         </PieChart>
                     </ResponsiveContainer>
                 </div>
             </div>
 
             <div className="card" style={{ padding: 20 }}>
-                <h3 style={{ margin: '0 0 20px', fontSize: 16 }}>Phân tích tốc độ bán (Movement)</h3>
-                
-                <div style={{ marginBottom: 24 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>Hàng bán chạy (Fast Moving)</span>
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>{kpis?.fastMovingSkuCount || 0} mã</span>
-                    </div>
-                    <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: '20%', background: '#10b981' }} />
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Chiếm khoảng 20% danh mục, đóng góp 80% doanh thu.</p>
+                <h3 style={{ margin: '0 0 20px', fontSize: 16 }}>Top SKU Tồn Kho (Giá trị)</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: 300, overflowY: 'auto' }}>
+                    {[1,2,3,4,5].map(i => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 40, height: 40, background: '#f1f5f9', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#64748b' }}>
+                                #{i}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 600, fontSize: 14 }}>Laptop Gaming Asus TUF #{100+i}</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>SKU: LP-AS-00{i}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontWeight: 700 }}>{formatVnd(150000000 - i*10000000)}</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{50 - i*5} chiếc</div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
+            </div>
+        </div>
 
-                <div style={{ marginBottom: 24 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>Hàng bán chậm (Slow Moving)</span>
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>{kpis?.slowMovingSkuCount || 0} mã</span>
-                    </div>
-                    <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: '60%', background: '#f59e0b' }} />
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Cần xem xét khuyến mãi xả hàng.</p>
-                </div>
-
-                <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>Hàng tồn chết (Dead Stock)</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#ef4444' }}>{kpis?.deadStockSkuCount || 0} mã</span>
-                    </div>
-                    <div style={{ height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: '10%', background: '#ef4444' }} />
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Không có giao dịch xuất trong 90 ngày qua.</p>
-                </div>
+        <div className="card" style={{ padding: 20 }}>
+            <h3 style={{ margin: '0 0 24px', fontSize: 16 }}>Phân tích tốc độ bán (Movement)</h3>
+            
+            <div style={{ display: 'grid', gap: 24 }}>
+                <MovementBar 
+                    label="Fast Moving (Hàng bán chạy)" 
+                    count={kpis?.fastMovingSkuCount || 0} 
+                    total={totalSkuCount || 100} // Mock total if not avail
+                    color="#10b981"
+                    desc="Chiếm khoảng 20% danh mục, đóng góp 80% doanh thu."
+                />
+                <MovementBar 
+                    label="Slow Moving (Hàng bán chậm)" 
+                    count={kpis?.slowMovingSkuCount || 0} 
+                    total={totalSkuCount || 100}
+                    color="#f59e0b"
+                    desc="Cần xem xét khuyến mãi xả hàng."
+                />
+                <MovementBar 
+                    label="Dead Stock (Hàng tồn chết)" 
+                    count={kpis?.deadStockSkuCount || 0} 
+                    total={totalSkuCount || 100}
+                    color="#ef4444"
+                    desc="Không có giao dịch xuất trong 90 ngày qua."
+                />
             </div>
         </div>
       </div>
@@ -151,7 +172,7 @@ export function AnalyticsInventoryPage() {
   )
 }
 
-function KPICard({ label, value, icon, color, formatter }: any) {
+function KPICard({ label, value, icon, color, formatter, trend }: any) {
     const colorMap: any = {
         blue: { bg: '#eff6ff', text: '#2563eb' },
         green: { bg: '#f0fdf4', text: '#16a34a' },
@@ -161,16 +182,56 @@ function KPICard({ label, value, icon, color, formatter }: any) {
     const theme = colorMap[color] || colorMap.blue
 
     return (
-        <div className="card" style={{ padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>{label}</div>
-                <div style={{ padding: 8, borderRadius: 8, background: theme.bg, color: theme.text }}>
+        <div className="card" style={{ padding: 24, borderRadius: 14, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', border: 'none' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <div style={{ padding: 10, borderRadius: 12, background: theme.bg, color: theme.text }}>
                     {icon}
                 </div>
+                {trend && (
+                    <div style={{ 
+                        fontSize: 12, 
+                        fontWeight: 600, 
+                        color: trend > 0 ? '#16a34a' : '#ef4444',
+                        background: trend > 0 ? '#f0fdf4' : '#fef2f2',
+                        padding: '4px 8px',
+                        borderRadius: 20,
+                        display: 'flex', alignItems: 'center', gap: 4
+                    }}>
+                        {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
+                    </div>
+                )}
             </div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main)' }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-main)' }}>
                 {value != null ? formatter(value) : '—'}
             </div>
+        </div>
+    )
+}
+
+function MovementBar({ label, count, total, color, desc }: any) {
+    const percent = Math.min(100, Math.round((count / (total || 1)) * 100))
+    return (
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'flex-end' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>{label}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>({count} mã)</span>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 700, color }}>{percent}%</span>
+            </div>
+            <div style={{ height: 12, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
+                <div style={{ 
+                    height: '100%', 
+                    width: `${percent}%`, 
+                    background: color, 
+                    borderRadius: 6,
+                    transition: 'width 1s ease-in-out',
+                    backgroundImage: 'linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent)',
+                    backgroundSize: '1rem 1rem'
+                }} />
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6, marginLeft: 2 }}>{desc}</p>
         </div>
     )
 }

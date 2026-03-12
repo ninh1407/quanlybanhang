@@ -7,9 +7,10 @@ import { formatVnd } from '../lib/money'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { Drawer } from '../ui-kit/Drawer'
 import { useDialogs } from '../ui-kit/Dialogs'
+import { PageHeader } from '../ui-kit/PageHeader'
 import { SmartTable, Column, SortConfig } from '../ui-kit/listing/SmartTable'
 import { AdvancedFilter, FilterDef } from '../ui-kit/listing/AdvancedFilter'
-import { Plus, Edit, Save, Upload, Download, FileSpreadsheet, Trash2 } from 'lucide-react'
+import { Plus, Edit, Save, Upload, Download, FileSpreadsheet, Image as ImageIcon, Tag } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 function autoInternalCode(): string {
@@ -17,18 +18,6 @@ function autoInternalCode(): string {
   const rnd = Math.random().toString(16).slice(2, 6).toUpperCase()
   return `SP-${d}-${rnd}`
 }
-
-// function skuTitle(productName: string, sku: Sku): string {
-//   const attrs = [
-//     sku.color.trim(),
-//     sku.size.trim(),
-//     sku.material?.trim(),
-//     sku.volume?.trim(),
-//     sku.capacity?.trim(),
-//     sku.power?.trim()
-//   ].filter(Boolean).join(' / ')
-//   return `${productName}${attrs ? ` - ${attrs}` : ''}`
-// }
 
 const emptyProductForm: Omit<Product, 'id' | 'createdAt'> = {
   internalCode: '',
@@ -60,9 +49,6 @@ const emptySkuForm: Omit<Sku, 'id' | 'createdAt' | 'productId'> = {
   kind: 'single',
   components: [],
 }
-
-// ProductRow removed
-
 
 export function ProductsPage() {
   const state = useAppState()
@@ -101,7 +87,6 @@ export function ProductsPage() {
   const [importStep, setImportStep] = useState<'upload' | 'preview'>('upload')
 
   const categoriesById = useMemo(() => new Map(state.categories.map((c) => [c.id, c.name])), [state.categories])
-  // const suppliersById removed
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
   const productObjById = useMemo(() => new Map(state.products.map((p) => [p.id, p])), [state.products])
 
@@ -161,10 +146,6 @@ export function ProductsPage() {
   }, [state.categories, state.products, state.skus, availableQtyBySkuId])
 
   const skus = useMemo(() => {
-    // START DEBUG
-    // console.log('All SKUs:', state.skus.length)
-    // END DEBUG
-    
     let list = state.skus.slice()
     
     if (search) {
@@ -246,36 +227,29 @@ export function ProductsPage() {
       title: 'Ảnh',
       width: 60,
       render: () => (
-        <div style={{ width: 40, height: 40, background: 'var(--neutral-100)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>IMG</span>
+        <div style={{ width: 44, height: 44, background: 'var(--neutral-100)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)' }}>
+            <ImageIcon size={20} color="var(--text-muted)" />
         </div>
       )
     },
     {
-      key: 'internalCode',
-      title: 'Mã nội bộ',
-      width: 120,
-      sortable: true,
-      render: (s) => <span className="text-muted" style={{ fontFamily: 'monospace' }}>{productObjById.get(s.productId)?.internalCode}</span>
-    },
-    {
       key: 'name',
-      title: 'Tên sản phẩm',
+      title: 'Sản phẩm',
       sortable: true,
       render: (s) => {
         const p = productObjById.get(s.productId)
         const variant = [
             s.color.trim(),
             s.size.trim(),
-            s.material?.trim(),
-            s.volume?.trim(),
-            s.capacity?.trim(),
-            s.power?.trim()
-          ].filter(Boolean).join(' / ')
+            s.material?.trim()
+          ].filter(Boolean).join(' - ')
         return (
           <div>
-            <div style={{ fontWeight: 600, color: 'var(--primary-700)' }}>{p?.name}</div>
-            {variant && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{variant}</div>}
+            <div style={{ fontWeight: 600, color: 'var(--primary-700)', fontSize: 14 }}>{p?.name}</div>
+            <div className="row" style={{ gap: 6, marginTop: 4, fontSize: 12 }}>
+               <span className="badge badge-neutral" style={{ padding: '0 4px' }}>{s.skuCode}</span>
+               {variant && <span className="text-muted">{variant}</span>}
+            </div>
           </div>
         )
       }
@@ -290,28 +264,26 @@ export function ProductsPage() {
       }
     },
     {
-      key: 'skuCode',
-      title: 'Mã SKU',
-      width: 150,
-      sortable: true,
-      render: (s) => <span style={{ fontFamily: 'monospace' }}>{s.skuCode}</span>
-    },
-    {
       key: 'qty',
       title: 'Tồn kho',
       align: 'right',
+      width: 120,
       sortable: true,
       render: (s) => {
         const qty = availableQtyBySkuId.get(s.id) ?? 0
-        return <span style={{ fontWeight: 600, color: qty <= 5 ? 'var(--danger)' : 'var(--success)' }}>{qty}</span>
+        const max = 100 // Mock max for visual bar
+        const percent = Math.min(100, Math.max(0, (qty / max) * 100))
+        const color = qty <= 5 ? 'var(--danger)' : qty <= 20 ? 'var(--warning)' : 'var(--success)'
+        
+        return (
+           <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 600, color: color }}>{qty}</div>
+              <div style={{ height: 4, background: 'var(--neutral-200)', borderRadius: 2, marginTop: 4, width: '100%' }}>
+                 <div style={{ height: '100%', width: `${percent}%`, background: color, borderRadius: 2 }} />
+              </div>
+           </div>
+        )
       }
-    },
-    {
-      key: 'cost',
-      title: 'Giá vốn',
-      align: 'right',
-      sortable: true,
-      render: (s) => formatVnd(s.cost)
     },
     {
       key: 'price',
@@ -329,8 +301,13 @@ export function ProductsPage() {
         const profit = s.price - s.cost
         const percent = s.price > 0 ? (profit / s.price) * 100 : 0
         return (
-           <div style={{ fontSize: 13, fontWeight: 500, color: profit > 0 ? 'var(--success)' : 'var(--danger)' }}>
-              {percent.toFixed(1)}%
+           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: profit > 0 ? 'var(--success)' : 'var(--danger)' }}>
+                {percent.toFixed(1)}%
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                 {formatVnd(profit)}
+              </span>
            </div>
         )
       }
@@ -338,18 +315,19 @@ export function ProductsPage() {
     {
       key: 'status',
       title: 'Trạng thái',
+      width: 100,
       render: (s) => {
         const p = productObjById.get(s.productId)
-        if (p?.isHidden) return <span className="badge badge-neutral">Đang ẩn</span>
-        if (p?.active && s.active) return <span className="badge badge-success">Đang bán</span>
-        return <span className="badge badge-danger">Ngưng bán</span>
+        if (p?.isHidden) return <span className="badge badge-neutral">Ẩn</span>
+        if (p?.active && s.active) return <span className="badge badge-success">Bán</span>
+        return <span className="badge badge-danger">Ngưng</span>
       }
     },
     {
       key: 'actions',
       title: 'Thao tác',
       align: 'right',
-      width: 120,
+      width: 100,
       render: (s) => {
          if (!canWrite) return null
          const p = productObjById.get(s.productId)
@@ -361,21 +339,9 @@ export function ProductsPage() {
                   </button>
                 )}
                 <button className="btn btn-small" onClick={() => startEditSku(s)} title="Sửa SKU">
-                  <Edit size={14} />
+                  <Tag size={14} />
                 </button>
-                {p && (
-                   <button className="btn btn-small" onClick={() => startCreateSku(p.id)} title="Thêm biến thể">
-                     <Plus size={14} />
-                   </button>
-                 )}
-                 <button className="btn btn-small text-danger" onClick={() => removeSku(s.id)} title="Xóa SKU">
-                   <Trash2 size={14} />
-                 </button>
-                 {p && (
-                   <button className="btn btn-small text-danger" onClick={() => removeProduct(p.id)} title="Xóa sản phẩm">
-                     <Trash2 size={14} />
-                   </button>
-                 )}
+                {/* More actions could be in a dropdown menu */}
              </div>
           )
        }
@@ -484,29 +450,10 @@ export function ProductsPage() {
     setIsDrawerOpen(false)
   }
 
-  async function removeProduct(id: string) {
-    if (!canWrite) return
-    const ok = await dialogs.confirm({ message: 'Bạn có chắc chắn muốn xóa sản phẩm này?', dangerous: true })
-    if (!ok) return
-    dispatch({ type: 'products/delete', id })
-  }
-
   function startCreateSkuGlobal() {
     setEditingProductId(null)
     setEditingSkuId(null)
     setSkuForm(emptySkuForm)
-    setDrawerMode('sku')
-    setIsDrawerOpen(true)
-  }
-
-  function startCreateSku(forProductId: string) {
-    setEditingProductId(forProductId)
-    setEditingSkuId(null)
-    const p = state.products.find((x) => x.id === forProductId)
-    setSkuForm({
-      ...emptySkuForm,
-      skuCode: p ? `${p.internalCode}-` : '',
-    })
     setDrawerMode('sku')
     setIsDrawerOpen(true)
   }
@@ -577,13 +524,6 @@ export function ProductsPage() {
 
     dispatch({ type: 'skus/upsert', sku })
     setIsDrawerOpen(false)
-  }
-
-  async function removeSku(id: string) {
-    if (!canWrite) return
-    const ok = await dialogs.confirm({ message: 'Bạn có chắc chắn muốn xóa SKU này?', dangerous: true })
-    if (!ok) return
-    dispatch({ type: 'skus/delete', id })
   }
 
   // Import Functions
@@ -669,14 +609,11 @@ export function ProductsPage() {
   }
 
   return (
-    <div className="page">
-      <div style={{ marginBottom: 20 }}>
-        <h1 className="page-title">Quản lý sản phẩm</h1>
-        <div className="page-subtitle">Quản lý danh mục, sản phẩm và biến thể</div>
-      </div>
+    <div className="page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <PageHeader title="Quản lý sản phẩm" />
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border-color)', marginBottom: 24 }}>
+      <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border-color)', marginBottom: 24, padding: '0 20px' }}>
         {['Sản phẩm', 'Danh mục', 'Biến thể', 'Nhập hàng'].map((tab, idx) => {
           const key = ['products', 'categories', 'variants', 'import'][idx]
           const isActive = activeTab === key
@@ -700,192 +637,194 @@ export function ProductsPage() {
         })}
       </div>
 
-      {activeTab === 'products' && (
-      <div className="card" style={{ height: 'calc(100vh - 180px)', display: 'flex', flexDirection: 'column' }}>
-        <div className="card-title">
-           Danh sách sản phẩm
-           <div className="row">
-              <div className="badge badge-neutral">{skus.length} SKU</div>
-              {canWrite && (
-                <button className="btn btn-primary btn-small" onClick={startCreateProduct}>
-                  <Plus size={16} /> Thêm sản phẩm
-                </button>
-              )}
-           </div>
-        </div>
-        
-        <AdvancedFilter
-          filters={filterDefs}
-          values={filterValues}
-          onChange={setFilterValues}
-          onSearchChange={(text) => setFilterValues(prev => ({ ...prev, search: text }))}
-          searchValue={search}
-        />
-
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <SmartTable
-            columns={columns}
-            data={skus}
-            keyField="id"
-            emptyText="Không tìm thấy sản phẩm nào"
-            sort={sortConfig}
-            onSort={setSortConfig}
-          />
-        </div>
-      </div>
-      )}
-
-      {activeTab === 'categories' && (
-        <div className="card">
-          <div className="card-title">Quản lý danh mục</div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Tên danh mục</th>
-                  <th>Số sản phẩm</th>
-                  <th>Tổng tồn kho</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.categories.map(c => (
-                  <tr key={c.id}>
-                    <td>{c.name}</td>
-                    <td>{state.products.filter(p => p.categoryId === c.id).length} sản phẩm</td>
-                    <td>{inventoryByCategory.get(c.id) ?? 0}</td>
-                  </tr>
-                ))}
-                 {state.categories.length === 0 && (
-                  <tr>
-                    <td colSpan={3} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Chưa có danh mục nào</td>
-                  </tr>
+      <div style={{ flex: 1, minHeight: 0, padding: '0 20px 20px' }}>
+        {activeTab === 'products' && (
+        <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div className="card-title">
+             Danh sách sản phẩm
+             <div className="row">
+                <div className="badge badge-neutral">{skus.length} SKU</div>
+                {canWrite && (
+                  <button className="btn btn-primary btn-small" onClick={startCreateProduct}>
+                    <Plus size={16} /> Thêm sản phẩm
+                  </button>
                 )}
-              </tbody>
-            </table>
+             </div>
+          </div>
+          
+          <AdvancedFilter
+            filters={filterDefs}
+            values={filterValues}
+            onChange={setFilterValues}
+            onSearchChange={(text) => setFilterValues(prev => ({ ...prev, search: text }))}
+            searchValue={search}
+          />
+
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <SmartTable
+              columns={columns}
+              data={skus}
+              keyField="id"
+              emptyText="Không tìm thấy sản phẩm nào"
+              sort={sortConfig}
+              onSort={setSortConfig}
+            />
           </div>
         </div>
-      )}
+        )}
 
-      {activeTab === 'variants' && (
-         <div className="card">
-            <div className="card-title">
-              <div>
-                Quản lý biến thể (Nhanh)
-                <div className="text-muted" style={{ fontWeight: 400, fontSize: 13 }}>Cập nhật nhanh giá và tồn kho</div>
-              </div>
-              {canWrite && (
-                <div className="row">
-                  <button className="btn btn-primary btn-small" onClick={startCreateSkuGlobal}>
-                    <Plus size={16} /> Thêm biến thể
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
+        {activeTab === 'categories' && (
+          <div className="card">
+            <div className="card-title">Quản lý danh mục</div>
+            <div className="table-wrap">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Sản phẩm</th>
-                    <th>SKU</th>
-                    <th>Màu / Size</th>
-                    <th>Giá vốn</th>
-                    <th>Giá bán</th>
-                    <th>Tồn kho</th>
-                    <th style={{ width: 50 }}></th>
+                    <th>Tên danh mục</th>
+                    <th>Số sản phẩm</th>
+                    <th>Tổng tồn kho</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {skus.map((s) => {
-                    const p = productObjById.get(s.productId)
-                    const qty = availableQtyBySkuId.get(s.id) ?? 0
-                    return (
-                      <tr key={s.id}>
-                        <td style={{ fontWeight: 500 }}>{p?.name}</td>
-                        <td><span className="badge badge-neutral">{s.skuCode}</span></td>
-                        <td>{s.color} {s.size ? `/ ${s.size}` : ''}</td>
-                        <td>{formatVnd(s.cost)}</td>
-                        <td style={{ fontWeight: 600, color: 'var(--success)' }}>{formatVnd(s.price)}</td>
-                        <td>{qty}</td>
-                        <td>
-                           <button className="btn btn-small" onClick={() => startEditSku(s)}>
-                             <Edit size={14} />
-                           </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {state.categories.map(c => (
+                    <tr key={c.id}>
+                      <td>{c.name}</td>
+                      <td>{state.products.filter(p => p.categoryId === c.id).length} sản phẩm</td>
+                      <td>{inventoryByCategory.get(c.id) ?? 0}</td>
+                    </tr>
+                  ))}
+                   {state.categories.length === 0 && (
+                    <tr>
+                      <td colSpan={3} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Chưa có danh mục nào</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
-         </div>
-      )}
+          </div>
+        )}
 
-      {activeTab === 'import' && (
-         <div className="card">
-            <div className="card-title">Nhập hàng từ Excel</div>
-            
-            {importStep === 'upload' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: 40, border: '2px dashed var(--border-color)', borderRadius: 16 }}>
-                <div style={{ background: 'var(--primary-50)', padding: 20, borderRadius: '50%' }}>
-                  <FileSpreadsheet size={48} color="var(--primary-600)" />
+        {activeTab === 'variants' && (
+           <div className="card">
+              <div className="card-title">
+                <div>
+                  Quản lý biến thể (Nhanh)
+                  <div className="text-muted" style={{ fontWeight: 400, fontSize: 13 }}>Cập nhật nhanh giá và tồn kho</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <h3 style={{ margin: '0 0 8px' }}>Tải lên file danh sách sản phẩm</h3>
-                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>Hỗ trợ định dạng .xlsx, .xls</p>
-                </div>
-                
-                <div className="row">
-                  <button className="btn" onClick={downloadTemplate}>
-                    <Download size={16} /> Tải file mẫu
-                  </button>
-                  <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
-                    <Upload size={16} /> Chọn file
-                  </button>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    style={{ display: 'none' }} 
-                    accept=".xlsx, .xls"
-                    onChange={handleFileUpload}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div>
-                <div className="row-between" style={{ marginBottom: 16 }}>
-                  <div>
-                    <strong>Xem trước dữ liệu</strong> ({importData.length} dòng)
-                  </div>
+                {canWrite && (
                   <div className="row">
-                    <button className="btn" onClick={() => { setImportData([]); setImportStep('upload') }}>Hủy bỏ</button>
-                    <button className="btn btn-primary" onClick={processImport}>Tiến hành nhập</button>
+                    <button className="btn btn-primary btn-small" onClick={startCreateSkuGlobal}>
+                      <Plus size={16} /> Thêm biến thể
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="table-wrap" style={{ maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Sản phẩm</th>
+                      <th>SKU</th>
+                      <th>Màu / Size</th>
+                      <th>Giá vốn</th>
+                      <th>Giá bán</th>
+                      <th>Tồn kho</th>
+                      <th style={{ width: 50 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {skus.map((s) => {
+                      const p = productObjById.get(s.productId)
+                      const qty = availableQtyBySkuId.get(s.id) ?? 0
+                      return (
+                        <tr key={s.id}>
+                          <td style={{ fontWeight: 500 }}>{p?.name}</td>
+                          <td><span className="badge badge-neutral">{s.skuCode}</span></td>
+                          <td>{s.color} {s.size ? `/ ${s.size}` : ''}</td>
+                          <td>{formatVnd(s.cost)}</td>
+                          <td style={{ fontWeight: 600, color: 'var(--success)' }}>{formatVnd(s.price)}</td>
+                          <td>{qty}</td>
+                          <td>
+                             <button className="btn btn-small" onClick={() => startEditSku(s)}>
+                               <Edit size={14} />
+                             </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'import' && (
+           <div className="card">
+              <div className="card-title">Nhập hàng từ Excel</div>
+              
+              {importStep === 'upload' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: 40, border: '2px dashed var(--border-color)', borderRadius: 16 }}>
+                  <div style={{ background: 'var(--primary-50)', padding: 20, borderRadius: '50%' }}>
+                    <FileSpreadsheet size={48} color="var(--primary-600)" />
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <h3 style={{ margin: '0 0 8px' }}>Tải lên file danh sách sản phẩm</h3>
+                    <p style={{ color: 'var(--text-muted)', margin: 0 }}>Hỗ trợ định dạng .xlsx, .xls</p>
+                  </div>
+                  
+                  <div className="row">
+                    <button className="btn" onClick={downloadTemplate}>
+                      <Download size={16} /> Tải file mẫu
+                    </button>
+                    <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
+                      <Upload size={16} /> Chọn file
+                    </button>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      style={{ display: 'none' }} 
+                      accept=".xlsx, .xls"
+                      onChange={handleFileUpload}
+                    />
                   </div>
                 </div>
-                <div className="table-wrap" style={{ maxHeight: 400, overflowY: 'auto' }}>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        {importData.length > 0 && Object.keys(importData[0]).map((key) => (
-                          <th key={key}>{key}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {importData.map((row, idx) => (
-                        <tr key={idx}>
-                          {Object.values(row).map((val, i) => (
-                            <td key={i}>{typeof val === 'string' || typeof val === 'number' ? String(val) : ''}</td>
+              ) : (
+                <div>
+                  <div className="row-between" style={{ marginBottom: 16 }}>
+                    <div>
+                      <strong>Xem trước dữ liệu</strong> ({importData.length} dòng)
+                    </div>
+                    <div className="row">
+                      <button className="btn" onClick={() => { setImportData([]); setImportStep('upload') }}>Hủy bỏ</button>
+                      <button className="btn btn-primary" onClick={processImport}>Tiến hành nhập</button>
+                    </div>
+                  </div>
+                  <div className="table-wrap" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          {importData.length > 0 && Object.keys(importData[0]).map((key) => (
+                            <th key={key}>{key}</th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {importData.map((row, idx) => (
+                          <tr key={idx}>
+                            {Object.values(row).map((val, i) => (
+                              <td key={i}>{typeof val === 'string' || typeof val === 'number' ? String(val) : ''}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )}
-         </div>
-      )}
+              )}
+           </div>
+        )}
+      </div>
 
       {/* Drawer Form */}
       <Drawer
@@ -1193,7 +1132,6 @@ export function ProductsPage() {
             {skuForm.kind === 'bundle' && (
                <div style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
                   <div style={{ marginBottom: 12, fontWeight: 600 }}>Thành phần combo</div>
-                  {/* Reuse table logic for components if needed, simplified for drawer */}
                    <div className="field">
                       <div className="text-muted" style={{ fontSize: 13, fontStyle: 'italic' }}>
                         (Chức năng chỉnh sửa thành phần combo trong Drawer đang được hoàn thiện. Vui lòng sử dụng giao diện cũ nếu cần chỉnh sửa phức tạp)

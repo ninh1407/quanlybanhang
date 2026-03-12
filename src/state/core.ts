@@ -16,6 +16,7 @@ import type {
   Supplier,
   User,
   InventoryRequest,
+  AppDocument,
 } from '../domain/types'
 import type { AppActionWithMeta as AppAction, AppState, WarehouseState } from './types'
 import { createEmptyWarehouseState } from './seed'
@@ -408,6 +409,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, allocationRules: upsertById(state.allocationRules, action.rule) }
     case 'allocationRules/delete':
       return { ...state, allocationRules: removeById(state.allocationRules, action.id) }
+    case 'documents/upsert':
+      return { ...state, documents: upsertById(state.documents, action.document) }
+    case 'documents/delete':
+      return { ...state, documents: removeById(state.documents, action.id) }
   }
   return state
 }
@@ -637,8 +642,8 @@ export function toAuditSnapshot(entityType: AuditLog['entityType'], entity: unkn
       return { name: c.name, createdAt: c.createdAt }
     }
     case 'location': {
-      const l = entity as unknown as { code?: string; name?: string; province?: string; active?: boolean; createdAt?: string }
-      return { code: l.code, name: l.name, province: l.province, active: l.active, createdAt: l.createdAt }
+      const l = entity as unknown as { code?: string; name?: string; province?: string; address?: string; lat?: number; lng?: number; active?: boolean; createdAt?: string }
+      return { code: l.code, name: l.name, province: l.province, address: l.address, lat: l.lat, lng: l.lng, active: l.active, createdAt: l.createdAt }
     }
     case 'user': {
       const u = entity as User
@@ -657,6 +662,17 @@ export function toAuditSnapshot(entityType: AuditLog['entityType'], entity: unkn
             updatedAt: r.updatedAt
         }
     }
+    case 'document': {
+        const d = entity as AppDocument
+        return {
+            code: d.code,
+            name: d.name,
+            type: d.type,
+            size: d.size,
+            status: d.status,
+            createdAt: d.createdAt
+        }
+    }
   }
 }
 
@@ -672,21 +688,52 @@ export function createAuditLog(prev: AppState, next: AppState, action: AppAction
       // Determine action type
       let auditAction: AuditLog['action'] = before ? 'update' : 'create'
       
-      // If status changed to approved/rejected, we can consider it an "update" but maybe we want to highlight it?
-      // For now 'update' is fine, the details will show the status change.
-      
       return {
           id: newId('log'),
           actorUserId,
           action: auditAction,
-          entityType: 'request' as any, // Need to add 'request' to AuditEntityType
+          entityType: 'request',
           entityId: after.id,
           entityCode: after.code,
-          before: before ? toAuditSnapshot('request' as any, before) : undefined,
-          after: toAuditSnapshot('request' as any, after),
+          before: before ? toAuditSnapshot('request', before) : undefined,
+          after: toAuditSnapshot('request', after),
           reason,
           createdAt: nowIso()
       }
+  }
+
+  if (action.type === 'documents/upsert') {
+    const before = prev.documents.find((d) => d.id === action.document.id) ?? null
+    const after = next.documents.find((d) => d.id === action.document.id) ?? null
+    if (!after) return null
+    return {
+      id: newId('log'),
+      actorUserId,
+      action: before ? 'update' : 'create',
+      entityType: 'document',
+      entityId: after.id,
+      entityCode: after.code,
+      before: before ? toAuditSnapshot('document', before) : undefined,
+      after: toAuditSnapshot('document', after),
+      reason,
+      createdAt: nowIso(),
+    }
+  }
+
+  if (action.type === 'documents/delete') {
+    const before = prev.documents.find((d) => d.id === action.id) ?? null
+    if (!before) return null
+    return {
+      id: newId('log'),
+      actorUserId,
+      action: 'delete',
+      entityType: 'document',
+      entityId: before.id,
+      entityCode: before.code,
+      before: toAuditSnapshot('document', before),
+      reason,
+      createdAt: nowIso(),
+    }
   }
 
   if (action.type === 'stockVouchers/upsert') {

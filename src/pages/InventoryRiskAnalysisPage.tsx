@@ -12,9 +12,12 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts'
+import { Tag, Truck } from 'lucide-react'
 import { useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { formatVnd } from '../lib/money'
+import { useDialogs } from '../ui-kit/Dialogs'
+import { useNavigate } from 'react-router-dom'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8']
 
@@ -60,7 +63,17 @@ function averageCostFromSortedTxs(txs: StockTransaction[]): number {
 
 export function InventoryRiskAnalysisPage() {
   const state = useAppState()
+  const dialogs = useDialogs()
+  const navigate = useNavigate()
   const productsById = useMemo(() => new Map((state.products || []).map((p) => [p.id, p.name])), [state.products])
+
+  function handleCreatePromo(sku: Sku) {
+      dialogs.alert({ message: `Tạo khuyến mãi cho SKU ${sku.skuCode} - Tính năng đang phát triển` })
+  }
+
+  function handleTransfer(_sku: Sku) {
+      navigate('/transfers')
+  }
 
   // 1. Calculate Stock & Average Cost per SKU
   const skuStats = useMemo(() => {
@@ -202,21 +215,21 @@ export function InventoryRiskAnalysisPage() {
       <PageHeader title="Phân tích rủi ro tồn kho (Inventory Risk Center)" />
 
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, marginBottom: 24 }}>
-        <div className="card">
+        <div className="card" style={{ borderLeft: '4px solid var(--danger)' }}>
             <div className="card-title">Tổng giá trị tồn kho chết ({'>'}30 ngày)</div>
             <div className="stat-value" style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--danger)' }}>
                 {formatVnd(totalDeadStockValue)}
             </div>
             <div className="stat-desc">Vốn bị chôn trong hàng không bán được</div>
         </div>
-        <div className="card">
+        <div className="card" style={{ borderLeft: '4px solid var(--warning)' }}>
             <div className="card-title">Tổng giá trị thất thoát (Shrinkage)</div>
             <div className="stat-value" style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--warning)' }}>
                 {formatVnd(totalShrinkageValue)}
             </div>
             <div className="stat-desc">Do điều chỉnh kho, mất mát, hư hỏng</div>
         </div>
-        <div className="card">
+        <div className="card" style={{ borderLeft: '4px solid var(--info-600)' }}>
             <div className="card-title">Tồn kho vượt mức (Overstock {'>'} 200%)</div>
             <div className="stat-value" style={{ fontSize: 24, fontWeight: 'bold', color: 'var(--info-600)' }}>
                 {formatVnd(totalOverstockValue)}
@@ -228,7 +241,7 @@ export function InventoryRiskAnalysisPage() {
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
         <div className="card">
             <div className="card-title">Phân bổ tồn kho chết theo thời gian</div>
-            <div style={{ height: 300 }}>
+            <div style={{ height: 400 }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={deadStockData}>
                         <CartesianGrid strokeDasharray="3 3" />
@@ -248,7 +261,7 @@ export function InventoryRiskAnalysisPage() {
 
         <div className="card">
             <div className="card-title">Top 10 Sản phẩm thất thoát cao nhất</div>
-             <div style={{ height: 300 }}>
+             <div style={{ height: 400 }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart layout="vertical" data={shrinkageData} margin={{ left: 50 }}>
                         <CartesianGrid strokeDasharray="3 3" />
@@ -274,6 +287,7 @@ export function InventoryRiskAnalysisPage() {
                           <th>Tỷ lệ</th>
                           <th>Giá trị tồn dư</th>
                           <th>Gợi ý</th>
+                          <th />
                       </tr>
                   </thead>
                   <tbody>
@@ -289,10 +303,16 @@ export function InventoryRiskAnalysisPage() {
                                       Giảm giá / Flash Sale
                                   </span>
                               </td>
+                              <td>
+                                  <button className="btn btn-small btn-primary" onClick={() => handleCreatePromo(item.sku)}>
+                                      <Tag size={14} style={{ marginRight: 4 }} />
+                                      Tạo KM
+                                  </button>
+                              </td>
                           </tr>
                       ))}
                       {overstockData.length === 0 && (
-                          <tr><td colSpan={6} style={{ textAlign: 'center' }}>Không có SKU nào vượt mức báo động</td></tr>
+                          <tr><td colSpan={7} style={{ textAlign: 'center' }}>Không có SKU nào vượt mức báo động</td></tr>
                       )}
                   </tbody>
               </table>
@@ -309,6 +329,7 @@ export function InventoryRiskAnalysisPage() {
                           <th>Số ngày tồn</th>
                           <th>Số lượng</th>
                           <th>Giá trị</th>
+                          <th>Hành động</th>
                       </tr>
                   </thead>
                   <tbody>
@@ -318,11 +339,23 @@ export function InventoryRiskAnalysisPage() {
                               <td>{item.days} ngày</td>
                               <td>{item.stock}</td>
                               <td>{formatVnd(item.value)}</td>
+                              <td>
+                                  <div className="row" style={{ gap: 8 }}>
+                                      <button className="btn btn-small" onClick={() => handleCreatePromo(item.sku)}>
+                                          <Tag size={14} style={{ marginRight: 4 }} />
+                                          KM
+                                      </button>
+                                      <button className="btn btn-small btn-primary" onClick={() => handleTransfer(item.sku)}>
+                                          <Truck size={14} style={{ marginRight: 4 }} />
+                                          Chuyển
+                                      </button>
+                                  </div>
+                              </td>
                           </tr>
                       ))}
                       {deadStockData[2].skus.length === 0 && (
                           <tr>
-                              <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                              <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
                                   Không có dữ liệu
                               </td>
                           </tr>

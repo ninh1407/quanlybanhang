@@ -98,7 +98,8 @@ function calculateLocationStats(
       stockBySku,
       pendingOrders,
       discrepancyAmount,
-      shortagePercent
+      shortagePercent,
+      activeSkuCount
   }
 }
 
@@ -262,8 +263,8 @@ function WarehouseDetailModal({
                              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--danger)' }}>{formatVnd(stats.discrepancyAmount)}</div>
                          </div>
                          <div style={{ background: 'var(--bg-subtle)', padding: 12, borderRadius: 8 }}>
-                             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Tổng sản phẩm</div>
-                             <div style={{ fontSize: 18, fontWeight: 700 }}>{stats.totalQty}</div>
+                             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>SKU / Tổng tồn</div>
+                             <div style={{ fontSize: 18, fontWeight: 700 }}>{stats.activeSkuCount} <span style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 400 }}>/ {stats.totalQty}</span></div>
                          </div>
                     </div>
 
@@ -408,9 +409,25 @@ export function WarehouseControlTowerPage() {
 
       {/* Map / Grid View */}
       <div style={{ marginBottom: 24 }}>
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-             <LayoutGrid size={20} /> Bản đồ kho theo khu vực
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+                <LayoutGrid size={20} /> Bản đồ kho theo khu vực
+            </h3>
+            <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--success)' }}></div>
+                    <span>Ổn định</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--warning)' }}></div>
+                    <span>Cảnh báo tồn</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--danger)' }}></div>
+                    <span>Rủi ro / Lệch</span>
+                </div>
+            </div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24 }}>
               {Array.from(locationsByProvince.entries()).map(([province, locs]) => (
                   <div key={province} style={{ background: 'var(--bg-subtle)', padding: 16, borderRadius: 12 }}>

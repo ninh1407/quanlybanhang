@@ -337,6 +337,7 @@ export function DashboardPage() {
     const lateOrders = currentOrders.filter(o => o.status === 'delivered' && (o.items || []).length > 10).length // Mock
     const lateRate = totalOrders > 0 ? (lateOrders / totalOrders) * 100 : 0
     const fulfillmentRate = totalOrders > 0 ? ((totalOrders - cancelledOrders) / totalOrders) * 100 : 100
+    const pendingOrdersCount = currentOrders.filter(o => ['confirmed', 'paid', 'picking', 'packed'].includes(o.status)).length
 
     // History
     const history = []
@@ -379,7 +380,8 @@ export function DashboardPage() {
          expense,
          inventoryCount,
          inventoryLow,
-         stockMap
+         stockMap,
+         pendingOrdersCount
      }
    }, [state.orders, state.skus, state.stockTransactions, state.financeTransactions, state.debts, filter])
 
@@ -736,6 +738,11 @@ export function DashboardPage() {
             status="warning"
         />
         <SmartMetricCard 
+            label="Đơn chờ xử lý" 
+            value={`${metrics.pendingOrdersCount}`} 
+            status={metrics.pendingOrdersCount > 10 ? 'warning' : 'success'}
+        />
+        <SmartMetricCard 
             label="Tỷ lệ Xử lý đơn" 
             value={apiKpi ? `${apiKpi.fulfillmentRate}%` : 'Loading...'} 
             status="success"
@@ -890,7 +897,13 @@ export function DashboardPage() {
       {/* 5. Alerts Row */}
       <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-title">Cảnh báo & Việc cần làm</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, padding: '0 20px 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, padding: '0 20px 20px' }}>
+              <AlertItem 
+                label="Dự báo thiếu hàng (AI)" 
+                value="Xem chi tiết" 
+                type="danger" 
+                onClick={() => navigate('/replenishment')}
+              />
               <AlertItem 
                 label="Tồn kho < 30%" 
                 value={`${metrics.inventoryLow} SKU`} 

@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
-import { useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { useAppState } from '../state/Store'
+import { useAppState, useAppDispatch } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { Sku, TransferOrder } from '../domain/types'
 import { subDays, parseISO } from 'date-fns'
-import { ArrowRight, Truck } from 'lucide-react'
+import { ArrowRight, Truck, TrendingUp, AlertTriangle, Package, DollarSign } from 'lucide-react'
 import { newId } from '../lib/id'
 import { nowIso } from '../lib/date'
 import { useAuth } from '../auth/auth'
 import { useDialogs } from '../ui-kit/Dialogs'
+import { formatVnd } from '../lib/money'
 
 function skuLabel(productsById: Map<string, string>, sku: Sku): string {
   const productName = productsById.get(sku.productId) ?? sku.productId
@@ -19,7 +19,7 @@ function skuLabel(productsById: Map<string, string>, sku: Sku): string {
 
 export function InventoryBalancingPage() {
   const state = useAppState()
-  const dispatch = useDispatch()
+  const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const { user } = useAuth()
   const dialogs = useDialogs()
@@ -110,8 +110,10 @@ export function InventoryBalancingPage() {
   }, [state.stockTransactions, state.orders, state.skus, locations])
 
   // 2. Identify Opportunities
-  const suggestions = useMemo(() => {
+  const { list: suggestions, stats } = useMemo(() => {
       const list: { sku: Sku; from: string; to: string; qty: number; reason: string }[] = []
+      const shortageLocsSet = new Set<string>()
+      const excessLocsSet = new Set<string>()
 
       analysis.forEach((locMap, skuId) => {
           const sku = state.skus.find(s => s.id === skuId)
@@ -127,12 +129,14 @@ export function InventoryBalancingPage() {
               const excessThreshold = Math.max(10, d.sales30d * 2)
               if (d.stock > excessThreshold) {
                   excessLocs.push({ id: locId, qty: d.stock - excessThreshold })
+                  excessLocsSet.add(locId)
               }
 
               // Rule: Shortage if Stock < Sales * 0.5 (safety) AND Sales > 0
               const shortageThreshold = Math.max(5, d.sales30d * 0.5)
               if (d.stock < shortageThreshold && d.sales30d > 0) {
                   shortageLocs.push({ id: locId, qty: shortageThreshold - d.stock })
+                  shortageLocsSet.add(locId)
               }
           })
 
@@ -159,33 +163,71 @@ export function InventoryBalancingPage() {
           })
       })
 
-      return list
+      const totalValue = list.reduce((acc, item) => acc + (item.qty * (item.sku.cost || 0)), 0)
+
+      return {
+          list,
+          stats: {
+              shortageLocCount: shortageLocsSet.size,
+              excessLocCount: excessLocsSet.size,
+              skuCount: list.length,
+              totalValue
+          }
+      }
   }, [analysis, state.skus])
 
   return (
     <div className="page">
       <PageHeader title="Cân bằng kho (Inventory Balancing)" />
 
-      <div className="dashboard-grid" style={{ marginBottom: 24 }}>
+      <div className="dashboard-grid" style={{ marginBottom: 24, gridTemplateColumns: 'repeat(4, 1fr)' }}>
           <div className="card">
-              <div className="card-title">Gợi ý điều chuyển</div>
-              <div className="stat-value">{suggestions.length}</div>
-              <div className="stat-desc">Đề xuất dựa trên sức bán và tồn kho hiện tại</div>
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AlertTriangle size={18} className="text-danger" />
+                  Kho thiếu hàng
+              </div>
+              <div className="stat-value text-danger">{stats.shortageLocCount}</div>
+              <div className="stat-desc">Số kho đang dưới định mức an toàn</div>
+          </div>
+          <div className="card">
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <TrendingUp size={18} className="text-warning" />
+                  Kho dư hàng
+              </div>
+              <div className="stat-value text-warning">{stats.excessLocCount}</div>
+              <div className="stat-desc">Số kho tồn vượt quá nhu cầu bán</div>
+          </div>
+          <div className="card">
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Package size={18} className="text-primary" />
+                  SKU cần điều chuyển
+              </div>
+              <div className="stat-value text-primary">{stats.skuCount}</div>
+              <div className="stat-desc">Số mã hàng có thể cân bằng ngay</div>
+          </div>
+          <div className="card">
+              <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <DollarSign size={18} className="text-success" />
+                  Giá trị tồn cần cân bằng
+              </div>
+              <div className="stat-value text-success">{formatVnd(stats.totalValue)}</div>
+              <div className="stat-desc">Tối ưu dòng tiền chết</div>
           </div>
       </div>
 
       <div className="card">
-        <div className="card-title">Chi tiết đề xuất</div>
+        <div className="card-title">Chi tiết đề xuất điều chuyển</div>
         <div className="table-wrap">
           <table className="table">
             <thead>
               <tr>
-                <th>SKU</th>
-                <th>Từ Kho (Dư)</th>
+                <th>SKU / Sản phẩm</th>
+                <th>Kho dư</th>
                 <th />
-                <th>Đến Kho (Thiếu)</th>
-                <th>Số lượng</th>
-                <th>Lý do</th>
+                <th>Kho thiếu</th>
+                <th>SL chuyển</th>
+                <th>Giá trị</th>
+                <th>Ghi chú</th>
                 <th />
               </tr>
             </thead>
@@ -193,6 +235,7 @@ export function InventoryBalancingPage() {
               {suggestions.map((s, idx) => {
                   const fromLoc = locations.find(l => l.id === s.from)
                   const toLoc = locations.find(l => l.id === s.to)
+                  const value = s.qty * (s.sku.cost || 0)
                   return (
                       <tr key={idx}>
                           <td>{skuLabel(productsById, s.sku)}</td>
@@ -204,11 +247,12 @@ export function InventoryBalancingPage() {
                               <span className="badge badge-success">{toLoc?.name}</span>
                           </td>
                           <td style={{ fontWeight: 'bold' }}>{s.qty}</td>
-                          <td>{s.reason}</td>
+                          <td>{formatVnd(value)}</td>
+                          <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{s.reason}</td>
                           <td>
                               <button className="btn btn-small btn-primary" onClick={() => createTransfer(s)}>
                                   <Truck size={14} style={{ marginRight: 4 }} />
-                                  Tạo phiếu chuyển
+                                  Chuyển hàng
                               </button>
                           </td>
                       </tr>

@@ -3,28 +3,43 @@ import type { Location, User } from './types'
 export function userCanAccessLocation(user: User | null, locationId: string): boolean {
   if (!user) return false
   if (!user.active) return false
-  if (user.role === 'admin') return true
-  if (user.scope === 'all') return true
   
-  // Region logic (assuming locations have region/province matching user region)
-  // This is a placeholder as Location type doesn't have region field explicitly yet, just province
-  // if (user.scope === 'region' && user.region) {
-  //    const location = locations.find(l => l.id === locationId)
-  //    return location?.province === user.region
-  // }
+  // 1. Admin/CEO/Manager: Full access
+  if (['admin', 'ceo', 'manager'].includes(user.role)) return true
+  if (user.scope === 'all') return true
 
+  // 2. Accountant: Access if assigned or global scope (usually global)
+  if (user.role === 'accountant') return true 
+
+  // 3. Region Manager: Access if location is in allowed list OR matches region (todo)
+  if (user.role === 'region_manager') {
+      return (user.allowedLocationIds ?? []).includes(locationId)
+  }
+
+  // 4. Staff: Strict access check
+  if (user.role === 'staff') {
+      return (user.allowedLocationIds ?? []).includes(locationId)
+  }
+  
   return (user.allowedLocationIds ?? []).includes(locationId)
 }
 
 export function accessibleLocations(user: User | null, locations: Location[]): Location[] {
   const active = locations.filter((l) => l.active)
   if (!user) return []
-  if (user.role === 'admin') return active
+  
+  // 1. Admin/CEO/Manager: Full access
+  if (['admin', 'ceo', 'manager'].includes(user.role)) return active
   if (user.scope === 'all') return active
 
-  // if (user.scope === 'region' && user.region) {
-  //   return active.filter(l => l.province === user.region)
-  // }
+  // 2. Accountant: Full access (to see all financial data)
+  if (user.role === 'accountant') return active
+
+  // 3. Region Manager & Staff: Filter by allowedLocationIds
+  if (['region_manager', 'staff'].includes(user.role)) {
+      const allowed = user.allowedLocationIds ?? []
+      return active.filter((l) => allowed.includes(l.id))
+  }
 
   const allowed = user.allowedLocationIds ?? []
   return active.filter((l) => allowed.includes(l.id))

@@ -6,16 +6,13 @@ import type { Location, Sku, StockTransaction, StockTxType, StockTransactionAtta
 import { formatDateTime, nowIso } from '../lib/date'
 import { newId } from '../lib/id'
 import { formatVnd } from '../lib/money'
-import { exportCsv, exportXlsx } from '../lib/export'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { useDialogs } from '../ui-kit/Dialogs'
-import { Upload, X, Paperclip, Filter, CheckSquare, Square, MoreHorizontal, Printer } from 'lucide-react'
+import { CheckSquare, Square, Database, AlertTriangle, ArrowUp, LogIn, LogOut, RefreshCw } from 'lucide-react'
 import { useSettings } from '../settings/useSettings'
-import { validateAttachmentFiles } from '../lib/attachments'
 import { useListView } from '../ui-kit/listing/useListView'
 import { Pagination } from '../ui-kit/listing/Pagination'
-import { SavedViewsBar } from '../ui-kit/listing/SavedViewsBar'
 
 function skuLabel(productsById: Map<string, string>, sku: Sku): string {
   const productName = productsById.get(sku.productId) ?? sku.productId
@@ -97,6 +94,13 @@ const StockRow = memo(function StockRow(props: {
   onSelect: () => void
 }) {
   const { sku, productName, stock, avgCost, selected, onSelect } = props
+  
+  // Custom logic: >50 Green, 10-50 Yellow, <10 Red
+  let color = 'var(--text-main)'
+  if (stock > 50) color = 'var(--success)'
+  else if (stock >= 10) color = 'var(--warning-700)'
+  else color = 'var(--danger)'
+
   return (
     <tr className={selected ? 'tr-selected' : ''}>
       <td className="sticky-col-1" style={{ background: selected ? 'var(--primary-50)' : 'var(--bg-surface)' }}>
@@ -108,58 +112,18 @@ const StockRow = memo(function StockRow(props: {
         </div>
       </td>
       <td className="sticky-col-2" style={{ background: selected ? 'var(--primary-50)' : 'var(--bg-surface)' }}>
+         <div style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--primary-700)' }}>{sku.skuCode}</div>
+      </td>
+      <td>
         <div style={{ fontWeight: 500 }}>{productName}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sku.skuCode}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+             {sku.color} {sku.size ? `/ ${sku.size}` : ''}
+        </div>
       </td>
-      <td>{stock}</td>
-      <td>{formatVnd(avgCost)}</td>
+      <td>
+         <span style={{ fontWeight: 600, color }}>{stock}</span>
+      </td>
       <td>{formatVnd(stock * avgCost)}</td>
-    </tr>
-  )
-})
-
-const HistoryRow = memo(function HistoryRow(props: {
-  tx: StockTransaction
-  sku: Sku | undefined
-  loc: Location | null
-  productName: string
-}) {
-  const { tx, sku, loc, productName } = props
-  return (
-    <tr>
-      <td style={{ fontFamily: 'monospace' }}>{tx.code}</td>
-      <td>{formatDateTime(tx.createdAt)}</td>
-      <td>
-        {productName} {sku ? `(${sku.skuCode})` : tx.skuId}
-      </td>
-      <td>{loc ? loc.code : ''}</td>
-      <td>
-        <span className={`badge ${tx.type === 'in' ? 'badge-success' : tx.type === 'out' ? 'badge-warning' : 'badge-neutral'}`}>
-            {tx.type === 'in' ? 'Nhập' : tx.type === 'out' ? 'Xuất' : 'Điều chỉnh'}
-        </span>
-      </td>
-      <td style={{ fontWeight: 600, color: tx.type === 'out' ? 'var(--danger)' : 'var(--success)' }}>
-        {tx.type === 'out' ? -tx.qty : tx.qty}
-      </td>
-      <td>
-        <div>{tx.note}</div>
-        {tx.attachments && tx.attachments.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-            {tx.attachments.map(a => (
-              <a 
-                key={a.id} 
-                href={a.dataUrl} 
-                target="_blank" 
-                rel="noreferrer"
-                className="badge badge-neutral"
-                style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
-              >
-                <Paperclip size={12} /> {a.name}
-              </a>
-            ))}
-          </div>
-        )}
-      </td>
     </tr>
   )
 })
@@ -174,17 +138,11 @@ export function InventoryPage() {
   const [searchParams] = useSearchParams()
 
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
-  const categories = useMemo(() => state.categories, [state.categories])
-  const suppliers = useMemo(() => state.suppliers, [state.suppliers])
   const locations = useMemo(
     () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
     [state.locations],
   )
 
-  // Default to 'all' for location if user is admin/manager, else default to first location
-  // But useListView initializes state once.
-  // We can patch it in useEffect.
-  
   const { user } = useAuth()
   const defaultLocationId = (user?.role === 'admin' || user?.role === 'manager') ? 'all' : (locations[0]?.id ?? '')
 
@@ -202,7 +160,6 @@ export function InventoryPage() {
     },
   })
 
-  // Drill-down initialization
   useEffect(() => {
       const locId = searchParams.get('locationId')
       const stockLevel = searchParams.get('stockLevel')
@@ -211,9 +168,8 @@ export function InventoryPage() {
               locationId: locId || stockList.state.filters.locationId,
               stockLevel: (stockLevel as any) || 'all'
           })
-          if (stockLevel) setShowFilters(true)
       }
-  }, []) // Run once
+  }, []) 
 
   const historyList = useListView<StockHistoryFilters>('inventory:history', {
     q: '',
@@ -229,7 +185,6 @@ export function InventoryPage() {
     },
   })
 
-  const [showFilters, setShowFilters] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const skus = useMemo(
@@ -263,42 +218,10 @@ export function InventoryPage() {
   }, [settings.lowStockThresholdPercent, skus, soldPrevBySkuId, stockQtyBySkuId])
 
   const skusById = useMemo(() => new Map(state.skus.map((s) => [s.id, s])), [state.skus])
-  const locationsById = useMemo(() => new Map(state.locations.map((l) => [l.id, l])), [state.locations])
   const txs = useMemo(
     () => state.stockTransactions.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [state.stockTransactions],
   )
-
-  function exportStock(kind: 'csv' | 'xlsx') {
-    const rows = stockRows.map((r) => ({
-      SKU: r.label,
-      'Mã SKU': r.sku.skuCode,
-      Tồn: r.stock,
-      'Giá vốn TB': r.avgCost,
-      'Thành tiền': r.stock * r.avgCost,
-      'Vị trí': locationsById.get(locationId)?.code ?? '',
-    }))
-    const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
-    if (kind === 'csv') exportCsv(`ton-kho-${stamp}.csv`, rows)
-    else exportXlsx(`ton-kho-${stamp}.xlsx`, 'TonKho', rows)
-  }
-
-  function exportStockHistory(kind: 'csv' | 'xlsx') {
-    const rows = filteredHistoryTxs.map((t) => ({
-      'Mã': t.code,
-      Ngày: t.createdAt,
-      SKU: skusById.get(t.skuId)?.skuCode ?? t.skuId,
-      'Vị trí': t.locationId ? locationsById.get(t.locationId)?.code ?? '' : '',
-      Loại: t.type,
-      'Số lượng': t.qty,
-      'Giá nhập': t.unitCost ?? '',
-      'Ghi chú': t.note,
-      'Tham chiếu': `${t.refType}${t.refId ? `:${t.refId}` : ''}`,
-    }))
-    const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
-    if (kind === 'csv') exportCsv(`lich-su-kho-${stamp}.csv`, rows)
-    else exportXlsx(`lich-su-kho-${stamp}.xlsx`, 'LichSuKho', rows)
-  }
 
   const [skuId, setSkuId] = useState(skus[0]?.id ?? '')
   const locationId = stockList.state.filters.locationId
@@ -311,7 +234,6 @@ export function InventoryPage() {
 
   const stockQtyAtLocationBySkuId = (() => {
     const m = new Map<string, number>()
-    // If locationId is 'all' or empty, we sum all transactions
     state.stockTransactions.forEach((t) => {
       if (locationId && locationId !== 'all' && t.locationId !== locationId) return
       const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
@@ -319,28 +241,6 @@ export function InventoryPage() {
     })
     return m
   })()
-
-  const locationStats = useMemo(() => {
-    const locId = stockList.state.filters.locationId
-    const internalOrders = state.orders.filter(o => o.type === 'internal' && (o.status === 'shipped' || o.status === 'delivered' || o.status === 'paid'))
-    
-    let revenue = 0
-    let shippedQty = 0
-    
-    internalOrders.forEach(o => {
-      // Filter by location if selected
-      const oLocId = o.fulfillmentLocationId ?? locations.find(l => l.active)?.id
-      if (locId && oLocId !== locId) return
-
-      // Revenue
-      revenue += (o.subTotalOverride ?? o.items.reduce((s, i) => s + i.price * i.qty, 0)) - (Number(o.discountAmount) || 0)
-
-      // Shipped Qty
-      shippedQty += o.items.reduce((s, i) => s + i.qty, 0)
-    })
-
-    return { revenue, shippedQty }
-  }, [stockList.state.filters.locationId, state.orders, locations])
 
   const averageCostBySkuId = useMemo(() => {
     const grouped = new Map<string, StockTransaction[]>()
@@ -381,7 +281,7 @@ export function InventoryPage() {
             if (!(soldPrev > 0 && r.stock < soldPrev * threshold)) return false
         }
         if (stockLevel === 'negative' && r.stock >= 0) return false
-
+        
         if (!needle) return true
         return `${r.label} ${r.sku.skuCode}`.toLowerCase().includes(needle)
       })
@@ -443,41 +343,6 @@ export function InventoryPage() {
     return filteredHistoryTxs.slice(start, end)
   })()
 
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files?.length) return
-    const validated = validateAttachmentFiles(e.target.files)
-    if (!validated.ok) {
-      await dialogs.alert({ message: validated.error })
-      e.target.value = ''
-      return
-    }
-    const files = validated.files
-    const newAttachments: StockTransactionAttachment[] = []
-    
-    for (const file of files) {
-      const reader = new FileReader()
-      const p = new Promise<StockTransactionAttachment>((resolve) => {
-        reader.onload = (evt) => {
-          resolve({
-            id: newId('att'),
-            name: file.name,
-            dataUrl: evt.target?.result as string,
-            createdAt: nowIso()
-          })
-        }
-        reader.readAsDataURL(file)
-      })
-      newAttachments.push(await p)
-    }
-    
-    setAttachments(prev => [...prev, ...newAttachments])
-    e.target.value = '' 
-  }
-
-  function removeAttachment(id: string) {
-    setAttachments(prev => prev.filter(a => a.id !== id))
-  }
-
   function addTx() {
     if (!canWrite) return
     if (!skuId) return
@@ -530,423 +395,207 @@ export function InventoryPage() {
       }
   }
 
+  const stats = useMemo(() => {
+     const totalItems = skus.length
+     const totalStock = stockRows.reduce((acc, r) => acc + r.stock, 0)
+     const totalValue = stockRows.reduce((acc, r) => acc + (r.stock * r.avgCost), 0)
+     const lowStock = lowStockSkus.length
+     return { totalItems, totalStock, totalValue, lowStock }
+  }, [skus.length, stockRows, lowStockSkus.length])
+
   return (
-    <div className="page">
+    <div className="page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
       <PageHeader title="Quản lý kho" />
 
-      {/* Bulk Actions */}
-      {selectedIds.size > 0 && (
-          <div className="bulk-actions-bar" style={{ 
-              position: 'fixed', 
-              bottom: 24, 
-              left: '50%', 
-              transform: 'translateX(-50%)', 
-              background: 'var(--bg-surface)', 
-              boxShadow: 'var(--shadow-lg)',
-              padding: '8px 16px',
-              borderRadius: 32,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 16,
-              zIndex: 100,
-              border: '1px solid var(--border-color)'
-          }}>
-              <span style={{ fontWeight: 600 }}>{selectedIds.size} đã chọn</span>
-              <div style={{ height: 20, width: 1, background: 'var(--border-color)' }} />
-              <button className="btn btn-small btn-ghost" onClick={() => setSelectedIds(new Set())}>Bỏ chọn</button>
-              <button className="btn btn-small" onClick={() => dialogs.alert({ message: 'Tính năng In tem đang phát triển' })}>
-                  <Printer size={16} /> In tem
-              </button>
-              <button className="btn btn-small" onClick={() => dialogs.alert({ message: 'Tính năng Xuất kho nhanh đang phát triển' })}>
-                  <MoreHorizontal size={16} /> Thao tác
-              </button>
-          </div>
-      )}
-
-      <div className="row" style={{ marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn" onClick={() => exportStock('xlsx')}>
-          Xuất tồn Excel
-        </button>
-        <button className="btn" onClick={() => exportStock('csv')}>
-          Xuất tồn CSV
-        </button>
-        <button className="btn" onClick={() => exportStockHistory('xlsx')}>
-          Xuất lịch sử Excel
-        </button>
-        <button className="btn" onClick={() => exportStockHistory('csv')}>
-          Xuất lịch sử CSV
-        </button>
+      {/* KPI Cards */}
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+         <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ padding: 12, borderRadius: 12, background: 'var(--primary-50)', color: 'var(--primary-600)' }}>
+               <Database size={24} />
+            </div>
+            <div>
+               <div className="text-muted" style={{ fontSize: 13, fontWeight: 500 }}>Giá trị tồn kho</div>
+               <div style={{ fontSize: 20, fontWeight: 700 }}>{formatVnd(stats.totalValue)}</div>
+            </div>
+         </div>
+         <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ padding: 12, borderRadius: 12, background: 'var(--success-50)', color: 'var(--success-600)' }}>
+               <ArrowUp size={24} />
+            </div>
+            <div>
+               <div className="text-muted" style={{ fontSize: 13, fontWeight: 500 }}>Tổng số lượng</div>
+               <div style={{ fontSize: 20, fontWeight: 700 }}>{stats.totalStock}</div>
+            </div>
+         </div>
+         <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ padding: 12, borderRadius: 12, background: 'var(--info-50)', color: 'var(--info-600)' }}>
+               <AlertTriangle size={24} />
+            </div>
+            <div>
+               <div className="text-muted" style={{ fontSize: 13, fontWeight: 500 }}>Sản phẩm (SKU)</div>
+               <div style={{ fontSize: 20, fontWeight: 700 }}>{stats.totalItems}</div>
+            </div>
+         </div>
+         <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16, border: stats.lowStock > 0 ? '2px solid var(--warning)' : undefined }}>
+            <div style={{ padding: 12, borderRadius: 12, background: 'var(--warning-50)', color: 'var(--warning-600)' }}>
+               <AlertTriangle size={24} />
+            </div>
+            <div>
+               <div className="text-muted" style={{ fontSize: 13, fontWeight: 500 }}>Cảnh báo tồn thấp</div>
+               <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--warning-700)' }}>{stats.lowStock}</div>
+            </div>
+         </div>
       </div>
 
-      {lowStockSkus.length ? (
-        <div className="card">
-          <div className="card-title">Cảnh báo tồn kho thấp</div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>SKU</th>
-                  <th>Tồn</th>
-                  <th>Bán kỳ trước</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lowStockSkus.map((s) => {
-                  const stock = stockQtyBySkuId.get(s.id) ?? 0
-                  const soldPrev = soldPrevBySkuId.get(s.id) ?? 0
-                  return (
-                    <tr key={s.id}>
-                      <td>{skuLabel(productsById, s)}</td>
-                      <td>{stock}</td>
-                      <td>{soldPrev}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
-
-      {canWrite ? (
-        <div className="card">
-          <div className="card-title">Ghi nhận nhập/xuất/điều chỉnh</div>
-          <div className="grid-form">
-            <div className="field">
-              <label>SKU</label>
-              <select value={skuId} onChange={(e) => setSkuId(e.target.value)}>
-                {skus.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {skuLabel(productsById, s)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Vị trí kho</label>
-              <select value={locationId} onChange={(e) => stockList.patchFilters({ locationId: e.target.value })}>
-                {locations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {locationLabel(l)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Loại</label>
-              <select value={type} onChange={(e) => setType(e.target.value as StockTxType)}>
-                <option value="in">Nhập</option>
-                <option value="out">Xuất</option>
-                <option value="adjust">Điều chỉnh (+/-)</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Số lượng</label>
-              <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} />
-            </div>
-            <div className="field">
-              <label>Giá nhập</label>
-              <input
-                type="number"
-                value={unitCost}
-                onChange={(e) => setUnitCost(Number(e.target.value))}
-                disabled={type !== 'in'}
-              />
-            </div>
-            <div className="field">
-              <label>Ngày nhập</label>
-              <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
-            </div>
-            <div className="field">
-              <label>Ghi chú</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} />
-            </div>
-            <div className="field">
-                <label>Chứng từ / Ảnh</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <label className="btn btn-small" style={{ cursor: 'pointer' }}>
-                    <Upload size={14} /> Chọn file
-                    <input type="file" accept="image/*,application/pdf" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
-                  </label>
-                  <span className="text-muted" style={{ fontSize: 12 }}>
-                    {attachments.length} file đã chọn
-                  </span>
-                </div>
-                {attachments.length > 0 && (
-                   <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {attachments.map(a => (
-                        <div key={a.id} className="badge badge-neutral" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {a.name}
-                          <button 
-                            onClick={() => removeAttachment(a.id)}
-                            style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: 'var(--text-secondary)' }}
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                   </div>
-                )}
-            </div>
-          </div>
-          <div className="row">
-            <button className="btn btn-primary" onClick={addTx}>
-              Ghi nhận
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="card">
-        <div className="card-title">Tồn kho hiện tại</div>
-        <div className="row">
-            <div className="field" style={{ width: 280 }}>
-            <label>Vị trí kho</label>
-            <select value={locationId} onChange={(e) => stockList.patchFilters({ locationId: e.target.value })}>
-              {(user?.role === 'admin' || user?.role === 'manager') && <option value="all">Tất cả kho</option>}
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {locationLabel(l)}
-                </option>
-              ))}
-            </select>
-            {locationId && locationId !== 'all' && (
-              <div className="hint" style={{ marginTop: 4 }}>
-                <div>Doanh thu kho: <b>{formatVnd(locationStats.revenue)}</b></div>
-                <div>Số lượng xuất: <b>{locationStats.shippedQty}</b> sp</div>
+      {/* Main Content */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 16 }}>
+          {/* Left Panel: Current Stock */}
+          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div className="card-title">Tồn kho hiện tại</div>
+            <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <div className="field">
+                <select value={locationId} onChange={(e) => stockList.patchFilters({ locationId: e.target.value })} style={{ fontSize: 13, padding: '6px 8px' }}>
+                  {(user?.role === 'admin' || user?.role === 'manager') && <option value="all">Tất cả kho</option>}
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {locationLabel(l)}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
-          </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Tìm kiếm SKU</label>
-            <input
-              value={stockList.state.q}
-              onChange={(e) => stockList.patch({ q: e.target.value })}
-              placeholder="Tên, mã SKU…"
-            />
-          </div>
-          <div className="field" style={{ width: 120 }}>
-             <label>&nbsp;</label>
-             <button className={`btn ${showFilters ? 'btn-primary' : ''}`} onClick={() => setShowFilters(!showFilters)}>
-                 <Filter size={16} /> Bộ lọc
-             </button>
-          </div>
-          <div className="field" style={{ width: 150 }}>
-            <label>Sắp xếp</label>
-            <select value={stockList.state.sortKey} onChange={(e) => stockList.patch({ sortKey: e.target.value })}>
-              <option value="sku">SKU</option>
-              <option value="stock">Tồn</option>
-              <option value="avgCost">Giá vốn TB</option>
-            </select>
-          </div>
-          <div className="field" style={{ width: 150 }}>
-            <label>Saved views</label>
-            <SavedViewsBar
-              views={stockList.views}
-              onApply={stockList.applyView}
-              onSave={stockList.saveCurrentAs}
-              onDelete={stockList.deleteView}
-            />
-          </div>
-        </div>
-
-        {/* Advanced Filters Panel */}
-        {showFilters && (
-            <div className="filter-panel" style={{ padding: 16, background: 'var(--bg-subtle)', borderRadius: 8, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                <div className="field">
-                    <label>Danh mục</label>
-                    <select value={stockList.state.filters.categoryId} onChange={e => stockList.patchFilters({ categoryId: e.target.value })}>
-                        <option value="">Tất cả</option>
-                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                </div>
-                <div className="field">
-                    <label>Thương hiệu</label>
-                    <select value={stockList.state.filters.supplierId} onChange={e => stockList.patchFilters({ supplierId: e.target.value })}>
-                        <option value="">Tất cả</option>
-                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                </div>
-                <div className="field">
-                    <label>Trạng thái tồn</label>
-                    <select value={stockList.state.filters.stockLevel} onChange={e => stockList.patchFilters({ stockLevel: e.target.value as any })}>
-                        <option value="all">Tất cả</option>
-                        <option value="low">Cảnh báo thấp</option>
-                        <option value="negative">Kho âm</option>
-                        <option value="high">Tồn nhiều ({'>'}100)</option>
-                    </select>
-                </div>
-                <div className="field" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                    <button className="btn btn-ghost" onClick={() => stockList.patchFilters({ categoryId: '', supplierId: '', stockLevel: 'all' })}>
-                        Xóa bộ lọc
-                    </button>
-                </div>
+              <div className="field">
+                <input
+                  value={stockList.state.q}
+                  onChange={(e) => stockList.patch({ q: e.target.value })}
+                  placeholder="Tìm SKU..."
+                  style={{ fontSize: 13, padding: '6px 8px' }}
+                />
+              </div>
             </div>
-        )}
+            
+            <div className="table-wrap" style={{ flex: 1, minHeight: 0 }}>
+              <table className="table sticky-header">
+                <thead>
+                  <tr>
+                    <th className="sticky-col-1" style={{ width: 40 }}>
+                        <div onClick={toggleSelectAll} style={{ cursor: 'pointer' }}>
+                            {selectedIds.size > 0 ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </div>
+                    </th>
+                    <th className="sticky-col-2">SKU</th>
+                    <th>Sản phẩm</th>
+                    <th>Tồn</th>
+                    <th>Giá trị</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedStockRows.map((r) => (
+                    <StockRow
+                      key={r.sku.id}
+                      sku={r.sku}
+                      productName={productsById.get(r.sku.productId) ?? r.sku.productId}
+                      stock={r.stock}
+                      avgCost={r.avgCost}
+                      selected={selectedIds.has(r.sku.id)}
+                      onSelect={() => toggleSelect(r.sku.id)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            <Pagination
+              page={stockList.state.page}
+              pageSize={stockList.state.pageSize}
+              totalItems={stockRows.length}
+              onChangePage={(page) => stockList.patch({ page })}
+            />
+          </div>
 
-        <div className="table-wrap">
-          <table className="table sticky-header">
-            <thead>
-              <tr>
-                <th className="sticky-col-1" style={{ width: 48, textAlign: 'center' }}>
-                    <div 
-                        onClick={toggleSelectAll}
-                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                        {selectedIds.size === pagedStockRows.length && pagedStockRows.length > 0 ? (
-                            <CheckSquare size={18} color="var(--primary-600)" />
-                        ) : (
-                            <Square size={18} color="var(--text-muted)" />
+          {/* Right Panel: Add Transaction & History */}
+          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {canWrite && (
+              <div style={{ marginBottom: 16, borderBottom: '1px solid var(--border-color)', paddingBottom: 16 }}>
+                 <div className="card-title" style={{ fontSize: 14 }}>Nhập / Xuất nhanh</div>
+                 
+                 {/* Tabs for In/Out/Adjust */}
+                 <div className="tabs" style={{ marginBottom: 16 }}>
+                    <button className={`tab ${type === 'in' ? 'active' : ''}`} onClick={() => setType('in')}>
+                        <LogIn size={14} /> Nhập kho
+                    </button>
+                    <button className={`tab ${type === 'out' ? 'active' : ''}`} onClick={() => setType('out')}>
+                        <LogOut size={14} /> Xuất kho
+                    </button>
+                    <button className={`tab ${type === 'adjust' ? 'active' : ''}`} onClick={() => setType('adjust')}>
+                        <RefreshCw size={14} /> Điều chỉnh
+                    </button>
+                 </div>
+
+                 <div className="grid-form" style={{ gridTemplateColumns: '1fr', gap: 12 }}>
+                    <div className="field">
+                       <label style={{ fontSize: 11 }}>Sản phẩm (SKU)</label>
+                       <select value={skuId} onChange={(e) => setSkuId(e.target.value)} style={{ fontSize: 13, padding: '8px' }}>
+                         {skus.map((s) => (
+                           <option key={s.id} value={s.id}>{skuLabel(productsById, s)}</option>
+                         ))}
+                       </select>
+                    </div>
+                    <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div className="field">
+                           <label style={{ fontSize: 11 }}>Số lượng</label>
+                           <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} style={{ fontSize: 13, padding: '8px' }} />
+                        </div>
+                        {type === 'in' && (
+                             <div className="field">
+                               <label style={{ fontSize: 11 }}>Giá nhập</label>
+                               <input type="number" value={unitCost} onChange={(e) => setUnitCost(Number(e.target.value))} style={{ fontSize: 13, padding: '8px' }} />
+                            </div>
                         )}
                     </div>
-                </th>
-                <th className="sticky-col-2">SKU</th>
-                <th>Tồn</th>
-                <th>Giá vốn TB</th>
-                <th>Thành tiền</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedStockRows.map((r) => (
-                <StockRow
-                  key={r.sku.id}
-                  sku={r.sku}
-                  productName={productsById.get(r.sku.productId) ?? r.sku.productId}
-                  stock={r.stock}
-                  avgCost={r.avgCost}
-                  selected={selectedIds.has(r.sku.id)}
-                  onSelect={() => toggleSelect(r.sku.id)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <Pagination
-          page={stockList.state.page}
-          pageSize={stockList.state.pageSize}
-          totalItems={stockRows.length}
-          onChangePage={(page) => stockList.patch({ page })}
-          onChangePageSize={(pageSize) => stockList.patch({ pageSize })}
-        />
-      </div>
-
-      <div className="card">
-        <div className="card-title">Lịch sử</div>
-
-        <div className="grid-form" style={{ marginBottom: 12 }}>
-          <div className="field field-span-2">
-            <label>Tìm kiếm</label>
-            <input
-              value={historyList.state.q}
-              onChange={(e) => historyList.patch({ q: e.target.value })}
-              placeholder="Mã phiếu, SKU, ghi chú…"
-            />
+                    <div className="field">
+                        <label style={{ fontSize: 11 }}>Ghi chú</label>
+                        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ fontSize: 13, padding: '8px' }} />
+                    </div>
+                    <button className="btn btn-primary" onClick={addTx} style={{ height: 36 }}>
+                         {type === 'in' ? 'Nhập kho' : type === 'out' ? 'Xuất kho' : 'Cập nhật tồn'}
+                    </button>
+                 </div>
+              </div>
+            )}
+            
+            <div className="card-title" style={{ fontSize: 14 }}>Lịch sử gần đây</div>
+            <div className="table-wrap" style={{ flex: 1, minHeight: 0 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Ngày</th>
+                    <th>Loại</th>
+                    <th>SL</th>
+                    <th>SKU</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedHistoryTxs.slice(0, 15).map((t) => { // Show max 15 recent
+                    const sku = skusById.get(t.skuId)
+                    return (
+                      <tr key={t.id}>
+                        <td style={{ fontSize: 12 }} className="text-muted">{formatDateTime(t.createdAt)}</td>
+                        <td>
+                            <span className={`badge ${t.type === 'in' ? 'badge-success' : t.type === 'out' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: 10, padding: '2px 6px' }}>
+                                {t.type === 'in' ? 'Nhập' : t.type === 'out' ? 'Xuất' : 'ĐC'}
+                            </span>
+                        </td>
+                        <td style={{ fontWeight: 600, color: t.type === 'out' ? 'var(--danger)' : 'var(--success)' }}>
+                            {t.type === 'out' ? -t.qty : t.qty}
+                        </td>
+                        <td style={{ fontSize: 12 }}>{sku?.skuCode}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div className="field">
-            <label>Kho</label>
-            <select
-              value={historyList.state.filters.locationId}
-              onChange={(e) => historyList.patchFilters({ locationId: e.target.value as 'all' | string })}
-            >
-              <option value="all">Tất cả</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {locationLabel(l)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label>Loại</label>
-            <select
-              value={historyList.state.filters.type}
-              onChange={(e) => historyList.patchFilters({ type: e.target.value as 'all' | StockTxType })}
-            >
-              <option value="all">Tất cả</option>
-              <option value="in">Nhập</option>
-              <option value="out">Xuất</option>
-              <option value="adjust">Điều chỉnh</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>Từ ngày</label>
-            <input type="date" value={historyList.state.filters.from} onChange={(e) => historyList.patchFilters({ from: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Đến ngày</label>
-            <input type="date" value={historyList.state.filters.to} onChange={(e) => historyList.patchFilters({ to: e.target.value })} />
-          </div>
-          <div className="field">
-            <label>Sắp xếp</label>
-            <select value={historyList.state.sortKey} onChange={(e) => historyList.patch({ sortKey: e.target.value })}>
-              <option value="createdAt">Ngày</option>
-              <option value="code">Mã</option>
-              <option value="qty">Số lượng</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>Chiều</label>
-            <select value={historyList.state.sortDir} onChange={(e) => historyList.patch({ sortDir: e.target.value as 'asc' | 'desc' })}>
-              <option value="desc">Giảm dần</option>
-              <option value="asc">Tăng dần</option>
-            </select>
-          </div>
-          <div className="field field-span-2">
-            <label>Saved views</label>
-            <SavedViewsBar
-              views={historyList.views}
-              onApply={historyList.applyView}
-              onSave={historyList.saveCurrentAs}
-              onDelete={historyList.deleteView}
-            />
-          </div>
-          <div className="field">
-            <label>&nbsp;</label>
-            <button className="btn" onClick={historyList.reset}>
-              Reset
-            </button>
-          </div>
-        </div>
-
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Mã</th>
-                <th>Ngày</th>
-                <th>SKU</th>
-                <th>Vị trí</th>
-                <th>Loại</th>
-                <th>Số lượng</th>
-                <th>Ghi chú</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedHistoryTxs.map((t) => {
-                const sku = skusById.get(t.skuId)
-                const loc = t.locationId ? (locationsById.get(t.locationId) ?? null) : null
-                return (
-                  <HistoryRow
-                    key={t.id}
-                    tx={t}
-                    sku={sku}
-                    loc={loc}
-                    productName={sku ? (productsById.get(sku.productId) ?? sku.productId) : ''}
-                  />
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        <Pagination
-          page={historyList.state.page}
-          pageSize={historyList.state.pageSize}
-          totalItems={filteredHistoryTxs.length}
-          onChangePage={(page) => historyList.patch({ page })}
-          onChangePageSize={(pageSize) => historyList.patch({ pageSize })}
-        />
       </div>
       
       <style>{`

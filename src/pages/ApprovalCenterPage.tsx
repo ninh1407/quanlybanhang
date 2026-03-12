@@ -8,7 +8,11 @@ import {
   XCircle,
   ChevronRight,
   MapPin,
-  ArrowRight
+  ArrowRight,
+  Trash2,
+  Clock,
+  Check,
+  Flag
 } from 'lucide-react'
 import { InventoryRequest, InventoryRequestStatus, InventoryRequestType, StockVoucher, StockTransaction } from '../domain/types'
 import { formatDateTime, nowIso } from '../lib/date'
@@ -42,6 +46,68 @@ function typeLabel(type: InventoryRequestType) {
     case 'adjust': return 'Điều chỉnh'
     default: return type
   }
+}
+
+// Visual Stepper Component
+function RequestStepper({ status }: { status: InventoryRequestStatus }) {
+  const steps = [
+    { key: 'create', label: 'Tạo yêu cầu', icon: <Plus size={14} /> },
+    { key: 'pending', label: 'Chờ duyệt', icon: <Clock size={14} /> },
+    { key: 'approved', label: 'Đã duyệt', icon: <Check size={14} /> },
+    { key: 'completed', label: 'Hoàn tất', icon: <Flag size={14} /> }
+  ]
+
+  let activeIndex = 0
+  if (status.startsWith('pending')) activeIndex = 1
+  else if (status === 'approved') activeIndex = 2
+  // For this demo, we treat approved as completed unless we track execution status separately
+  if (status === 'approved') activeIndex = 3 
+  
+  if (status === 'rejected' || status === 'cancelled') {
+      return (
+          <div style={{ padding: '16px 0', display: 'flex', justifyContent: 'center' }}>
+              <span className={`badge ${status === 'rejected' ? 'badge-danger' : 'badge-neutral'}`} style={{ fontSize: 14, padding: '8px 16px' }}>
+                  {status === 'rejected' ? '❌ Đã từ chối' : '🚫 Đã hủy'}
+              </span>
+          </div>
+      )
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 0', position: 'relative' }}>
+      {/* Connector Line */}
+      <div style={{ position: 'absolute', top: 35, left: 40, right: 40, height: 2, background: 'var(--border-color)', zIndex: 0 }} />
+      <div style={{ position: 'absolute', top: 35, left: 40, right: 40, height: 2, background: 'var(--primary-500)', zIndex: 0, width: `${(activeIndex / (steps.length - 1)) * 100}%`, transition: 'width 0.3s' }} />
+
+      {steps.map((step, idx) => {
+        const isActive = idx <= activeIndex
+        const isCurrent = idx === activeIndex
+        return (
+          <div key={step.key} style={{ zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+             <div 
+                style={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: '50%', 
+                    background: isActive ? 'var(--primary-500)' : 'var(--bg-surface)',
+                    border: isActive ? 'none' : '2px solid var(--border-color)',
+                    color: isActive ? '#fff' : 'var(--text-muted)',
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    boxShadow: isCurrent ? '0 0 0 4px var(--primary-100)' : 'none'
+                }}
+             >
+                {step.icon}
+             </div>
+             <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, color: isActive ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                 {step.label}
+             </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function RequestRow({ request, onClick }: { request: InventoryRequest; onClick: () => void }) {
@@ -265,29 +331,24 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-        <div className="card" style={{ width: 600, maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
+        <div className="card" style={{ width: 650, maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
             <div style={{ padding: 16, borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0 }}>Chi tiết yêu cầu {request.code}</h3>
                 <button onClick={onClose} className="btn btn-ghost btn-small"><XCircle size={20} /></button>
             </div>
             
             <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+                
+                <RequestStepper status={request.status} />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, background: 'var(--bg-subtle)', padding: 16, borderRadius: 8 }}>
                     <div>
                         <label className="label-sm">Loại yêu cầu</label>
                         <div style={{ fontWeight: 500 }}>{typeLabel(request.type)}</div>
                     </div>
                     <div>
-                        <label className="label-sm">Trạng thái</label>
-                        <div>{statusLabel(request.status)}</div>
-                    </div>
-                    <div>
                         <label className="label-sm">Người tạo</label>
                         <div>{creator?.fullName}</div>
-                    </div>
-                    <div>
-                        <label className="label-sm">Ngày tạo</label>
-                        <div>{formatDateTime(request.createdAt)}</div>
                     </div>
                     <div>
                         <label className="label-sm">Kho</label>
@@ -299,6 +360,10 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
                             <div>{targetWarehouse.name}</div>
                         </div>
                     )}
+                    <div>
+                        <label className="label-sm">Ngày tạo</label>
+                        <div>{formatDateTime(request.createdAt)}</div>
+                    </div>
                 </div>
 
                 <h4 style={{ marginBottom: 12 }}>Danh sách hàng hóa</h4>
@@ -306,7 +371,8 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
                     <thead>
                         <tr>
                             <th>SKU</th>
-                            <th>SL</th>
+                            <th>Tên sản phẩm</th>
+                            <th style={{ textAlign: 'right' }}>SL</th>
                             <th>Ghi chú</th>
                         </tr>
                     </thead>
@@ -316,12 +382,10 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
                              const product = state.products.find(p => p.id === sku?.productId)
                              return (
                                  <tr key={idx}>
-                                     <td>
-                                         <div style={{ fontWeight: 500 }}>{sku?.skuCode}</div>
-                                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{product?.name}</div>
-                                     </td>
-                                     <td style={{ fontWeight: 600 }}>{item.qty}</td>
-                                     <td>{item.note}</td>
+                                     <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{sku?.skuCode}</td>
+                                     <td>{product?.name}</td>
+                                     <td style={{ fontWeight: 600, textAlign: 'right' }}>{item.qty}</td>
+                                     <td style={{ color: 'var(--text-secondary)' }}>{item.note}</td>
                                  </tr>
                              )
                         })}
@@ -380,7 +444,7 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
     const [type, setType] = useState<InventoryRequestType>('in')
     const [warehouseId, setWarehouseId] = useState(state.locations[0]?.id || '')
     const [targetWarehouseId, setTargetWarehouseId] = useState('')
-    const [items, setItems] = useState<any[]>([]) // Simplification
+    const [items, setItems] = useState<any[]>([]) 
     const [note, setNote] = useState('')
 
     // Simple item adder
@@ -388,8 +452,16 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
     const [qty, setQty] = useState(1)
 
     const addItem = () => {
+        if (qty <= 0) return
+        if (items.find(i => i.skuId === skuId)) return dialogs.alert({ message: 'Sản phẩm đã có trong danh sách' })
         setItems([...items, { skuId, qty }])
         setQty(1)
+    }
+
+    const removeItem = (index: number) => {
+        const newItems = [...items]
+        newItems.splice(index, 1)
+        setItems(newItems)
     }
 
     const handleSubmit = async () => {
@@ -438,26 +510,32 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
 
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div className="card" style={{ width: 500 }}>
-                <div className="card-title">Tạo yêu cầu mới</div>
-                <div className="grid-form">
-                    <div className="field">
-                        <label>Loại yêu cầu</label>
-                        <select value={type} onChange={e => setType(e.target.value as any)}>
-                            <option value="in">Nhập kho</option>
-                            <option value="out">Xuất kho</option>
-                            <option value="transfer">Chuyển kho</option>
-                            <option value="adjust">Điều chỉnh</option>
-                        </select>
-                    </div>
-                    <div className="field">
-                        <label>Kho</label>
-                        <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
-                            {(state.locations || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                        </select>
-                    </div>
-                    {type === 'transfer' && (
+            <div className="card" style={{ width: 600, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+                <div className="card-title" style={{ padding: 16, borderBottom: '1px solid var(--border-color)', margin: 0 }}>
+                    Tạo yêu cầu mới
+                </div>
+                
+                <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
+                    <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <div className="field">
+                            <label>Loại yêu cầu</label>
+                            <select value={type} onChange={e => setType(e.target.value as any)}>
+                                <option value="in">Nhập kho</option>
+                                <option value="out">Xuất kho</option>
+                                <option value="transfer">Chuyển kho</option>
+                                <option value="adjust">Điều chỉnh</option>
+                            </select>
+                        </div>
+                        <div className="field">
+                            <label>Kho</label>
+                            <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
+                                {(state.locations || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    {type === 'transfer' && (
+                        <div className="field" style={{ marginTop: 16 }}>
                             <label>Kho đích</label>
                             <select value={targetWarehouseId} onChange={e => setTargetWarehouseId(e.target.value)}>
                                 <option value="">Chọn kho đích...</option>
@@ -466,9 +544,9 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
                         </div>
                     )}
                     
-                    <div className="field" style={{ borderTop: '1px solid var(--border-color)', paddingTop: 12, marginTop: 12 }}>
-                        <label>Thêm sản phẩm</label>
-                        <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ marginTop: 24, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
+                        <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Thêm sản phẩm</label>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                             <select value={skuId} onChange={e => setSkuId(e.target.value)} style={{ flex: 1 }}>
                                 {(state.skus || []).map(s => {
                                     const p = (state.products || []).find(x => x.id === s.productId)
@@ -476,25 +554,53 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
                                 })}
                             </select>
                             <input type="number" value={qty} onChange={e => setQty(Number(e.target.value))} style={{ width: 80 }} />
-                            <button className="btn btn-small" onClick={addItem}>Thêm</button>
+                            <button className="btn btn-primary btn-small" onClick={addItem}>Thêm</button>
+                        </div>
+
+                        <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden' }}>
+                            <table className="table">
+                                <thead style={{ background: 'var(--bg-subtle)' }}>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Tên sản phẩm</th>
+                                        <th style={{ textAlign: 'right', width: 80 }}>SL</th>
+                                        <th style={{ width: 50 }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {items.map((it, idx) => {
+                                         const sku = state.skus.find(s => s.id === it.skuId)
+                                         const product = state.products.find(p => p.id === sku?.productId)
+                                         return (
+                                            <tr key={idx}>
+                                                <td style={{ fontFamily: 'monospace', fontWeight: 500 }}>{sku?.skuCode}</td>
+                                                <td>{product?.name}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 600 }}>{it.qty}</td>
+                                                <td>
+                                                    <button className="btn-icon text-danger" onClick={() => removeItem(idx)}>
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                         )
+                                    })}
+                                    {items.length === 0 && (
+                                        <tr><td colSpan={4} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Chưa có sản phẩm nào</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                     
-                    <div style={{ maxHeight: 150, overflow: 'auto', background: 'var(--bg-subtle)', padding: 8, borderRadius: 4 }}>
-                        {items.map((it, idx) => {
-                             const sku = state.skus.find(s => s.id === it.skuId)
-                             return <div key={idx} style={{ fontSize: 13 }}>- {sku?.skuCode} x {it.qty}</div>
-                        })}
-                    </div>
-
-                    <div className="field">
+                    <div className="field" style={{ marginTop: 20 }}>
                         <label>Ghi chú</label>
-                        <textarea value={note} onChange={e => setNote(e.target.value)} />
+                        <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} />
                     </div>
                 </div>
-                <div className="row" style={{ marginTop: 16 }}>
-                    <button className="btn btn-primary" onClick={handleSubmit}>Tạo yêu cầu</button>
+
+                <div style={{ padding: 16, borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                     <button className="btn" onClick={onClose}>Hủy</button>
+                    <button className="btn btn-primary" onClick={handleSubmit}>Tạo yêu cầu</button>
                 </div>
             </div>
         </div>
@@ -510,7 +616,7 @@ export function ApprovalCenterPage() {
 
   const pendingRequests = (state.requests || []).filter(r => {
       if (user?.role === 'admin') {
-          return r.status === 'pending_manager' || r.status === 'pending_accountant'
+          return r.status === 'pending_manager' || r.status === 'pending_accountant' || r.status === 'pending_ceo'
       }
       if (user?.role === 'manager') return r.status === 'pending_manager'
       if (user?.role === 'accountant') return r.status === 'pending_accountant'

@@ -8,7 +8,7 @@ import type { WarehouseState } from '../state/types'
 import { createEmptyWarehouseState, warehouseStorageKey } from '../state/seed'
 import { useStore } from '../state/Store'
 import { useDialogs } from '../ui-kit/Dialogs'
-import { Store, MapPin, ArrowRight, Search } from 'lucide-react'
+import { Store, MapPin, ArrowRight, Search, RefreshCw } from 'lucide-react'
 
 function loadWarehouseState(locationId: string): WarehouseState {
   const raw = loadJson<unknown>(warehouseStorageKey(locationId))
@@ -91,7 +91,16 @@ export function SelectWarehousePage() {
         </div>
 
         <div className="field">
-          <label>Danh sách kho</label>
+          <div className="row-between" style={{ marginBottom: 4 }}>
+            <label style={{ margin: 0 }}>Danh sách kho</label>
+            <button 
+              className="btn btn-small btn-ghost" 
+              onClick={() => window.location.reload()}
+              title="Cập nhật danh sách kho"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
           <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 12 }}>
             {filtered.length ? (
               filtered.map((w: Warehouse) => {

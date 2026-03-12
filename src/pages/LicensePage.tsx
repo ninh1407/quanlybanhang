@@ -1,126 +1,66 @@
-import { useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { useLicense } from '../licensing/useLicense'
-import { getSecureNow } from '../licensing/secureTime'
-
-function formatEpochSec(sec: number): string {
-  if (!sec) return 'Không giới hạn'
-  // If sec is small (like 0 or null), it means unlimited.
-  // If sec is large timestamp (seconds), convert to Date.
-  // JS Date uses ms, so * 1000
-  const d = new Date(sec * 1000)
-  if (Number.isNaN(d.getTime())) return 'Không xác định'
-  
-  return new Intl.DateTimeFormat('vi-VN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d)
-}
+import { PageHeader } from '../ui-kit/PageHeader'
+import { Calendar, CheckCircle, Award, Server } from 'lucide-react'
 
 export function LicensePage() {
-  const nav = useNavigate()
-  const location = useLocation()
-  const { from } = (location.state as { from?: string }) || { from: '/' }
-
-  const { desktop, hwid, stored, loading, checking, error, refresh, activate, unbind } = useLicense()
-  const [keyDraft, setKeyDraft] = useState<string | null>(null)
-  const keyValue = (keyDraft ?? stored?.key ?? '').trim()
-
-  const statusText = useMemo(() => {
-    if (!stored) return 'Chưa kích hoạt'
-    if (stored.status === 'active') {
-       if (stored.expireAt && stored.expireAt * 1000 < getSecureNow()) return 'Hết hạn'
-       return 'Đang hoạt động'
-    }
-    if (stored.status === 'expired') return 'Hết hạn'
-    if (stored.status === 'unbound') return 'Chưa kích hoạt'
-    return 'Lỗi / Không xác định'
-  }, [stored])
-
-  const expiryText = useMemo(() => {
-    if (!stored) return ''
-    return formatEpochSec(stored.expireAt)
-  }, [stored])
-
-  async function onActivate() {
-    if (!keyValue) return
-    const next = await activate(keyValue)
-    if (next?.status === 'active') {
-        setKeyDraft(null)
-        nav(from || '/', { replace: true })
-    }
-  }
-
   return (
-    <div className="auth-page">
-      <div className="card">
-        <div className="row row-between" style={{ marginBottom: 10 }}>
-          <button className="btn" onClick={() => nav(from || '/')}>
-            Quay lại
-          </button>
-        </div>
-        <div className="card-title">Kích hoạt bản quyền</div>
+    <div className="page">
+      <PageHeader title="Thông tin bản quyền" subtitle="Quản lý gói dịch vụ và gia hạn" />
 
-        {!desktop && (
-          <div className="muted">
-            Ứng dụng đang chạy trên web, HWID gắn với trình duyệt và sẽ đổi nếu bạn xóa dữ liệu trình duyệt hoặc dùng domain/port khác.
+      <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--primary-200)', boxShadow: '0 10px 30px rgba(37, 99, 235, 0.1)' }}>
+              <div style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', padding: 32, color: 'white', textAlign: 'center' }}>
+                  <Award size={48} style={{ marginBottom: 16, opacity: 0.9 }} />
+                  <h2 style={{ margin: 0, fontSize: 24 }}>Enterprise License</h2>
+                  <div style={{ marginTop: 8, opacity: 0.8, fontSize: 14 }}>Phiên bản cao cấp dành cho chuỗi cửa hàng</div>
+              </div>
+              
+              <div style={{ padding: 24 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                      <div style={{ padding: 16, background: 'var(--bg-subtle)', borderRadius: 12 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13, marginBottom: 4 }}>
+                              <Calendar size={16} /> Ngày hết hạn
+                          </div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-main)' }}>28/03/2026</div>
+                      </div>
+                      <div style={{ padding: 16, background: 'var(--success-50)', borderRadius: 12 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--success-700)', fontSize: 13, marginBottom: 4 }}>
+                              <CheckCircle size={16} /> Trạng thái
+                          </div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--success-700)' }}>Đang hoạt động</div>
+                      </div>
+                  </div>
+
+                  <div style={{ marginBottom: 24 }}>
+                      <h4 style={{ margin: '0 0 12px 0', fontSize: 14, color: 'var(--text-secondary)' }}>Tính năng bao gồm:</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                              <CheckCircle size={16} color="var(--success)" /> Đa chi nhánh
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                              <CheckCircle size={16} color="var(--success)" /> Không giới hạn người dùng
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                              <CheckCircle size={16} color="var(--success)" /> API tích hợp
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                              <CheckCircle size={16} color="var(--success)" /> Hỗ trợ 24/7
+                          </div>
+                      </div>
+                  </div>
+
+                  <div style={{ paddingTop: 24, borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                          <Server size={14} />
+                          Server: Asia-Pacific (VN)
+                      </div>
+                      <button className="btn btn-primary">Gia hạn ngay</button>
+                  </div>
+              </div>
           </div>
-        )}
-
-        <div className="field">
-          <label>Hardware ID (HWID)</label>
-          <input value={hwid} readOnly />
-        </div>
-
-        <div className="field">
-          <label>Key bản quyền</label>
-          <input
-            value={keyDraft ?? stored?.key ?? ''}
-            onChange={(e) => setKeyDraft(e.target.value)}
-            placeholder="Nhập key..."
-          />
-        </div>
-
-        <div className="field">
-          <label>Trạng thái</label>
-          <input value={statusText} readOnly />
-        </div>
-
-        {stored && (
-          <div className="field">
-            <label>Hết hạn</label>
-            <input value={expiryText} readOnly />
+          
+          <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-muted)' }}>
+              Cần nâng cấp gói? <a href="#" style={{ color: 'var(--primary-600)', fontWeight: 500 }}>Liên hệ kinh doanh</a>
           </div>
-        )}
-
-        {error && <div className="error">{error}</div>}
-
-        <div className="row">
-          <button className="btn btn-primary" onClick={onActivate} disabled={loading || !keyValue}>
-            Kích hoạt
-          </button>
-          <button
-            className="btn"
-            onClick={async () => {
-              const next = await refresh({ interactive: true })
-              if (next?.key) setKeyDraft(null)
-            }}
-            disabled={loading || checking || !hwid}
-          >
-            Kiểm tra bản quyền
-          </button>
-          <button
-            className="btn btn-danger"
-            onClick={async () => {
-              await unbind()
-              setKeyDraft(null)
-            }}
-            disabled={loading || !stored}
-          >
-            Đổi mã bản quyền (Xóa key)
-          </button>
-        </div>
       </div>
     </div>
   )

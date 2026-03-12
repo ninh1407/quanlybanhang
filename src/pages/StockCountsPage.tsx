@@ -179,6 +179,45 @@ export function StockCountsPage() {
     return { stats, abcMap }
   }, [state.stockTransactions, state.skus, state.stockCounts])
 
+  const { stats: skuStats } = skuClassifications
+
+  // KPI Calculations
+  const kpiStats = useMemo(() => {
+    const today = new Date()
+    const todayCounts = counts.filter(c => differenceInDays(today, parseISO(c.createdAt)) === 0)
+    
+    let totalSkuDiff = 0
+    let totalValueDiff = 0
+
+    // Calculate for all today's counts (or just active/draft ones? Let's do all today to show impact)
+    // Note: This uses CURRENT stock for draft counts, which is correct.
+    // For final counts, it also uses CURRENT stock which might be wrong if time passed.
+    // But without snapshots, this is the best approximation or we only calculate for 'draft'.
+    // Let's focus on 'Actionable' (Draft) counts for the discrepancy KPIs, plus 'Today's finalized' adjustments?
+    // Simpler: Just calculate for the SELECTED count if exists, otherwise summary of Today's DRAFT counts.
+    
+    const targetCounts = selected ? [selected] : todayCounts.filter(c => c.status === 'draft')
+
+    targetCounts.forEach(c => {
+        c.lines.forEach(l => {
+            const systemQty = getStockQty(state.stockTransactions, l.skuId, c.locationId)
+            const counted = Number(l.countedQty) || 0
+            const diff = counted - systemQty
+            if (diff !== 0) {
+                totalSkuDiff++
+                const cost = skuStats.get(l.skuId)?.avgCost || 0
+                totalValueDiff += diff * cost
+            }
+        })
+    })
+
+    return {
+        todayCount: todayCounts.length,
+        skuDiff: totalSkuDiff,
+        valueDiff: totalValueDiff
+    }
+  }, [counts, selected, state.stockTransactions, skuStats])
+
   function createSmart() {
       if (!canWrite) return
       if (!locationId) {
@@ -422,6 +461,26 @@ export function StockCountsPage() {
   return (
     <div className="page">
       <PageHeader title="Kiểm kho định kỳ" />
+
+      {/* KPI Dashboard */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+          <div className="card" style={{ textAlign: 'center', padding: 16 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Phiếu kiểm hôm nay</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--primary-600)' }}>{kpiStats.todayCount}</div>
+          </div>
+          <div className="card" style={{ textAlign: 'center', padding: 16 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{selected ? 'SKU lệch (Phiếu này)' : 'SKU lệch (Chưa xử lý)'}</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: kpiStats.skuDiff > 0 ? 'var(--warning-600)' : 'var(--success)' }}>
+                  {kpiStats.skuDiff}
+              </div>
+          </div>
+          <div className="card" style={{ textAlign: 'center', padding: 16 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Giá trị lệch</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: kpiStats.valueDiff < 0 ? 'var(--danger)' : kpiStats.valueDiff > 0 ? 'var(--success)' : 'var(--text-primary)' }}>
+                  {formatVnd(kpiStats.valueDiff)}
+              </div>
+          </div>
+      </div>
 
       {canWrite ? (
         <div className="card">
@@ -695,9 +754,10 @@ export function StockCountsPage() {
                 <thead>
                   <tr>
                     <th>SKU</th>
-                    <th>Hệ thống</th>
-                    <th>Kiểm</th>
-                    <th>Chênh lệch</th>
+                    <th style={{ textAlign: 'right' }}>Tồn hệ thống</th>
+                    <th style={{ textAlign: 'right' }}>Tồn thực</th>
+                    <th style={{ textAlign: 'right' }}>Lệch</th>
+                    <th style={{ textAlign: 'right' }}>Giá trị lệch</th>
                     <th />
                   </tr>
                 </thead>
@@ -706,12 +766,22 @@ export function StockCountsPage() {
                     const sku = skus.find((s) => s.id === l.skuId)
                     const systemQty = getStockQty(state.stockTransactions, l.skuId, selected.locationId)
                     const diff = (Number(l.countedQty) || 0) - systemQty
+                    const cost = skuStats.get(l.skuId)?.avgCost || 0
+                    const diffValue = diff * cost
+                    
                     return (
                       <tr key={l.skuId}>
-                        <td>{sku ? skuLabel(productsById, sku) : l.skuId}</td>
-                        <td>{systemQty}</td>
-                        <td>{l.countedQty}</td>
-                        <td>{diff}</td>
+                        <td>
+                            <div style={{ fontWeight: 500 }}>{sku ? skuLabel(productsById, sku) : l.skuId}</div>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>{systemQty}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{l.countedQty}</td>
+                        <td style={{ textAlign: 'right', color: diff < 0 ? 'var(--danger)' : diff > 0 ? 'var(--success)' : 'inherit', fontWeight: 600 }}>
+                            {diff > 0 ? '+' : ''}{diff}
+                        </td>
+                        <td style={{ textAlign: 'right', color: diffValue < 0 ? 'var(--danger)' : diffValue > 0 ? 'var(--success)' : 'inherit' }}>
+                            {diffValue !== 0 ? formatVnd(diffValue) : '-'}
+                        </td>
                         <td className="cell-actions">
                           {selected.status === 'draft' && canWrite ? (
                             <button className="btn btn-small btn-danger" onClick={() => removeLine(l.skuId)}>

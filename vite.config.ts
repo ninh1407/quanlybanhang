@@ -5,4 +5,17 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: process.env.DESKTOP === 'true' ? './' : '/',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['lucide-react'],
+          'charts-vendor': ['recharts'],
+          'utils-vendor': ['xlsx', 'date-fns']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
+  }
 })

@@ -59,8 +59,10 @@ async function migrate() {
   // 3. Categories
   console.log(`Migrating ${data.categories?.length || 0} categories...`)
   for (const c of (data.categories || [])) {
-    await prisma.category.create({
-      data: {
+    await prisma.category.upsert({
+      where: { id: c.id },
+      update: { name: c.name },
+      create: {
         id: c.id,
         name: c.name
       }
@@ -71,8 +73,18 @@ async function migrate() {
   console.log(`Migrating ${data.suppliers?.length || 0} suppliers...`)
   for (const s of (data.suppliers || [])) {
     await prisma.supplier.upsert({
-      where: { code: s.code },
-      update: {},
+      where: { id: s.id },
+      update: {
+        code: s.code,
+        name: s.name,
+        phone: s.phone,
+        email: s.email,
+        address: s.address,
+        note: s.note,
+        country: s.country,
+        manufacturingCountry: s.manufacturingCountry,
+        segment: s.segment
+      },
       create: {
         id: s.id,
         code: s.code,
@@ -92,8 +104,23 @@ async function migrate() {
   console.log(`Migrating ${data.products?.length || 0} products...`)
   for (const p of (data.products || [])) {
     try {
-        await prisma.product.create({
-        data: {
+        await prisma.product.upsert({
+        where: { id: p.id },
+        update: {
+            internalCode: p.internalCode,
+            manualInternalCode: p.manualInternalCode,
+            barcode: p.barcode,
+            manufacturerBatchCode: p.manufacturerBatchCode,
+            specs: p.specs,
+            internalBatchCode: p.internalBatchCode,
+            name: p.name,
+            categoryId: p.categoryId,
+            supplierId: p.supplierId,
+            isMaterial: p.isMaterial ?? false,
+            active: p.active ?? true,
+            isHidden: p.isHidden ?? false
+        },
+        create: {
             id: p.id,
             internalCode: p.internalCode,
             manualInternalCode: p.manualInternalCode,
@@ -117,8 +144,25 @@ async function migrate() {
   console.log(`Migrating ${data.skus?.length || 0} SKUs...`)
   for (const s of (data.skus || [])) {
     try {
-        await prisma.sku.create({
-        data: {
+        await prisma.sku.upsert({
+        where: { id: s.id },
+        update: {
+            productId: s.productId,
+            skuCode: s.skuCode,
+            color: s.color,
+            size: s.size,
+            material: s.material,
+            volume: s.volume,
+            capacity: s.capacity,
+            power: s.power,
+            unit: s.unit || 'cái',
+            cost: s.cost || 0,
+            price: s.price || 0,
+            active: s.active ?? true,
+            kind: s.kind || 'single',
+            components: s.components || []
+        },
+        create: {
             id: s.id,
             productId: s.productId,
             skuCode: s.skuCode,
@@ -144,8 +188,18 @@ async function migrate() {
   // 6. Customers
   console.log(`Migrating ${data.customers?.length || 0} customers...`)
   for (const c of (data.customers || [])) {
-    await prisma.customer.create({
-      data: {
+    await prisma.customer.upsert({
+      where: { id: c.id },
+      update: {
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        address: c.address,
+        note: c.note,
+        discountPercent: c.discountPercent || 0,
+        loyaltyPoints: c.loyaltyPoints || 0
+      },
+      create: {
         id: c.id,
         name: c.name,
         phone: c.phone,
@@ -162,46 +216,89 @@ async function migrate() {
   console.log(`Migrating ${data.orders?.length || 0} orders...`)
   for (const o of (data.orders || [])) {
     try {
-      await prisma.order.create({
-        data: {
-          id: o.id,
-          code: o.code,
-          customerId: o.customerId,
-          fulfillmentLocationId: o.fulfillmentLocationId,
-          warehouseId: o.warehouseId,
-          type: o.type || 'internal',
-          source: o.source || 'pos',
-          paymentMethod: o.paymentMethod || 'cod',
-          status: o.status,
-          subTotalOverride: o.subTotalOverride,
-          shippingFee: o.shippingFee || 0,
-          carrierName: o.carrierName,
-          trackingCode: o.trackingCode,
-          platformOrderId: o.platformOrderId,
-          dropshipBrand: o.dropshipBrand,
-          partnerVoucherCode: o.partnerVoucherCode,
-          discountPercent: o.discountPercent || 0,
-          discountAmount: o.discountAmount || 0,
-          vatAmount: o.vatAmount || 0,
-          otherFees: o.otherFees || 0,
-          otherFeesNote: o.otherFeesNote,
-          note: o.note,
-          cancelReason: o.cancelReason,
-          isReconciledCarrier: o.isReconciledCarrier || 'unreconciled',
-          isReconciledSupplier: o.isReconciledSupplier || 'unreconciled',
-          reconciliationResultAmount: o.reconciliationResultAmount,
-          createdAt: o.createdAt ? new Date(o.createdAt) : undefined,
-          createdByUserId: o.createdByUserId,
-          items: {
-            create: (o.items || []).map((i: any) => ({
-              skuId: i.skuId,
-              qty: i.qty,
-              price: i.price
-            }))
-          },
-          attachments: o.attachments || []
-        }
-      })
+      // For orders, we might want to delete items and recreate them if updating
+      // but for simplicity, let's just upsert the order itself.
+      // Actually, if we use upsert, we need to handle nested items.
+      // Prisma upsert doesn't support nested create/update easily for items.
+      // So we'll check if exists first.
+      const existingOrder = await prisma.order.findUnique({ where: { id: o.id } })
+      if (existingOrder) {
+          // Update order without items (or delete/recreate items if needed)
+          await prisma.order.update({
+              where: { id: o.id },
+              data: {
+                code: o.code,
+                customerId: o.customerId,
+                fulfillmentLocationId: o.fulfillmentLocationId,
+                warehouseId: o.warehouseId,
+                type: o.type || 'internal',
+                source: o.source || 'pos',
+                paymentMethod: o.paymentMethod || 'cod',
+                status: o.status,
+                subTotalOverride: o.subTotalOverride,
+                shippingFee: o.shippingFee || 0,
+                carrierName: o.carrierName,
+                trackingCode: o.trackingCode,
+                platformOrderId: o.platformOrderId,
+                dropshipBrand: o.dropshipBrand,
+                partnerVoucherCode: o.partnerVoucherCode,
+                discountPercent: o.discountPercent || 0,
+                discountAmount: o.discountAmount || 0,
+                vatAmount: o.vatAmount || 0,
+                otherFees: o.otherFees || 0,
+                otherFeesNote: o.otherFeesNote,
+                note: o.note,
+                cancelReason: o.cancelReason,
+                isReconciledCarrier: o.isReconciledCarrier || 'unreconciled',
+                isReconciledSupplier: o.isReconciledSupplier || 'unreconciled',
+                reconciliationResultAmount: o.reconciliationResultAmount,
+                createdAt: o.createdAt ? new Date(o.createdAt) : undefined,
+                createdByUserId: o.createdByUserId,
+                attachments: o.attachments || []
+              }
+          })
+      } else {
+        await prisma.order.create({
+            data: {
+              id: o.id,
+              code: o.code,
+              customerId: o.customerId,
+              fulfillmentLocationId: o.fulfillmentLocationId,
+              warehouseId: o.warehouseId,
+              type: o.type || 'internal',
+              source: o.source || 'pos',
+              paymentMethod: o.paymentMethod || 'cod',
+              status: o.status,
+              subTotalOverride: o.subTotalOverride,
+              shippingFee: o.shippingFee || 0,
+              carrierName: o.carrierName,
+              trackingCode: o.trackingCode,
+              platformOrderId: o.platformOrderId,
+              dropshipBrand: o.dropshipBrand,
+              partnerVoucherCode: o.partnerVoucherCode,
+              discountPercent: o.discountPercent || 0,
+              discountAmount: o.discountAmount || 0,
+              vatAmount: o.vatAmount || 0,
+              otherFees: o.otherFees || 0,
+              otherFeesNote: o.otherFeesNote,
+              note: o.note,
+              cancelReason: o.cancelReason,
+              isReconciledCarrier: o.isReconciledCarrier || 'unreconciled',
+              isReconciledSupplier: o.isReconciledSupplier || 'unreconciled',
+              reconciliationResultAmount: o.reconciliationResultAmount,
+              createdAt: o.createdAt ? new Date(o.createdAt) : undefined,
+              createdByUserId: o.createdByUserId,
+              items: {
+                create: (o.items || []).map((i: any) => ({
+                  skuId: i.skuId,
+                  qty: i.qty,
+                  price: i.price
+                }))
+              },
+              attachments: o.attachments || []
+            }
+          })
+      }
     } catch (e: any) {
       console.error(`Failed to migrate order ${o.code}: ${e.message}`)
     }
@@ -211,10 +308,10 @@ async function migrate() {
   console.log(`Migrating ${data.stockTransactions?.length || 0} stock transactions...`)
   for (const t of (data.stockTransactions || [])) {
       try {
-        await prisma.stockTransaction.create({
-            data: {
-                id: t.id,
-                code: t.code || `TX-${t.id.substring(0,8)}`, // Fallback code
+        await prisma.stockTransaction.upsert({
+            where: { id: t.id },
+            update: {
+                code: t.code || `TX-${t.id.substring(0,8)}`,
                 type: t.type,
                 skuId: t.skuId,
                 locationId: t.locationId,
@@ -223,7 +320,21 @@ async function migrate() {
                 unitCost: t.unitCost,
                 note: t.note,
                 createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
-                refType: 'manual', // Default
+                refType: 'manual',
+                refId: null
+            },
+            create: {
+                id: t.id,
+                code: t.code || `TX-${t.id.substring(0,8)}`,
+                type: t.type,
+                skuId: t.skuId,
+                locationId: t.locationId,
+                warehouseId: t.warehouseId,
+                qty: t.qty,
+                unitCost: t.unitCost,
+                note: t.note,
+                createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
+                refType: 'manual',
                 refId: null
             }
         })

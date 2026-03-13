@@ -1,6 +1,6 @@
 import { ArrowDownCircle, ArrowUpCircle, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/auth'
 import type { StockVoucher, StockVoucherLine, StockVoucherStatus, StockVoucherType } from '../domain/types'
 import { nowIso } from '../lib/date'
@@ -27,8 +27,14 @@ function VoucherTypeBadge({ type }: { type: StockVoucherType }) {
 
 function voucherStatusLabel(s: StockVoucherStatus): string {
   if (s === 'draft') return 'Nháp'
-  if (s === 'final') return 'Đã chốt'
+  if (s === 'submitted') return 'Chờ duyệt'
+  if (s === 'posted' || s === 'final') return 'Đã ghi sổ'
   return 'Hủy'
+}
+
+function effectiveVoucherStatus(s: StockVoucherStatus): Exclude<StockVoucherStatus, 'final'> {
+  if (s === 'final') return 'posted'
+  return s
 }
 
 function toMs(iso: string): number {
@@ -42,7 +48,9 @@ export function StockVouchersPage() {
   const { can, user } = useAuth()
   const canWrite = can('inventory:write')
   const isAdmin = user?.role === 'admin'
+  const canApproveVoucher = user?.role === 'admin' || user?.role === 'manager'
   const nav = useNavigate()
+  const location = useLocation()
   const dialogs = useDialogs()
 
   const locations = useMemo(
@@ -66,11 +74,20 @@ export function StockVouchersPage() {
     filters: { type: 'all', status: 'all', dateRange: 'all' },
   })
 
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    const openId = (location.state as { openId?: string } | null)?.openId
+    return openId ?? null
+  })
   const selected = useMemo(
     () => (selectedId ? state.stockVouchers.find((v) => v.id === selectedId) ?? null : null),
     [selectedId, state.stockVouchers],
   )
+
+  function closeSelected() {
+    setSelectedId(null)
+    const openId = (location.state as { openId?: string } | null)?.openId
+    if (openId) nav(location.pathname, { replace: true, state: null })
+  }
 
   const vouchers = useMemo(() => {
     const needle = list.state.q.trim().toLowerCase()
@@ -78,7 +95,7 @@ export function StockVouchersPage() {
     
     const filtered = state.stockVouchers
       .filter((v) => (list.state.filters.type === 'all' ? true : v.type === list.state.filters.type))
-      .filter((v) => (list.state.filters.status === 'all' ? true : v.status === list.state.filters.status))
+      .filter((v) => (list.state.filters.status === 'all' ? true : effectiveVoucherStatus(v.status) === list.state.filters.status))
       .filter((v) => {
           if (list.state.filters.dateRange === 'all') return true
           const d = parseISO(v.createdAt)
@@ -169,9 +186,17 @@ export function StockVouchersPage() {
   async function finalizeSelected() {
     if (!canWrite) return
     if (!selected) return
-    const reason = await dialogs.prompt({ message: 'Nhập lý do chốt phiếu (khuyến nghị):', initialValue: '' })
+    const reason = await dialogs.prompt({ message: 'Nhập lý do ghi sổ phiếu (khuyến nghị):', initialValue: '' })
     if (reason == null) return
     dispatch({ type: 'stockVouchers/finalize', id: selected.id, meta: { reason: reason.trim() } })
+  }
+
+  async function submitSelected() {
+    if (!canWrite) return
+    if (!selected) return
+    const reason = await dialogs.prompt({ message: 'Nhập lý do gửi duyệt (khuyến nghị):', initialValue: '' })
+    if (reason == null) return
+    dispatch({ type: 'stockVouchers/submit', id: selected.id, meta: { reason: reason.trim() } })
   }
 
   function cancelSelected() {
@@ -227,7 +252,8 @@ export function StockVouchersPage() {
             >
               <option value="all">Tất cả</option>
               <option value="draft">Nháp</option>
-              <option value="final">Đã chốt</option>
+              <option value="submitted">Chờ duyệt</option>
+              <option value="posted">Đã ghi sổ</option>
               <option value="cancelled">Hủy</option>
             </select>
           </div>
@@ -296,7 +322,7 @@ export function StockVouchersPage() {
                     <button className="btn btn-small" onClick={() => setSelectedId(v.id)}>
                       Mở
                     </button>
-                    <button className="btn btn-small" onClick={() => nav(`/stock-vouchers/${v.id}/print`)}>
+                    <button className="btn btn-small" onClick={() => nav(`/movements/${v.id}/print`)}>
                       In/PDF
                     </button>
                   </td>
@@ -316,32 +342,37 @@ export function StockVouchersPage() {
       </div>
 
       {selected ? (
-        <div className="modal-overlay" onClick={() => setSelectedId(null)}>
+        <div className="modal-overlay" onClick={closeSelected}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ width: 920, maxWidth: '95vw' }}>
             <div className="row-between" style={{ marginBottom: 12 }}>
               <h3>
                 Phiếu: <span style={{ fontFamily: 'monospace' }}>{selected.code || selected.id}</span>
               </h3>
               <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                <button className="btn" onClick={() => nav(`/stock-vouchers/${selected.id}/print`)}>
+                <button className="btn" onClick={() => nav(`/movements/${selected.id}/print`)}>
                   In/PDF
                 </button>
-                {selected.status === 'draft' && canWrite ? (
-                  <button className="btn btn-primary" onClick={finalizeSelected}>
-                    Chốt phiếu
+                {effectiveVoucherStatus(selected.status) === 'draft' && canWrite && !canApproveVoucher ? (
+                  <button className="btn btn-primary" onClick={submitSelected}>
+                    Gửi duyệt
                   </button>
                 ) : null}
-                {selected.status === 'draft' && canWrite ? (
+                {(effectiveVoucherStatus(selected.status) === 'draft' || effectiveVoucherStatus(selected.status) === 'submitted') && canWrite && canApproveVoucher ? (
+                  <button className="btn btn-primary" onClick={finalizeSelected}>
+                    Ghi sổ
+                  </button>
+                ) : null}
+                {effectiveVoucherStatus(selected.status) === 'draft' && canWrite ? (
                   <button className="btn" onClick={cancelSelected}>
                     Hủy
                   </button>
                 ) : null}
-                {selected.status !== 'final' && canWrite ? (
+                {effectiveVoucherStatus(selected.status) !== 'posted' && canWrite ? (
                   <button className="btn btn-danger" onClick={deleteSelected}>
                     Xóa
                   </button>
                 ) : null}
-                <button className="btn" onClick={() => setSelectedId(null)}>
+                <button className="btn" onClick={closeSelected}>
                   Đóng
                 </button>
               </div>

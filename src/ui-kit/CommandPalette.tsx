@@ -39,12 +39,12 @@ export function CommandPalette() {
   
   // 1. Navigation
   const pages = [
-    { name: 'Dashboard', path: '/', icon: <ArrowRight size={14} /> },
-    { name: 'Orders', path: '/orders', icon: <ShoppingCart size={14} /> },
-    { name: 'Inventory', path: '/inventory', icon: <Package size={14} /> },
-    { name: 'Products', path: '/products', icon: <Package size={14} /> },
-    { name: 'Customers', path: '/customers', icon: <User size={14} /> },
-    { name: 'Finance', path: '/finance', icon: <FileText size={14} /> },
+    { name: 'Tổng quan', path: '/', icon: <ArrowRight size={14} /> },
+    { name: 'Đơn hàng', path: '/orders', icon: <ShoppingCart size={14} /> },
+    { name: 'Kho vận', path: '/inventory', icon: <Package size={14} /> },
+    { name: 'Sản phẩm', path: '/products', icon: <Package size={14} /> },
+    { name: 'Khách hàng', path: '/customers', icon: <User size={14} /> },
+    { name: 'Tài chính', path: '/finance', icon: <FileText size={14} /> },
   ].filter(p => p.name.toLowerCase().includes(lowerQuery))
 
   // 2. Orders (Top 5 matching)

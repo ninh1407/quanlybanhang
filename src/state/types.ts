@@ -83,6 +83,7 @@ export type AppAction =
   | { type: 'stock/add'; tx: StockTransaction }
   | { type: 'stockVouchers/upsert'; voucher: StockVoucher }
   | { type: 'stockVouchers/delete'; id: string }
+  | { type: 'stockVouchers/submit'; id: string }
   | { type: 'stockVouchers/finalize'; id: string }
   | { type: 'stockCounts/upsert'; stockCount: StockCount }
   | { type: 'stockCounts/delete'; id: string }

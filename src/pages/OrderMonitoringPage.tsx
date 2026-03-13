@@ -98,7 +98,7 @@ export function OrderMonitoringPage() {
     return (
         <div className="page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flexShrink: 0 }}>
-                <PageHeader title="Order Monitoring Board (Kanban)" subtitle="Giám sát luồng đơn hàng đa kênh" />
+                <PageHeader title="Bảng theo dõi đơn hàng (Kanban)" subtitle="Giám sát luồng đơn hàng đa kênh" />
                 
                 <div className="toolbar" style={{ marginBottom: 16, gap: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

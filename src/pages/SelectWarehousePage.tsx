@@ -17,7 +17,7 @@ function loadWarehouseState(locationId: string): WarehouseState {
 }
 
 export function SelectWarehousePage() {
-  const { state, dispatch } = useStore()
+  const { state, dispatch, refresh } = useStore()
   const { user, logout } = useAuth()
   const nav = useNavigate()
   const location = useLocation()
@@ -95,7 +95,7 @@ export function SelectWarehousePage() {
             <label style={{ margin: 0 }}>Danh sách kho</label>
             <button 
               className="btn btn-small btn-ghost" 
-              onClick={() => window.location.reload()}
+              onClick={() => refresh()}
               title="Cập nhật danh sách kho"
             >
               <RefreshCw size={14} />

@@ -90,7 +90,7 @@ export function ChannelIntegrationPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Channel Integration Center" subtitle="Quản lý kết nối đa kênh & Điều phối đơn hàng" />
+      <PageHeader title="Trung tâm tích hợp kênh" subtitle="Quản lý kết nối đa kênh & Điều phối đơn hàng" />
 
       <div className="tabs">
           <button className={`tab ${tab === 'channels' ? 'active' : ''}`} onClick={() => setTab('channels')}>Cấu hình Kênh</button>

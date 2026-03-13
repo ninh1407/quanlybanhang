@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { nowIso } from '../lib/date'
@@ -15,6 +15,7 @@ import { getServerUrl } from '../config'
 type Store = {
   state: AppState
   dispatch: (action: AppAction) => void
+  refresh: () => void
 }
 
 const StoreContext = createContext<Store | null>(null)
@@ -280,7 +281,15 @@ export function StoreProvider(props: { children: ReactNode }) {
     }
   }, [dispatch, dialogs])
 
-  const value = useMemo(() => ({ state, dispatch: auditedDispatch }), [state, auditedDispatch])
+  const refresh = useCallback(() => {
+    console.log('Manual sync requested')
+    if (socketRef.current) {
+      if (!socketRef.current.connected) socketRef.current.connect()
+      socketRef.current.emit('requestSync')
+    }
+  }, [])
+
+  const value = useMemo(() => ({ state, dispatch: auditedDispatch, refresh }), [state, auditedDispatch, refresh])
   return (
     <DispatchContext.Provider value={auditedDispatch}>
       <StateContext.Provider value={state}>

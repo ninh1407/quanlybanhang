@@ -195,7 +195,7 @@ export type StockTransaction = {
 }
 
 export type StockVoucherType = 'in' | 'out' | 'transfer'
-export type StockVoucherStatus = 'draft' | 'final' | 'cancelled'
+export type StockVoucherStatus = 'draft' | 'submitted' | 'posted' | 'final' | 'cancelled'
 
 export type StockVoucherLine = {
   skuId: Id

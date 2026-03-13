@@ -72,8 +72,8 @@ export function DialogProvider(props: { children: ReactNode }) {
   const confirm = useCallback(
     (opts: ConfirmOptions) => {
       const title = opts.title?.trim() ? opts.title.trim() : 'Thông báo'
-      const confirmText = opts.confirmText?.trim() ? opts.confirmText.trim() : 'OK'
-      const cancelText = opts.cancelText?.trim() ? opts.cancelText.trim() : 'Cancel'
+      const confirmText = opts.confirmText?.trim() ? opts.confirmText.trim() : 'Đồng ý'
+      const cancelText = opts.cancelText?.trim() ? opts.cancelText.trim() : 'Hủy'
       const dangerous = Boolean(opts.dangerous)
       setDialog({ kind: 'confirm', title, message: opts.message, confirmText, cancelText, dangerous })
       return new Promise<boolean>((resolve) => {
@@ -86,7 +86,7 @@ export function DialogProvider(props: { children: ReactNode }) {
   const alert = useCallback(
     (opts: AlertOptions) => {
       const title = opts.title?.trim() ? opts.title.trim() : 'Thông báo'
-      const okText = opts.okText?.trim() ? opts.okText.trim() : 'OK'
+      const okText = opts.okText?.trim() ? opts.okText.trim() : 'Đồng ý'
       setDialog({ kind: 'alert', title, message: opts.message, okText })
       return new Promise<void>((resolve) => {
         resolveRef.current = resolve
@@ -98,8 +98,8 @@ export function DialogProvider(props: { children: ReactNode }) {
   const prompt = useCallback(
     (opts: PromptOptions) => {
       const title = opts.title?.trim() ? opts.title.trim() : 'Thông báo'
-      const confirmText = opts.confirmText?.trim() ? opts.confirmText.trim() : 'OK'
-      const cancelText = opts.cancelText?.trim() ? opts.cancelText.trim() : 'Cancel'
+      const confirmText = opts.confirmText?.trim() ? opts.confirmText.trim() : 'Đồng ý'
+      const cancelText = opts.cancelText?.trim() ? opts.cancelText.trim() : 'Hủy'
       const placeholder = opts.placeholder ?? ''
       const initialValue = opts.initialValue ?? ''
       const required = Boolean(opts.required)

@@ -19,6 +19,7 @@ import { rateLimit } from 'express-rate-limit'
 
 import { store, prisma } from './store' // Import prisma
 import { analyticsService } from './services/analytics'
+import { orderService } from './services/order' // Import Order Service
 
 import { authService } from './services/auth'
 import { authenticateToken, authorizeWarehouse } from './middleware/auth'
@@ -205,6 +206,77 @@ app.get('/api/analytics/channels', authenticateToken, async (req, res) => {
     }
 })
 
+
+// --- New API Routes for ERP ---
+
+// 1. Inventory
+app.get('/api/inventory', authenticateToken, async (req, res) => {
+    try {
+        const { warehouseId } = req.query
+        const where: any = {}
+        if (warehouseId) where.warehouseId = String(warehouseId)
+
+        const inventory = await prisma.inventory.findMany({
+            where,
+            include: { 
+                sku: { 
+                    include: { product: true } 
+                },
+                warehouse: true
+            }
+        })
+        res.json(inventory)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+// 2. Orders
+app.post('/api/orders', authenticateToken, async (req, res) => {
+    try {
+        // Validate payload...
+        const order = await orderService.createOrder({
+            ...req.body,
+            createdByUserId: req.user.id
+        })
+        res.json(order)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+app.get('/api/orders/:id', authenticateToken, async (req, res) => {
+    try {
+        const order = await orderService.getOrder(req.params.id)
+        if (!order) return res.status(404).json({ error: 'Order not found' })
+        res.json(order)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+// 3. Products (Simple CRUD for now)
+app.get('/api/products', authenticateToken, async (req, res) => {
+    try {
+        const products = await prisma.product.findMany({
+            include: { skus: true, category: true }
+        })
+        res.json(products)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
+// 4. Dashboard (New)
+app.get('/api/dashboard', authenticateToken, async (req, res) => {
+    try {
+        const data = await analyticsService.getDashboardData(req.user)
+        res.json(data)
+    } catch (e: any) {
+        res.status(500).json({ error: e.message })
+    }
+})
+
 // Login Endpoint (Updated)
 app.post('/api/users', authenticateToken, async (req, res) => {
     // Check permissions
@@ -285,8 +357,8 @@ app.post('/api/login', loginLimiter, async (req: express.Request, res: express.R
   }
 
   // Lấy danh sách locations từ Database để trả về cho Frontend
-  const locations = await prisma.location.findMany({
-    where: { active: true }
+  const warehouses = await prisma.warehouse.findMany({
+    where: { status: 'active' }
   })
 
   res.json({ 
@@ -294,7 +366,7 @@ app.post('/api/login', loginLimiter, async (req: express.Request, res: express.R
     accessToken: result.accessToken,
     refreshToken: result.refreshToken,
     user: result.user,
-    locations: locations // Dùng data từ DB thay vì store.state.locations
+    locations: warehouses // Dùng data từ DB thay vì store.state.locations
   })
 })
 

@@ -211,11 +211,19 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, stockVouchers: upsertById(state.stockVouchers, action.voucher) }
     case 'stockVouchers/delete':
       return { ...state, stockVouchers: removeById(state.stockVouchers, action.id) }
-    case 'stockVouchers/finalize':
+    case 'stockVouchers/submit':
       {
         const v = state.stockVouchers.find((x) => x.id === action.id) ?? null
         if (!v) return state
         if (v.status !== 'draft') return state
+        const nextVoucher: StockVoucher = { ...v, status: 'submitted' }
+        return { ...state, stockVouchers: upsertById(state.stockVouchers, nextVoucher) }
+      }
+    case 'stockVouchers/finalize':
+      {
+        const v = state.stockVouchers.find((x) => x.id === action.id) ?? null
+        if (!v) return state
+        if (v.status !== 'draft' && v.status !== 'submitted') return state
         const createdAt = nowIso()
         const txs: StockTransaction[] = []
         if (v.type === 'in') {
@@ -290,7 +298,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
           nextState = reducer(nextState, { type: 'stock/add', tx })
         })
 
-        const nextVoucher: StockVoucher = { ...v, status: 'final', finalizedAt: createdAt }
+        const nextVoucher: StockVoucher = { ...v, status: 'posted', finalizedAt: createdAt }
         return { ...nextState, stockVouchers: upsertById(nextState.stockVouchers, nextVoucher) }
       }
     case 'stockCounts/upsert':
@@ -446,6 +454,7 @@ function stockQtyBySkuLocation(state: AppState): Map<string, number> {
 export function validateAction(prev: AppState, action: AppAction): { ok: true } | { ok: false; error: string } {
   const currentUser = prev.currentUserId ? prev.users.find((u) => u.id === prev.currentUserId) ?? null : null
   const isAdmin = currentUser?.role === 'admin'
+  const canApproveVoucher = isAdmin || currentUser?.role === 'manager'
 
   if (action.type === 'orders/delete') {
     const order = prev.orders.find((o) => o.id === action.id) ?? null
@@ -482,14 +491,33 @@ export function validateAction(prev: AppState, action: AppAction): { ok: true } 
   if (action.type === 'stockVouchers/delete') {
     const v = prev.stockVouchers.find((x) => x.id === action.id) ?? null
     if (!v) return { ok: true }
-    if (v.status === 'final') return { ok: false, error: 'Không thể xóa phiếu kho đã chốt.' }
+    if (v.status === 'final' || v.status === 'posted') return { ok: false, error: 'Không thể xóa phiếu kho đã ghi sổ.' }
+    return { ok: true }
+  }
+
+  if (action.type === 'stockVouchers/submit') {
+    const v = prev.stockVouchers.find((x) => x.id === action.id) ?? null
+    if (!v) return { ok: false, error: 'Không tìm thấy phiếu kho.' }
+    if (v.status !== 'draft') return { ok: false, error: 'Chỉ cho phép gửi duyệt phiếu ở trạng thái Nháp.' }
+    if (!v.lines.length) return { ok: false, error: 'Phiếu kho chưa có dòng hàng.' }
+    if (v.type === 'in' && !v.toLocationId) return { ok: false, error: 'Vui lòng chọn kho nhập.' }
+    if (v.type === 'out' && !v.fromLocationId) return { ok: false, error: 'Vui lòng chọn kho xuất.' }
+    if (v.type === 'transfer' && (!v.fromLocationId || !v.toLocationId)) {
+      return { ok: false, error: 'Vui lòng chọn kho chuyển đi và kho nhận.' }
+    }
+    if (v.type === 'transfer' && v.fromLocationId === v.toLocationId) {
+      return { ok: false, error: 'Kho chuyển đi và kho nhận không được trùng nhau.' }
+    }
     return { ok: true }
   }
 
   if (action.type === 'stockVouchers/finalize') {
     const v = prev.stockVouchers.find((x) => x.id === action.id) ?? null
     if (!v) return { ok: false, error: 'Không tìm thấy phiếu kho.' }
-    if (v.status !== 'draft') return { ok: false, error: 'Chỉ cho phép chốt phiếu ở trạng thái Nháp.' }
+    if (v.status === 'final' || v.status === 'posted') return { ok: false, error: 'Phiếu kho đã ghi sổ.' }
+    if (v.status === 'cancelled') return { ok: false, error: 'Không thể ghi sổ phiếu đã hủy.' }
+    if (v.status === 'draft' && !canApproveVoucher) return { ok: false, error: 'Phiếu đang ở trạng thái Nháp. Vui lòng gửi duyệt trước.' }
+    if (v.status === 'submitted' && !canApproveVoucher) return { ok: false, error: 'Bạn không có quyền ghi sổ phiếu này.' }
     if (!v.lines.length) return { ok: false, error: 'Phiếu kho chưa có dòng hàng.' }
     if (v.type === 'in' && !v.toLocationId) return { ok: false, error: 'Vui lòng chọn kho nhập.' }
     if (v.type === 'out' && !v.fromLocationId) return { ok: false, error: 'Vui lòng chọn kho xuất.' }
@@ -765,6 +793,24 @@ export function createAuditLog(prev: AppState, next: AppState, action: AppAction
       entityId: before.id,
       entityCode: before.code,
       before: toAuditSnapshot('stock_voucher', before),
+      reason,
+      createdAt: nowIso(),
+    }
+  }
+
+  if (action.type === 'stockVouchers/submit') {
+    const before = prev.stockVouchers.find((x) => x.id === action.id) ?? null
+    const after = next.stockVouchers.find((x) => x.id === action.id) ?? null
+    if (!before || !after) return null
+    return {
+      id: newId('log'),
+      actorUserId,
+      action: 'update',
+      entityType: 'stock_voucher',
+      entityId: after.id,
+      entityCode: after.code,
+      before: toAuditSnapshot('stock_voucher', before),
+      after: toAuditSnapshot('stock_voucher', after),
       reason,
       createdAt: nowIso(),
     }

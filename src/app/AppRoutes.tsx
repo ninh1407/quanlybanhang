@@ -26,6 +26,8 @@ import { SuppliersPage } from '../pages/SuppliersPage'
 import { StockCountsPage } from '../pages/StockCountsPage'
 import { StockVouchersPage } from '../pages/StockVouchersPage'
 import { StockVoucherPrintPage } from '../pages/StockVoucherPrintPage'
+import { MovementCreatePage } from '../pages/MovementCreatePage'
+import { MovementOpenPage } from '../pages/MovementOpenPage'
 import { AuditLogPage } from '../pages/AuditLogPage'
 import { ApprovalCenterPage } from '../pages/ApprovalCenterPage'
 import { TransferOrderPage } from '../pages/TransferOrderPage'
@@ -223,7 +225,39 @@ export function AppRoutes() {
               }
             />
             <Route
+              path="/movements"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <StockVouchersPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/movements/new"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <MovementCreatePage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/movements/:id"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <MovementOpenPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
               path="/stock-vouchers/:id/print"
+              element={
+                <RequirePermissionRoute permission="inventory:read">
+                  <StockVoucherPrintPage />
+                </RequirePermissionRoute>
+              }
+            />
+            <Route
+              path="/movements/:id/print"
               element={
                 <RequirePermissionRoute permission="inventory:read">
                   <StockVoucherPrintPage />

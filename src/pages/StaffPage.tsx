@@ -36,6 +36,8 @@ export function StaffPage() {
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState('')
 
+  const [selectedRoleForMatrix, setSelectedRoleForMatrix] = useState<Role>('manager')
+
   const users = useMemo(() => {
     return state.users.slice().sort((a, b) => a.username.localeCompare(b.username))
   }, [state.users])
@@ -265,7 +267,11 @@ export function StaffPage() {
                     </thead>
                     <tbody>
                     {users.map((u) => (
-                        <tr key={u.id}>
+                        <tr 
+                            key={u.id} 
+                            onClick={() => setSelectedRoleForMatrix(u.role)}
+                            style={{ cursor: 'pointer', background: selectedRoleForMatrix === u.role ? 'var(--primary-50)' : 'transparent' }}
+                        >
                         <td style={{ fontWeight: 600 }}>{u.username}</td>
                         <td>{u.fullName}</td>
                         <td><span className="badge">{roleLabel(u.role).split('(')[0]}</span></td>
@@ -301,7 +307,18 @@ export function StaffPage() {
             </div>
 
             <div className="card">
-                <div className="card-title">Ma trận phân quyền</div>
+                <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Ma trận phân quyền</span>
+                    <select 
+                        value={selectedRoleForMatrix} 
+                        onChange={(e) => setSelectedRoleForMatrix(e.target.value as Role)}
+                        style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-color)' }}
+                    >
+                        {roles.map(r => (
+                            <option key={r} value={r}>{roleLabel(r).split('(')[0]}</option>
+                        ))}
+                    </select>
+                </div>
                 <div className="table-wrap">
                 <table className="table">
                     <thead>
@@ -314,9 +331,7 @@ export function StaffPage() {
                     </tr>
                     </thead>
                     <tbody>
-                    {/* Just showing Admin/Staff diff for simplicity or iterate roles? Let's show currently selected role or generic matrix */}
-                    {/* The prompt asked for a matrix grid. We can show it for the 'Manager' role as example or make it selectable */}
-                    {groupPermissions(rolePermissions['manager']).map((g) => (
+                    {groupPermissions(rolePermissions[selectedRoleForMatrix]).map((g) => (
                         <tr key={g.moduleKey}>
                             <td style={{ fontWeight: 600 }}>{g.moduleLabel}</td>
                             <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':read')) ? 'var(--success)' : 'var(--text-muted)' }}>
@@ -336,7 +351,7 @@ export function StaffPage() {
                     </tbody>
                 </table>
                 <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
-                    * Bảng trên hiển thị quyền hạn mẫu của vai trò "Quản lý". Admin có toàn quyền.
+                    * Bảng trên hiển thị quyền hạn của vai trò <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{roleLabel(selectedRoleForMatrix)}</span>.
                 </div>
                 </div>
             </div>

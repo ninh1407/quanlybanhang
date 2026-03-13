@@ -371,7 +371,7 @@ export function WarehouseControlTowerPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Trung tâm điều hành kho (Control Tower)" />
+      <PageHeader title="Trung tâm điều hành kho" />
 
       {/* Top Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>

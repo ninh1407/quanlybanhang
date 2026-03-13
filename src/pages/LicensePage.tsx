@@ -1,10 +1,28 @@
 import { PageHeader } from '../ui-kit/PageHeader'
 import { Calendar, CheckCircle, Award, Server } from 'lucide-react'
+import { useDialogs } from '../ui-kit/Dialogs'
+import { useNavigate } from 'react-router-dom'
 
 export function LicensePage() {
+  const dialogs = useDialogs()
+  const navigate = useNavigate()
+
+  const handleRenew = () => {
+    dialogs.alert({ message: 'Vui lòng liên hệ bộ phận kinh doanh để gia hạn gói cước.' })
+  }
+
+  const handleContactSales = (e: React.MouseEvent) => {
+    e.preventDefault()
+    dialogs.alert({ message: 'Hotline: 1900 1234 - Email: sales@company.com' })
+  }
+
   return (
     <div className="page">
-      <PageHeader title="Thông tin bản quyền" subtitle="Quản lý gói dịch vụ và gia hạn" />
+      <PageHeader 
+        title="Thông tin bản quyền" 
+        subtitle="Quản lý gói dịch vụ và gia hạn" 
+        onBack={() => navigate('/')}
+      />
 
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
           <div className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--primary-200)', boxShadow: '0 10px 30px rgba(37, 99, 235, 0.1)' }}>
@@ -53,13 +71,13 @@ export function LicensePage() {
                           <Server size={14} />
                           Server: Asia-Pacific (VN)
                       </div>
-                      <button className="btn btn-primary">Gia hạn ngay</button>
+                      <button className="btn btn-primary" onClick={handleRenew}>Gia hạn ngay</button>
                   </div>
               </div>
           </div>
           
           <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-muted)' }}>
-              Cần nâng cấp gói? <a href="#" style={{ color: 'var(--primary-600)', fontWeight: 500 }}>Liên hệ kinh doanh</a>
+              Cần nâng cấp gói? <a href="#" style={{ color: 'var(--primary-600)', fontWeight: 500 }} onClick={handleContactSales}>Liên hệ kinh doanh</a>
           </div>
       </div>
     </div>

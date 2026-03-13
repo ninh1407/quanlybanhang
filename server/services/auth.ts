@@ -64,7 +64,7 @@ export class AuthService {
       active: user.active,
       allowedLocationIds: user.allowedLocationIds,
       scope: user.scope as any,
-      password: user.password,
+      password: user.password ?? undefined,
       createdAt: user.createdAt.toISOString() // Fix missing createdAt
     }
 
@@ -104,7 +104,7 @@ export class AuthService {
       active: user.active,
       allowedLocationIds: user.allowedLocationIds,
       scope: user.scope as any,
-      password: user.password,
+      password: user.password ?? undefined,
       createdAt: user.createdAt.toISOString()
     }
 

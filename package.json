@@ -75,7 +75,7 @@
     "productName": "Ứng dụng quản lý bán hàng",
     "artifactName": "UngDungQuanLyBanHang-Setup-${version}.${ext}",
     "directories": {
-      "output": "release_v3"
+      "output": "release_v3_401"
     },
     "publish": [
       {

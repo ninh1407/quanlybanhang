@@ -31,6 +31,34 @@ async function main() {
 
   const prisma = new PrismaClient()
   try {
+    const existingWarehouse = await prisma.warehouse.findFirst({ where: { status: 'active' } })
+    if (!existingWarehouse) {
+      await prisma.warehouse.createMany({
+        data: [
+          {
+            code: 'MAIN',
+            name: 'Kho chính (HCM)',
+            region: 'Hồ Chí Minh',
+            lat: 10.8231,
+            lng: 106.6297,
+            address: 'Hồ Chí Minh',
+            status: 'active',
+          },
+          {
+            code: 'HN01',
+            name: 'Kho Hà Nội',
+            region: 'Hà Nội',
+            lat: 21.0285,
+            lng: 105.8542,
+            address: 'Hà Nội',
+            status: 'active',
+          },
+        ],
+        skipDuplicates: true,
+      })
+      process.stdout.write('✅ Đã tạo 2 kho mặc định (MAIN, HN01)\n')
+    }
+
     const existing = await prisma.user.findUnique({ where: { username } })
     const hash = await bcrypt.hash(password, 10)
 

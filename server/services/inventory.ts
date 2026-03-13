@@ -143,6 +143,81 @@ export class InventoryService {
       }
   }
 
+  async adjustStock(
+    skuId: string,
+    warehouseId: string,
+    quantity: number,
+    type: 'IN' | 'OUT' | 'ADJUST',
+    referenceId?: string,
+    tx: Tx = prisma
+  ) {
+    if (quantity <= 0) return
+
+    if (type === 'IN') {
+      await tx.inventory.upsert({
+        where: { skuId_warehouseId: { skuId, warehouseId } },
+        create: { skuId, warehouseId, quantity, reserved: 0 },
+        update: { quantity: { increment: quantity } },
+      })
+
+      await tx.stockMovement.create({
+        data: {
+          skuId,
+          warehouseId,
+          type: 'IN',
+          quantity,
+          referenceType: 'adjust',
+          referenceId: referenceId ?? null,
+        },
+      })
+      return
+    }
+
+    const inv = await tx.inventory.findUnique({ where: { skuId_warehouseId: { skuId, warehouseId } } })
+    const currentQty = inv?.quantity ?? 0
+    const currentReserved = inv?.reserved ?? 0
+    const available = currentQty - currentReserved
+
+    if (type === 'OUT') {
+      if (available < quantity) {
+        throw new Error(`Insufficient stock for SKU ${skuId} in Warehouse ${warehouseId}. Available: ${available}, Required: ${quantity}`)
+      }
+
+      await tx.inventory.update({
+        where: { skuId_warehouseId: { skuId, warehouseId } },
+        data: { quantity: { decrement: quantity } },
+      })
+
+      await tx.stockMovement.create({
+        data: {
+          skuId,
+          warehouseId,
+          type: 'OUT',
+          quantity,
+          referenceType: 'adjust',
+          referenceId: referenceId ?? null,
+        },
+      })
+      return
+    }
+
+    await tx.inventory.update({
+      where: { skuId_warehouseId: { skuId, warehouseId } },
+      data: { quantity: { increment: quantity } },
+    })
+
+    await tx.stockMovement.create({
+      data: {
+        skuId,
+        warehouseId,
+        type: 'ADJUST',
+        quantity,
+        referenceType: 'adjust',
+        referenceId: referenceId ?? null,
+      },
+    })
+  }
+
   /**
    * Transfer Stock between Warehouses
    * OUT from Source, IN to Target.

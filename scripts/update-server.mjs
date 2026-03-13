@@ -1,6 +1,8 @@
 import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import readline from 'readline/promises'
+import { stdin as input, stdout as output } from 'process'
 
 console.log('🚀 Đang cập nhật Server & Database...')
 
@@ -39,7 +41,54 @@ try {
   // 3. Database Setup (Prisma)
   console.log('🗄️ 3. Đang cập nhật cấu trúc Database...')
   execSync('npx prisma generate', { stdio: 'inherit' })
-  execSync('npx prisma db push', { stdio: 'inherit' })
+
+  const runPrisma = (cmd) => {
+    try {
+      const out = execSync(cmd, { stdio: 'pipe', encoding: 'utf8' })
+      if (out) process.stdout.write(out)
+      return { ok: true, output: out ?? '' }
+    } catch (e) {
+      const stdout = e?.stdout?.toString?.() ?? ''
+      const stderr = e?.stderr?.toString?.() ?? ''
+      if (stdout) process.stdout.write(stdout)
+      if (stderr) process.stderr.write(stderr)
+      return { ok: false, output: `${stdout}\n${stderr}`.trim() }
+    }
+  }
+
+  const dbPush = () => runPrisma('npx prisma db push --accept-data-loss')
+  let dbPushResult = dbPush()
+
+  if (!dbPushResult.ok) {
+    const outputText = dbPushResult.output.toLowerCase()
+    const looksLikeMissingTable = outputText.includes('p1014') || outputText.includes('does not exist')
+
+    if (looksLikeMissingTable) {
+      console.log('⚠️  Prisma không thể đồng bộ schema với Database hiện tại (P1014 / thiếu bảng).')
+      console.log('⚠️  Giải pháp nhanh: RESET Database để tạo lại toàn bộ bảng theo schema mới (SẼ MẤT DỮ LIỆU).')
+
+      const allowForceReset = process.env.PRISMA_FORCE_RESET === '1'
+      let shouldReset = allowForceReset
+
+      if (!allowForceReset) {
+        const rl = readline.createInterface({ input, output })
+        const answer = (await rl.question('👉 Bạn có muốn reset database ngay bây giờ? (yes/no): ')).trim().toLowerCase()
+        rl.close()
+        shouldReset = answer === 'y' || answer === 'yes'
+      }
+
+      if (!shouldReset) {
+        throw new Error('Dừng cập nhật vì không reset database. Nếu muốn tự động reset, set PRISMA_FORCE_RESET=1.')
+      }
+
+      const resetResult = runPrisma('npx prisma db push --force-reset --accept-data-loss')
+      if (!resetResult.ok) {
+        throw new Error('Reset database thất bại. Vui lòng kiểm tra DATABASE_URL và quyền truy cập Postgres.')
+      }
+    } else {
+      throw new Error('Prisma db push thất bại. Vui lòng kiểm tra log phía trên.')
+    }
+  }
 
   // 4. Data Migration (JSON -> PG)
   // Only run if data.json exists to ensure we don't crash

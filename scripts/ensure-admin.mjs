@@ -79,6 +79,26 @@ async function main() {
       return
     }
 
+    const shouldForceAdminDefaults = username === 'admin'
+    if (shouldForceAdminDefaults) {
+      const data = {
+        active: true,
+        role: 'admin',
+        scope: 'all',
+        allowedLocationIds: [],
+        fullName,
+      }
+      if (resetPassword) {
+        await prisma.user.update({ where: { username }, data: { ...data, password: hash } })
+        process.stdout.write(`✅ Đã reset mật khẩu cho tài khoản: ${username}\n`)
+        process.stdout.write(`🔑 Mật khẩu mới: ${password}\n`)
+        return
+      }
+      await prisma.user.update({ where: { username }, data })
+      process.stdout.write(`✅ Đã chuẩn hóa quyền admin cho tài khoản: ${username}\n`)
+      return
+    }
+
     if (resetPassword) {
       await prisma.user.update({ where: { username }, data: { password: hash, active: true } })
       process.stdout.write(`✅ Đã reset mật khẩu cho tài khoản: ${username}\n`)

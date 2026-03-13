@@ -25,7 +25,11 @@ export function userCanAccessLocation(user: User | null, locationId: string): bo
 }
 
 export function accessibleLocations(user: User | null, locations: Location[]): Location[] {
-  const active = locations.filter((l) => l.active)
+  const active = locations.filter((l: any) => {
+    if (typeof l.active === 'boolean') return l.active
+    if (typeof l.status === 'string') return l.status === 'active'
+    return true
+  })
   if (!user) return []
   
   // 1. Admin/CEO/Manager: Full access
@@ -44,4 +48,3 @@ export function accessibleLocations(user: User | null, locations: Location[]): L
   const allowed = user.allowedLocationIds ?? []
   return active.filter((l) => allowed.includes(l.id))
 }
-

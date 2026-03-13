@@ -4,7 +4,7 @@
   "description": "Phần mềm quản lý bán hàng đa kho",
   "author": "Ninh <ninh1407@github.com>",
   "private": true,
-  "version": "4.0.1",
+  "version": "4.0.2",
   "type": "module",
   "main": "electron/main.js",
   "repository": {
@@ -75,7 +75,7 @@
     "productName": "Ứng dụng quản lý bán hàng",
     "artifactName": "UngDungQuanLyBanHang-Setup-${version}.${ext}",
     "directories": {
-      "output": "release_v3_401"
+      "output": "release_v3_402"
     },
     "publish": [
       {

@@ -31,7 +31,28 @@ export class AuthService {
     
     if (!user || !user.password) return null
 
-    const valid = await bcrypt.compare(password, user.password)
+    // Check if stored password is plain text or hash (Legacy migration support)
+    let valid = false
+    if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+        valid = await bcrypt.compare(password, user.password)
+    } else {
+        // Fallback for plain text (e.g. from data.json migration)
+        valid = (password === user.password)
+        if (valid) {
+            // Auto-hash for next time
+            try {
+                const newHash = await bcrypt.hash(password, 10)
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { password: newHash }
+                })
+                console.log(`Auto-migrated password to hash for user: ${username}`)
+            } catch (e) {
+                console.error(`Failed to auto-hash password for user ${username}:`, e)
+            }
+        }
+    }
+    
     if (!valid) return null
 
     // Map Prisma User to Domain User

@@ -82,7 +82,7 @@ export function createSeedState(): AppState {
       {
         id: 'usr_admin',
         username: 'admin',
-        password: '$2a$10$wT8vFkG.z6y9qJ1kL4t3.e6.g5h4i3j2k1l0m9n8o7p6q5r4s3t2u1', // Placeholder hash, server will reset if needed
+        password: '$2b$10$FPhWUF0PVOHr6DGCpV0kmu2VFryCDMawM5in5mdDTU.BJFwHpSRcO', // Hash of '123'
         fullName: 'Quản trị (Admin)',
         role: 'admin',
         active: true,
@@ -93,7 +93,7 @@ export function createSeedState(): AppState {
       {
         id: 'usr_staff1',
         username: 'staff1',
-        password: '$2a$10$wT8vFkG.z6y9qJ1kL4t3.e6.g5h4i3j2k1l0m9n8o7p6q5r4s3t2u1',
+        password: '$2b$10$FPhWUF0PVOHr6DGCpV0kmu2VFryCDMawM5in5mdDTU.BJFwHpSRcO', // Hash of '123'
         fullName: 'Nhân viên 1',
         role: 'staff',
         active: true,

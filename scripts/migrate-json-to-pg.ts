@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const DATA_FILE = path.resolve('server/data.json')
 const prisma = new PrismaClient()
@@ -20,13 +21,28 @@ async function migrate() {
   // 1. Users
   console.log(`Migrating ${data.users?.length || 0} users...`)
   for (const u of (data.users || [])) {
+    // Check if password needs hashing (if it's not already a bcrypt hash)
+    let passwordToStore = u.password
+    if (passwordToStore && !passwordToStore.startsWith('$2a$') && !passwordToStore.startsWith('$2b$')) {
+        console.log(`Hashing password for user: ${u.username}`)
+        passwordToStore = await bcrypt.hash(passwordToStore, 10)
+    }
+
     await prisma.user.upsert({
       where: { username: u.username },
-      update: {},
+      update: {
+        password: passwordToStore,
+        fullName: u.fullName || u.username,
+        role: u.role,
+        active: u.active ?? true,
+        allowedLocationIds: u.allowedLocationIds || [],
+        scope: u.scope,
+        region: u.region
+      },
       create: {
         id: u.id,
         username: u.username,
-        password: u.password,
+        password: passwordToStore,
         fullName: u.fullName || u.username,
         role: u.role,
         active: u.active ?? true,

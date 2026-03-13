@@ -33,31 +33,6 @@ export interface ChannelPerformance {
   percent: number
 }
 
-export interface DashboardData {
-    kpi: {
-        revenueToday: number
-        ordersToday: number
-        inventoryValue: number
-        cashflow: number
-    }
-    sales: {
-        chart: { date: string, revenue: number }[]
-        topProducts: any[]
-    }
-    inventory: {
-        lowStock: number
-        deadStock: number
-        value: number
-        health: number
-    }
-    operations: {
-        pending: number
-        picking: number
-        packing: number
-        shipping: number
-    }
-}
-
 export const AnalyticsApi = {
   getBusinessKPIs: (from?: Date, to?: Date) => {
     const params = new URLSearchParams()
@@ -83,7 +58,5 @@ export const AnalyticsApi = {
     if (from) params.append('from', from.toISOString())
     if (to) params.append('to', to.toISOString())
     return fetchApi<ChannelPerformance[]>(`/api/analytics/channels?${params.toString()}`)
-  },
-
-  getDashboardData: () => fetchApi<DashboardData>('/api/dashboard')
+  }
 }

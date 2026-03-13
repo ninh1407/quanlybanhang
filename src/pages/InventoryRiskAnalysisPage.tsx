@@ -212,7 +212,7 @@ export function InventoryRiskAnalysisPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Phân tích rủi ro tồn kho" />
+      <PageHeader title="Phân tích rủi ro tồn kho (Inventory Risk Center)" />
 
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, marginBottom: 24 }}>
         <div className="card" style={{ borderLeft: '4px solid var(--danger)' }}>

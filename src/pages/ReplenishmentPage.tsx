@@ -334,7 +334,7 @@ export function ReplenishmentPage() {
   return (
     <div className="page">
       <PageHeader 
-        title="Trung tâm gợi ý nhập hàng"  
+        title="Purchase Suggestion Center" 
         actions={
             <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn" onClick={() => setViewMode('settings')}>

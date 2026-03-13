@@ -328,7 +328,7 @@ export function TransferOrderPage() {
         return (
             <div className="page">
                 <PageHeader 
-                    title="Chuyển kho doanh nghiệp"  
+                    title="Chuyển kho doanh nghiệp (Enterprise Transfer)" 
                     actions={
                         <button className="btn btn-primary" onClick={() => { setFormData({}); setViewMode('create'); setCreateStep(1) }}>
                             <Plus size={16} /> Tạo phiếu chuyển

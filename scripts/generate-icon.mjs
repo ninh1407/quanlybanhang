@@ -1,12 +1,11 @@
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs/promises'
 
-const iconPath = path.resolve('build/icon.ico')
-if (fs.existsSync(iconPath)) {
-  process.stdout.write('✅ icon.ico đã tồn tại\n')
-  process.exit(0)
+const iconPath = new URL('../build/icon.ico', import.meta.url)
+
+try {
+  await fs.access(iconPath)
+} catch {
+  process.stdout.write(
+    '[gen:icon] Không tìm thấy build/icon.ico. Bỏ qua bước tạo icon.\n'
+  )
 }
-
-process.stderr.write('❌ Không tìm thấy build/icon.ico\n')
-process.exit(1)
-

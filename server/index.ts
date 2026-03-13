@@ -19,7 +19,6 @@ import { rateLimit } from 'express-rate-limit'
 
 import { store, prisma } from './store' // Import prisma
 import { analyticsService } from './services/analytics'
-import { orderService } from './services/order' // Import Order Service
 
 import { authService } from './services/auth'
 import { authenticateToken, authorizeWarehouse } from './middleware/auth'
@@ -206,80 +205,6 @@ app.get('/api/analytics/channels', authenticateToken, async (req, res) => {
     }
 })
 
-
-// --- New API Routes for ERP ---
-
-// 1. Inventory
-app.get('/api/inventory', authenticateToken, async (req, res) => {
-    try {
-        const db = prisma as any
-        const { warehouseId } = req.query
-        const where: any = {}
-        if (warehouseId) where.warehouseId = String(warehouseId)
-
-        const inventory = await db.inventory.findMany({
-            where,
-            include: { 
-                sku: { 
-                    include: { product: true } 
-                },
-                warehouse: true
-            }
-        })
-        res.json(inventory)
-    } catch (e: any) {
-        res.status(500).json({ error: e.message })
-    }
-})
-
-// 2. Orders
-app.post('/api/orders', authenticateToken, async (req, res) => {
-    try {
-        // Validate payload...
-        const order = await orderService.createOrder({
-            ...req.body,
-            createdByUserId: req.user.id
-        })
-        res.json(order)
-    } catch (e: any) {
-        res.status(500).json({ error: e.message })
-    }
-})
-
-app.get('/api/orders/:id', authenticateToken, async (req, res) => {
-    try {
-        const orderId = Array.isArray((req.params as any).id) ? (req.params as any).id[0] : (req.params as any).id
-        const order = await orderService.getOrder(String(orderId))
-        if (!order) return res.status(404).json({ error: 'Order not found' })
-        res.json(order)
-    } catch (e: any) {
-        res.status(500).json({ error: e.message })
-    }
-})
-
-// 3. Products (Simple CRUD for now)
-app.get('/api/products', authenticateToken, async (req, res) => {
-    try {
-        const db = prisma as any
-        const products = await db.product.findMany({
-            include: { skus: true, category: true }
-        })
-        res.json(products)
-    } catch (e: any) {
-        res.status(500).json({ error: e.message })
-    }
-})
-
-// 4. Dashboard (New)
-app.get('/api/dashboard', authenticateToken, async (req, res) => {
-    try {
-        const data = await analyticsService.getDashboardData(req.user)
-        res.json(data)
-    } catch (e: any) {
-        res.status(500).json({ error: e.message })
-    }
-})
-
 // Login Endpoint (Updated)
 app.post('/api/users', authenticateToken, async (req, res) => {
     // Check permissions
@@ -359,40 +284,17 @@ app.post('/api/login', loginLimiter, async (req: express.Request, res: express.R
       return
   }
 
-  const toLocation = (w: any) => ({
-    id: w.id,
-    code: w.code,
-    name: w.name,
-    province: w.region ?? undefined,
-    address: w.address ?? undefined,
-    lat: w.lat ?? undefined,
-    lng: w.lng ?? undefined,
-    note: w.note ?? '',
-    active: w.active ?? (w.status ? w.status === 'active' : true),
-    createdAt: w.createdAt ? new Date(w.createdAt).toISOString() : new Date().toISOString(),
+  // Lấy danh sách locations từ Database để trả về cho Frontend
+  const locations = await prisma.location.findMany({
+    where: { active: true }
   })
-
-  const db = prisma as any
-  let locations: any[] = []
-  try {
-    const warehouses = await db.warehouse.findMany()
-    if (warehouses.length) {
-      locations = warehouses.map((w: any) => toLocation({ ...w, active: w.status === 'active' }))
-    }
-  } catch {
-    locations = []
-  }
-
-  if (!locations.length) {
-    locations = (store.state.locations || []).map((l: any) => toLocation(l))
-  }
 
   res.json({ 
     token: result.accessToken, 
     accessToken: result.accessToken,
     refreshToken: result.refreshToken,
     user: result.user,
-    locations
+    locations: locations // Dùng data từ DB thay vì store.state.locations
   })
 })
 

@@ -178,7 +178,7 @@ export function InventoryBalancingPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Cân bằng kho" />
+      <PageHeader title="Cân bằng kho (Inventory Balancing)" />
 
       <div className="dashboard-grid" style={{ marginBottom: 24, gridTemplateColumns: 'repeat(4, 1fr)' }}>
           <div className="card">

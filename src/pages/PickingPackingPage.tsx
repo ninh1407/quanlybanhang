@@ -233,7 +233,7 @@ export function PickingPackingPage() {
 
     return (
         <div className="page">
-            <PageHeader title="Vận hành kho: Soạn & Đóng gói" subtitle="Quy trình xử lý đơn hàng tại kho" />
+            <PageHeader title="Warehouse Operation: Pick & Pack" subtitle="Quy trình xử lý đơn hàng tại kho" />
             
             {/* Kanban Workflow Steps */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 24, overflowX: 'auto', paddingBottom: 4 }}>

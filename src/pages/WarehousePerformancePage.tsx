@@ -111,7 +111,7 @@ export function WarehousePerformancePage() {
 
   return (
     <div className="page">
-      <PageHeader title="Hiệu suất kho" />
+      <PageHeader title="Warehouse Performance Dashboard" />
       
       <div className="card">
           <div className="card-title">Hiệu suất vận hành (KPIs)</div>

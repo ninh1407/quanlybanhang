@@ -632,7 +632,7 @@ export function ApprovalCenterPage() {
   return (
     <div className="page">
       <PageHeader 
-        title="Trung tâm phê duyệt"  
+        title="Approval Center" 
         actions={
             <button className="btn btn-primary" onClick={() => setIsCreating(true)}>
                 <Plus size={16} /> Tạo yêu cầu

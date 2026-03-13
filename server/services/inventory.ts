@@ -1,8 +1,15 @@
 import { prisma } from '../store'
-import { PrismaClient, Prisma } from '@prisma/client'
 
-// Helper type for Transaction Client
-type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
+type Tx = {
+  inventory: {
+    findUnique: (args: any) => Promise<any>
+    upsert: (args: any) => Promise<any>
+    update: (args: any) => Promise<any>
+  }
+  stockMovement: {
+    create: (args: any) => Promise<any>
+  }
+}
 
 export class InventoryService {
   
@@ -10,7 +17,7 @@ export class InventoryService {
    * Reserve stock for an Order
    * Decreases Available, Increases Reserved. Quantity unchanged.
    */
-  async reserveStock(orderId: string, items: { skuId: string, quantity: number }[], warehouseId: string, tx: Tx = prisma) {
+  async reserveStock(orderId: string, items: { skuId: string, quantity: number }[], warehouseId: string, tx: Tx = prisma as any) {
       for (const item of items) {
         // 1. Check availability
         // Use tx instead of internal transaction
@@ -58,7 +65,7 @@ export class InventoryService {
    * Release reserved stock (e.g. Order Cancelled)
    * Increases Available, Decreases Reserved. Quantity unchanged.
    */
-  async releaseStock(orderId: string, items: { skuId: string, quantity: number }[], warehouseId: string, tx: Tx = prisma) {
+  async releaseStock(orderId: string, items: { skuId: string, quantity: number }[], warehouseId: string, tx: Tx = prisma as any) {
       for (const item of items) {
         // 1. Update Inventory (Reserved -= qty)
         await tx.inventory.update({
@@ -84,7 +91,7 @@ export class InventoryService {
    * Ship Order (Deduct from Inventory and Reserved)
    * Decreases Quantity, Decreases Reserved. Available unchanged (technically).
    */
-  async shipOrder(orderId: string, items: { skuId: string, quantity: number }[], warehouseId: string, tx: Tx = prisma) {
+  async shipOrder(orderId: string, items: { skuId: string, quantity: number }[], warehouseId: string, tx: Tx = prisma as any) {
       for (const item of items) {
         // 1. Update Inventory (Quantity -= qty, Reserved -= qty)
         await tx.inventory.update({
@@ -113,7 +120,7 @@ export class InventoryService {
    * Receive Stock (Purchase)
    * Increases Quantity, Increases Available. Reserved unchanged.
    */
-  async receiveStock(poId: string, items: { skuId: string, quantity: number }[], warehouseId: string, tx: Tx = prisma) {
+  async receiveStock(poId: string, items: { skuId: string, quantity: number }[], warehouseId: string, tx: Tx = prisma as any) {
       for (const item of items) {
         // 1. Upsert Inventory
         await tx.inventory.upsert({
@@ -149,7 +156,7 @@ export class InventoryService {
     quantity: number,
     type: 'IN' | 'OUT' | 'ADJUST',
     referenceId?: string,
-    tx: Tx = prisma
+    tx: Tx = prisma as any
   ) {
     if (quantity <= 0) return
 
@@ -222,7 +229,7 @@ export class InventoryService {
    * Transfer Stock between Warehouses
    * OUT from Source, IN to Target.
    */
-  async transferStock(transferId: string, items: { skuId: string, quantity: number }[], fromWarehouseId: string, toWarehouseId: string, tx: Tx = prisma) {
+  async transferStock(transferId: string, items: { skuId: string, quantity: number }[], fromWarehouseId: string, toWarehouseId: string, tx: Tx = prisma as any) {
       for (const item of items) {
         // Source Warehouse: OUT
         await tx.inventory.update({
@@ -269,14 +276,16 @@ export class InventoryService {
   }
 
   async getStockLevel(skuId: string, warehouseId: string) {
-    const inventory = await prisma.inventory.findUnique({
+    const db = prisma as any
+    const inventory = await db.inventory.findUnique({
       where: { skuId_warehouseId: { skuId, warehouseId } }
     })
     return inventory ? inventory.quantity - inventory.reserved : 0
   }
   
   async getInventory(skuId: string, warehouseId: string) {
-    return await prisma.inventory.findUnique({
+    const db = prisma as any
+    return await db.inventory.findUnique({
         where: { skuId_warehouseId: { skuId, warehouseId } }
     })
   }

@@ -212,11 +212,12 @@ app.get('/api/analytics/channels', authenticateToken, async (req, res) => {
 // 1. Inventory
 app.get('/api/inventory', authenticateToken, async (req, res) => {
     try {
+        const db = prisma as any
         const { warehouseId } = req.query
         const where: any = {}
         if (warehouseId) where.warehouseId = String(warehouseId)
 
-        const inventory = await prisma.inventory.findMany({
+        const inventory = await db.inventory.findMany({
             where,
             include: { 
                 sku: { 
@@ -247,7 +248,8 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
 
 app.get('/api/orders/:id', authenticateToken, async (req, res) => {
     try {
-        const order = await orderService.getOrder(req.params.id)
+        const orderId = Array.isArray((req.params as any).id) ? (req.params as any).id[0] : (req.params as any).id
+        const order = await orderService.getOrder(String(orderId))
         if (!order) return res.status(404).json({ error: 'Order not found' })
         res.json(order)
     } catch (e: any) {
@@ -258,7 +260,8 @@ app.get('/api/orders/:id', authenticateToken, async (req, res) => {
 // 3. Products (Simple CRUD for now)
 app.get('/api/products', authenticateToken, async (req, res) => {
     try {
-        const products = await prisma.product.findMany({
+        const db = prisma as any
+        const products = await db.product.findMany({
             include: { skus: true, category: true }
         })
         res.json(products)
@@ -356,17 +359,40 @@ app.post('/api/login', loginLimiter, async (req: express.Request, res: express.R
       return
   }
 
-  // Lấy danh sách locations từ Database để trả về cho Frontend
-  const warehouses = await prisma.warehouse.findMany({
-    where: { status: 'active' }
+  const toLocation = (w: any) => ({
+    id: w.id,
+    code: w.code,
+    name: w.name,
+    province: w.region ?? undefined,
+    address: w.address ?? undefined,
+    lat: w.lat ?? undefined,
+    lng: w.lng ?? undefined,
+    note: w.note ?? '',
+    active: w.active ?? (w.status ? w.status === 'active' : true),
+    createdAt: w.createdAt ? new Date(w.createdAt).toISOString() : new Date().toISOString(),
   })
+
+  const db = prisma as any
+  let locations: any[] = []
+  try {
+    const warehouses = await db.warehouse.findMany()
+    if (warehouses.length) {
+      locations = warehouses.map((w: any) => toLocation({ ...w, active: w.status === 'active' }))
+    }
+  } catch {
+    locations = []
+  }
+
+  if (!locations.length) {
+    locations = (store.state.locations || []).map((l: any) => toLocation(l))
+  }
 
   res.json({ 
     token: result.accessToken, 
     accessToken: result.accessToken,
     refreshToken: result.refreshToken,
     user: result.user,
-    locations: warehouses // Dùng data từ DB thay vì store.state.locations
+    locations
   })
 })
 

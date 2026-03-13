@@ -90,6 +90,9 @@ try {
     }
   }
 
+  console.log('👤 3.1 Đang đảm bảo có tài khoản quản trị (admin)...')
+  execSync('node scripts/ensure-admin.mjs', { stdio: 'inherit' })
+
   // 4. Data Migration (JSON -> PG)
   // Only run if data.json exists to ensure we don't crash
   const dataPath = path.resolve('server/data.json')

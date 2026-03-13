@@ -136,7 +136,7 @@ export function AdminLayout() {
     const actions: { key: string; label: string; to: string; show: boolean; icon: React.ReactNode }[] = [
       { key: 'order', label: 'Tạo đơn hàng', to: '/orders', show: can('orders:write'), icon: <FileText size={16} /> },
       { key: 'product', label: 'Thêm sản phẩm', to: '/products', show: can('products:write'), icon: <Package size={16} /> },
-      { key: 'import', label: 'Nhập kho', to: '/movements/new', show: can('inventory:write'), icon: <RotateCw size={16} /> },
+      { key: 'import', label: 'Nhập kho', to: '/stock-vouchers', show: can('inventory:write'), icon: <RotateCw size={16} /> },
       { key: 'customer', label: 'Thêm khách hàng', to: '/customers', show: can('customers:write'), icon: <Users size={16} /> },
       { key: 'stockCount', label: 'Kiểm kho', to: '/stock-counts', show: can('inventory:write'), icon: <ClipboardList size={16} /> },
     ]
@@ -208,7 +208,7 @@ export function AdminLayout() {
                 <NavItem to="/stock-counts" label="Kiểm kho" icon={<ClipboardList size={18} />} />
               </RequirePermission>
               <RequirePermission permission="inventory:read">
-                <NavItem to="/movements" label="Phiếu kho" icon={<FileText size={18} />} />
+                <NavItem to="/stock-vouchers" label="Phiếu kho" icon={<FileText size={18} />} />
               </RequirePermission>
               <RequirePermission permission="inventory:read">
                 <NavItem to="/locations" label="Vị trí kho" icon={<MapPin size={18} />} />

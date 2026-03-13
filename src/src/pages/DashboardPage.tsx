@@ -751,7 +751,7 @@ export function DashboardPage() {
       {/* 1. KPI Cards (4 cols) - Matches User Request */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
         <SmartMetricCard 
-            label="New Orders" 
+            label="Đơn hàng mới" 
             value={`${metrics.completedOrdersCount} / ${metrics.totalOrders}`} 
             solid
             status="info"

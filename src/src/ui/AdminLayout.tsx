@@ -72,15 +72,18 @@ function NavGroup(props: { title: string; open: boolean; onToggle: () => void; c
 }
 
 function roleLabel(role: string): string {
-  if (role === 'admin') return 'Admin'
-  if (role === 'staff') return 'Nhân sự'
+  if (role === 'admin') return 'Quản trị viên'
+  if (role === 'staff') return 'Nhân viên'
+  if (role === 'manager') return 'Quản lý'
+  if (role === 'accountant') return 'Kế toán'
+  if (role === 'ceo') return 'Giám đốc'
   return role
 }
 
 import { useSettings } from '../settings/useSettings'
 // import { getServerUrl } from '../config'
 
-import { version } from '../../package.json'
+const version = '5.0.0'
 
 export function AdminLayout() {
   const { user, logout, can } = useAuth()
@@ -174,7 +177,7 @@ export function AdminLayout() {
           </RequirePermission>
 
           {can('orders:read') || can('customers:read') || can('products:read') ? (
-            <NavGroup title="Bán hàng (Sales)" open={groups.sales} onToggle={() => toggleGroup('sales')}>
+            <NavGroup title="Bán hàng" open={groups.sales} onToggle={() => toggleGroup('sales')}>
               <RequirePermission permission="orders:read">
                 <NavItem to="/orders" label="Đơn hàng" icon={<ShoppingCart size={18} />} />
               </RequirePermission>
@@ -191,9 +194,9 @@ export function AdminLayout() {
           ) : null}
 
           {can('inventory:read') ? (
-            <NavGroup title="Kho vận (Warehouse)" open={groups.inventory} onToggle={() => toggleGroup('inventory')}>
+            <NavGroup title="Kho vận & WMS" open={groups.inventory} onToggle={() => toggleGroup('inventory')}>
               <RequirePermission permission="inventory:read">
-                <NavItem to="/warehouse-control-tower" label="Control Tower" icon={<Activity size={18} />} />
+                <NavItem to="/warehouse-control-tower" label="Trung tâm điều hành" icon={<Activity size={18} />} />
               </RequirePermission>
               <RequirePermission permission="inventory:read">
                 <NavItem to="/approval-center" label="Duyệt yêu cầu" icon={<CheckSquare size={18} />} />
@@ -214,7 +217,7 @@ export function AdminLayout() {
                 <NavItem to="/locations" label="Vị trí kho" icon={<MapPin size={18} />} />
               </RequirePermission>
               <RequirePermission permission="inventory:read">
-                <NavItem to="/pick-pack" label="Pick & Pack" icon={<Box size={18} />} />
+                <NavItem to="/pick-pack" label="Đóng gói & Giao hàng" icon={<Box size={18} />} />
               </RequirePermission>
               <RequirePermission permission="inventory:read">
                 <NavItem to="/replenishment" label="Gợi ý nhập hàng" icon={<RotateCw size={18} />} />
@@ -229,7 +232,7 @@ export function AdminLayout() {
                 <NavItem to="/materials" label="Vật tư" icon={<Component size={18} />} />
               </RequirePermission>
               <RequirePermission permission="inventory:read">
-                <NavItem to="/warehouse-performance" label="KPIs Kho" icon={<BarChart size={18} />} />
+                <NavItem to="/warehouse-performance" label="Hiệu suất kho" icon={<BarChart size={18} />} />
               </RequirePermission>
               <RequirePermission permission="inventory:read">
                 <NavItem to="/order-monitoring" label="Giám sát đơn hàng" icon={<Activity size={18} />} />
@@ -238,7 +241,7 @@ export function AdminLayout() {
           ) : null}
 
           {can('products:read') ? (
-            <NavGroup title="Mua hàng (Purchasing)" open={groups.purchasing} onToggle={() => toggleGroup('purchasing')}>
+            <NavGroup title="Mua hàng" open={groups.purchasing} onToggle={() => toggleGroup('purchasing')}>
               <RequirePermission permission="products:read">
                 <NavItem to="/suppliers" label="Nhà cung cấp" icon={<Truck size={18} />} />
               </RequirePermission>
@@ -249,7 +252,7 @@ export function AdminLayout() {
           ) : null}
 
           {can('finance:read') ? (
-            <NavGroup title="Tài chính (Finance)" open={groups.finance} onToggle={() => toggleGroup('finance')}>
+            <NavGroup title="Tài chính" open={groups.finance} onToggle={() => toggleGroup('finance')}>
               <RequirePermission permission="finance:read">
                 <NavItem to="/finance/overview" label="Tổng quan" icon={<DollarSign size={18} />} />
               </RequirePermission>
@@ -263,21 +266,21 @@ export function AdminLayout() {
           ) : null}
 
           {can('orders:write') ? (
-            <NavGroup title="Đa kênh (Channels)" open={groups.omnichannel} onToggle={() => toggleGroup('omnichannel')}>
+            <NavGroup title="Kênh bán hàng" open={groups.omnichannel} onToggle={() => toggleGroup('omnichannel')}>
                 <NavItem to="/channel-integration" label="Cấu hình & Kết nối" icon={<Globe size={18} />} />
                 <NavItem to="/channel-reconciliation" label="Đối soát" icon={<CheckSquare size={18} />} />
             </NavGroup>
           ) : null}
 
           {can('dashboard:read') ? (
-            <NavGroup title="Báo cáo (Analytics)" open={groups.analytics} onToggle={() => toggleGroup('analytics')}>
+            <NavGroup title="Báo cáo & Phân tích" open={groups.analytics} onToggle={() => toggleGroup('analytics')}>
               <NavItem to="/analytics/sales" label="Báo cáo bán hàng" icon={<BarChart size={18} />} />
               <NavItem to="/analytics/inventory" label="Báo cáo kho" icon={<PieChart size={18} />} />
             </NavGroup>
           ) : null}
 
           {can('staff:read') ? (
-            <NavGroup title="Hệ thống (System)" open={groups.system} onToggle={() => toggleGroup('system')}>
+            <NavGroup title="Hệ thống" open={groups.system} onToggle={() => toggleGroup('system')}>
               <RequirePermission permission="staff:read">
                 <NavItem to="/staff" label="Nhân sự & Phân quyền" icon={<UserCog size={18} />} />
               </RequirePermission>

@@ -4,11 +4,13 @@ import { useAppState } from '../state/Store'
 import type { Sku, StockTransaction, Order } from '../domain/types'
 import { AnalyticsApi, type BusinessKPIs, type RevenueHistory, type TopProduct, type ChannelPerformance } from '../api/analytics'
 import { formatVnd } from '../lib/money'
+import { PageHeader } from '../ui-kit/PageHeader'
 import { 
   TrendingUp, 
   TrendingDown, 
   Minus, 
   AlertTriangle,
+  Search,
   Calendar,
   Download
 } from 'lucide-react'
@@ -32,6 +34,7 @@ import {
   Treemap
 } from 'recharts'
 import { format, startOfMonth, startOfDay, endOfDay, subDays } from 'date-fns'
+import { SmartTable, type Column, type SortConfig } from '../ui-kit/listing/SmartTable'
 
 function formatAxisMoney(value: number): string {
   const v = Number(value) || 0
@@ -73,48 +76,41 @@ function SmartMetricCard({
   trendValue?: string
   status?: 'success' | 'warning' | 'danger' | 'neutral'
 }) {
-  const color = status === 'success' ? '#10B981' : status === 'warning' ? '#F59E0B' : status === 'danger' ? '#EF4444' : '#6B7280'
-  const bgColor = status === 'success' ? '#ECFDF5' : status === 'warning' ? '#FFFBEB' : status === 'danger' ? '#FEF2F2' : '#F3F4F6'
+  const statusClass = status === 'success' ? 'kpi-success' : status === 'warning' ? 'kpi-warning' : status === 'danger' ? 'kpi-danger' : 'kpi-neutral'
   
   return (
-    <div className="card" style={{ padding: 16, borderLeft: `4px solid ${color}`, height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, textTransform: 'uppercase' }}>{label}</div>
-          {trend && (
-             <div style={{ 
-                 display: 'flex', alignItems: 'center', gap: 4, 
-                 padding: '2px 6px', borderRadius: 4, 
-                 background: bgColor, color: color, fontSize: 12, fontWeight: 600 
-             }}>
-                 {trend === 'up' ? <TrendingUp size={12}/> : trend === 'down' ? <TrendingDown size={12}/> : <Minus size={12}/>}
-                 {trendValue}
-             </div>
-          )}
-      </div>
-      
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end' }}>
-          <div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {status === 'success' ? 'Tốt' : status === 'warning' ? 'Cần chú ý' : status === 'danger' ? 'Nguy hiểm' : 'Ổn định'}
-              </div>
+    <div className={`card kpi-card ${statusClass}`}>
+      <div className="kpi-head">
+        <div className="kpi-label">{label}</div>
+        {trend ? (
+          <div className="kpi-trend">
+            {trend === 'up' ? <TrendingUp size={12} /> : trend === 'down' ? <TrendingDown size={12} /> : <Minus size={12} />}
+            {trendValue}
           </div>
-          
-          {data && data.length > 0 && (
-              <div style={{ width: 80, height: 40 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={data}>
-                          <defs>
-                              <linearGradient id={`grad-${label.replace(/\s/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
-                                  <stop offset="95%" stopColor={color} stopOpacity={0}/>
-                              </linearGradient>
-                          </defs>
-                          <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#grad-${label.replace(/\s/g, '')})`} />
-                      </AreaChart>
-                  </ResponsiveContainer>
-              </div>
-          )}
+        ) : null}
+      </div>
+
+      <div className="kpi-body">
+        <div>
+          <div className="kpi-value">{value}</div>
+          <div className="kpi-meta">{status === 'success' ? 'Tốt' : status === 'warning' ? 'Cần chú ý' : status === 'danger' ? 'Nguy hiểm' : 'Ổn định'}</div>
+        </div>
+
+        {data && data.length > 0 ? (
+          <div className="kpi-spark">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data}>
+                <defs>
+                  <linearGradient id={`grad-${label.replace(/\s/g, '')}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--kpi-accent)" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="var(--kpi-accent)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="value" stroke="var(--kpi-accent)" strokeWidth={2} fill={`url(#grad-${label.replace(/\s/g, '')})`} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -229,6 +225,11 @@ export function DashboardPage() {
       warehouseId: 'all',
       channel: 'all'
   })
+
+  const [staffRevenueQuery, setStaffRevenueQuery] = useState('')
+  const [staffRevenueSort, setStaffRevenueSort] = useState<SortConfig>({ key: 'revenue', direction: 'desc' })
+  const [staffRevenuePage, setStaffRevenuePage] = useState(1)
+  const [staffRevenuePageSize, setStaffRevenuePageSize] = useState(10)
   
   const [apiKpi, setApiKpi] = useState<BusinessKPIs | null>(null)
   const [apiHistory, setApiHistory] = useState<RevenueHistory[]>([])
@@ -334,8 +335,7 @@ export function DashboardPage() {
     const cancelRate = totalOrders > 0 ? (cancelledOrders / totalOrders) * 100 : 0
     const returnedOrders = currentOrders.filter(o => o.status === 'returned').length
     const returnRate = totalOrders > 0 ? (returnedOrders / totalOrders) * 100 : 0
-    const lateOrders = currentOrders.filter(o => o.status === 'delivered' && (o.items || []).length > 10).length // Mock
-    const lateRate = totalOrders > 0 ? (lateOrders / totalOrders) * 100 : 0
+    const lateRate = 0
     const fulfillmentRate = totalOrders > 0 ? ((totalOrders - cancelledOrders) / totalOrders) * 100 : 100
     const pendingOrdersCount = currentOrders.filter(o => ['confirmed', 'paid', 'picking', 'packed'].includes(o.status)).length
 
@@ -384,6 +384,14 @@ export function DashboardPage() {
          pendingOrdersCount
      }
    }, [state.orders, state.skus, state.stockTransactions, state.financeTransactions, state.debts, filter])
+
+
+  const operationScore = useMemo(() => {
+    const base = 100
+    const score = base - metrics.cancelRate * 0.6 - metrics.returnRate * 0.3 - metrics.lateRate * 0.4
+    const clamped = Math.max(0, Math.min(100, score))
+    return Math.round(clamped)
+  }, [metrics.cancelRate, metrics.returnRate, metrics.lateRate])
 
   // 2. Charts Data
   const revenueByChannel = useMemo(() => {
@@ -569,23 +577,138 @@ export function DashboardPage() {
           .sort((a, b) => b.value - a.value)
   }, [state.orders, state.skus, state.products, state.categories])
 
+  type StaffRevenueRow = {
+    id: string
+    name: string
+    ordersCount: number
+    revenue: number
+    revenuePercent: number
+    avgOrderValue: number
+  }
+
+  const staffRevenueRows = useMemo<StaffRevenueRow[]>(() => {
+    const users = new Map((state.users || []).map(u => [u.id, u.fullName]))
+    const map = new Map<string, { name: string; ordersCount: number; revenue: number }>()
+
+    metrics.currentOrders.forEach((o) => {
+      if (o.status === 'cancelled') return
+      const userId = o.createdByUserId || 'unknown'
+      const userName = users.get(userId) || 'Unknown'
+      const rev = calculateOrderTotal(o)
+
+      const curr = map.get(userId) || { name: userName, ordersCount: 0, revenue: 0 }
+      map.set(userId, { name: curr.name, ordersCount: curr.ordersCount + 1, revenue: curr.revenue + rev })
+    })
+
+    const totalRevenue = Array.from(map.values()).reduce((s, v) => s + v.revenue, 0)
+    return Array.from(map.entries()).map(([id, v]) => {
+      const avg = v.ordersCount ? v.revenue / v.ordersCount : 0
+      return {
+        id,
+        name: v.name,
+        ordersCount: v.ordersCount,
+        revenue: v.revenue,
+        revenuePercent: totalRevenue ? (v.revenue / totalRevenue) * 100 : 0,
+        avgOrderValue: avg,
+      }
+    })
+  }, [metrics.currentOrders, state.users])
+
   const salesLeaderboard = useMemo(() => {
-      const map = new Map<string, number>()
-      const users = new Map((state.users || []).map(u => [u.id, u.fullName]))
-      
-      ;(state.orders || []).forEach(o => {
-          if (o.status === 'cancelled') return
-          const userId = o.createdByUserId || 'unknown'
-          const userName = users.get(userId) || 'Unknown'
-          const rev = (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)
-          map.set(userName, (map.get(userName) || 0) + rev)
-      })
-      
-      return Array.from(map.entries())
-          .map(([name, value]) => ({ name, value }))
-          .sort((a, b) => b.value - a.value)
-          .slice(0, 10)
-  }, [state.orders, state.users])
+    return [...staffRevenueRows]
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10)
+      .map((r) => ({ name: r.name, value: r.revenue }))
+  }, [staffRevenueRows])
+
+  const staffRevenueRankByRevenue = useMemo(() => {
+    const sorted = [...staffRevenueRows].sort((a, b) => b.revenue - a.revenue)
+    const rankMap = new Map<string, number>()
+    sorted.forEach((r, i) => rankMap.set(r.id, i + 1))
+    return rankMap
+  }, [staffRevenueRows])
+
+  const staffRevenueFilteredSorted = useMemo(() => {
+    const q = staffRevenueQuery.trim().toLowerCase()
+    const filtered = q
+      ? staffRevenueRows.filter((r) => r.name.toLowerCase().includes(q))
+      : staffRevenueRows
+
+    const sorted = [...filtered]
+    const dir = staffRevenueSort.direction === 'asc' ? 1 : -1
+    sorted.sort((a, b) => {
+      switch (staffRevenueSort.key) {
+        case 'name':
+          return a.name.localeCompare(b.name, 'vi') * dir
+        case 'ordersCount':
+          return (a.ordersCount - b.ordersCount) * dir
+        case 'revenuePercent':
+          return (a.revenuePercent - b.revenuePercent) * dir
+        case 'avgOrderValue':
+          return (a.avgOrderValue - b.avgOrderValue) * dir
+        case 'revenue':
+        default:
+          return (a.revenue - b.revenue) * dir
+      }
+    })
+
+    return sorted
+  }, [staffRevenueRows, staffRevenueQuery, staffRevenueSort])
+
+  const staffRevenuePageData = useMemo(() => {
+    const start = (staffRevenuePage - 1) * staffRevenuePageSize
+    return staffRevenueFilteredSorted.slice(start, start + staffRevenuePageSize)
+  }, [staffRevenueFilteredSorted, staffRevenuePage, staffRevenuePageSize])
+
+  const staffRevenueColumns = useMemo<Column<StaffRevenueRow>[]>(() => {
+    return [
+      {
+        key: 'rank',
+        title: '#',
+        width: 52,
+        align: 'right',
+        render: (r) => staffRevenueRankByRevenue.get(r.id) ?? '-',
+      },
+      {
+        key: 'name',
+        title: 'Nhân viên',
+        sortable: true,
+        render: (r) => <span style={{ fontWeight: 600 }}>{r.name}</span>,
+      },
+      {
+        key: 'ordersCount',
+        title: 'Số đơn',
+        width: 90,
+        align: 'right',
+        sortable: true,
+        render: (r) => r.ordersCount.toLocaleString('vi-VN'),
+      },
+      {
+        key: 'revenue',
+        title: 'Doanh thu',
+        width: 150,
+        align: 'right',
+        sortable: true,
+        render: (r) => formatVnd(r.revenue),
+      },
+      {
+        key: 'avgOrderValue',
+        title: 'TB/đơn',
+        width: 150,
+        align: 'right',
+        sortable: true,
+        render: (r) => formatVnd(r.avgOrderValue),
+      },
+      {
+        key: 'revenuePercent',
+        title: '% tổng',
+        width: 90,
+        align: 'right',
+        sortable: true,
+        render: (r) => `${r.revenuePercent.toFixed(1)}%`,
+      },
+    ]
+  }, [staffRevenueRankByRevenue])
 
   const topProfitSkus = useMemo(() => {
       const map = new Map<string, number>()
@@ -642,75 +765,82 @@ export function DashboardPage() {
 
   return (
     <div className="page">
-      <div className="row-between" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-            <h1 className="page-title" style={{ fontSize: 24, fontWeight: 700 }}>Tổng quan</h1>
-            <div style={{ marginTop: 4, color: '#6b7280', fontSize: 14 }}>
-                {format(new Date(), 'EEEE, dd/MM/yyyy')}
-            </div>
-        </div>
-        
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-             <button onClick={handleExport} style={{ height: 36, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: 'white', cursor: 'pointer', fontSize: 13 }}>
-                 <Download size={16} />
-                 Xuất báo cáo
-             </button>
+      <PageHeader
+        title="Tổng quan"
+        subtitle={format(new Date(), 'EEEE, dd/MM/yyyy')}
+        actions={
+          <div className="dashboard-actions">
+            <button className="btn btn-outline btn-small" onClick={handleExport}>
+              <Download size={16} />
+              Xuất báo cáo
+            </button>
 
-             <div className="filter-group" style={{ display: 'flex', alignItems: 'center', background: 'white', padding: '4px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-                 <Calendar size={16} style={{ marginRight: 8, color: '#6b7280' }} />
-                 <input 
-                    type="date" 
-                    value={format(filter.start, 'yyyy-MM-dd')}
-                    onChange={e => setFilter({...filter, start: new Date(e.target.value)})}
-                    style={{ border: 'none', outline: 'none', fontSize: 13, color: '#374151', width: 110 }}
-                 />
-                 <span style={{ color: '#9ca3af', margin: '0 4px' }}>-</span>
-                 <input 
-                    type="date" 
-                    value={format(filter.end, 'yyyy-MM-dd')}
-                    onChange={e => setFilter({...filter, end: new Date(e.target.value)})}
-                    style={{ border: 'none', outline: 'none', fontSize: 13, color: '#374151', width: 110 }}
-                 />
-             </div>
-             
-             <select 
-                value={filter.warehouseId} 
-                onChange={e => setFilter({...filter, warehouseId: e.target.value})}
-                className="select"
-                style={{ height: 36, padding: '0 12px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
-             >
-                 <option value="all">Tất cả kho</option>
-                 {(state.locations || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-             </select>
-             
-             <select 
-                value={filter.channel} 
-                onChange={e => setFilter({...filter, channel: e.target.value})}
-                className="select"
-                style={{ height: 36, padding: '0 12px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
-             >
-                 <option value="all">Tất cả kênh</option>
-                 <option value="pos">POS</option>
-                 <option value="shopee">Shopee</option>
-                 <option value="lazada">Lazada</option>
-                 <option value="tiktok">TikTok</option>
-                 <option value="wholesale">Bán buôn</option>
-             </select>
-
-             <div className="tabs" style={{ background: '#f3f4f6', padding: 4, borderRadius: 8, display: 'flex', gap: 4 }}>
-                <button className={`tab ${viewMode === 'overview' ? 'active' : ''}`} onClick={() => setViewMode('overview')}>Tổng quan</button>
-                <button className={`tab ${viewMode === 'finance' ? 'active' : ''}`} onClick={() => setViewMode('finance')}>Tài chính</button>
-                <button className={`tab ${viewMode === 'warehouse' ? 'active' : ''}`} onClick={() => setViewMode('warehouse')}>Kho</button>
-                <button className={`tab ${viewMode === 'operation' ? 'active' : ''}`} onClick={() => setViewMode('operation')}>Vận hành</button>
-                <button className={`tab ${viewMode === 'analysis' ? 'active' : ''}`} onClick={() => setViewMode('analysis')}>BI</button>
+            <div className="date-range">
+              <Calendar size={16} />
+              <input
+                type="date"
+                value={format(filter.start, 'yyyy-MM-dd')}
+                onChange={(e) => setFilter({ ...filter, start: new Date(e.target.value) })}
+              />
+              <span className="date-range-sep">-</span>
+              <input
+                type="date"
+                value={format(filter.end, 'yyyy-MM-dd')}
+                onChange={(e) => setFilter({ ...filter, end: new Date(e.target.value) })}
+              />
             </div>
-        </div>
-      </div>
+
+            <select
+              value={filter.warehouseId}
+              onChange={(e) => setFilter({ ...filter, warehouseId: e.target.value })}
+              className="input-compact"
+            >
+              <option value="all">Tất cả kho</option>
+              {(state.locations || []).map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filter.channel}
+              onChange={(e) => setFilter({ ...filter, channel: e.target.value })}
+              className="input-compact"
+            >
+              <option value="all">Tất cả kênh</option>
+              <option value="pos">POS</option>
+              <option value="shopee">Shopee</option>
+              <option value="lazada">Lazada</option>
+              <option value="tiktok">TikTok</option>
+              <option value="wholesale">Bán buôn</option>
+            </select>
+
+            <div className="tabs">
+              <button className={`tab ${viewMode === 'overview' ? 'active' : ''}`} onClick={() => setViewMode('overview')}>
+                Tổng quan
+              </button>
+              <button className={`tab ${viewMode === 'finance' ? 'active' : ''}`} onClick={() => setViewMode('finance')}>
+                Tài chính
+              </button>
+              <button className={`tab ${viewMode === 'warehouse' ? 'active' : ''}`} onClick={() => setViewMode('warehouse')}>
+                Kho
+              </button>
+              <button className={`tab ${viewMode === 'operation' ? 'active' : ''}`} onClick={() => setViewMode('operation')}>
+                Vận hành
+              </button>
+              <button className={`tab ${viewMode === 'analysis' ? 'active' : ''}`} onClick={() => setViewMode('analysis')}>
+                BI
+              </button>
+            </div>
+          </div>
+        }
+      />
       
       {viewMode === 'overview' && (
       <>
       {/* 1. KPI Cards (5 cols) - Powered by API */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 20 }}>
+      <div className="kpi-grid">
         <SmartMetricCard 
             label="Doanh thu" 
             value={apiKpi ? formatVnd(apiKpi.revenue) : 'Loading...'} 
@@ -894,6 +1024,44 @@ export function DashboardPage() {
            </div>
       </div>
 
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <div className="card-title" style={{ margin: 0 }}>Checklist doanh thu nhân viên</div>
+          <div style={{ position: 'relative', width: 320 }}>
+            <Search size={16} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
+            <input
+              placeholder="Tìm theo tên nhân viên..."
+              value={staffRevenueQuery}
+              onChange={(e) => {
+                setStaffRevenueQuery(e.target.value)
+                setStaffRevenuePage(1)
+              }}
+              style={{ paddingLeft: 34, width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-color)' }}
+            />
+          </div>
+        </div>
+        <div style={{ padding: 20, height: 420 }}>
+          <SmartTable
+            columns={staffRevenueColumns}
+            data={staffRevenuePageData}
+            keyField="id"
+            sort={staffRevenueSort}
+            onSort={setStaffRevenueSort}
+            pagination={{
+              page: staffRevenuePage,
+              pageSize: staffRevenuePageSize,
+              total: staffRevenueFilteredSorted.length,
+              onChangePage: setStaffRevenuePage,
+              onChangePageSize: (size) => {
+                setStaffRevenuePageSize(size)
+                setStaffRevenuePage(1)
+              },
+            }}
+            emptyText="Không có dữ liệu doanh thu theo nhân viên"
+          />
+        </div>
+      </div>
+
       {/* 5. Alerts Row */}
       <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-title">Cảnh báo & Việc cần làm</div>
@@ -1061,7 +1229,7 @@ export function DashboardPage() {
                 />
                <SmartMetricCard 
                     label="Hiệu suất vận hành" 
-                    value="98/100" 
+                    value={`${operationScore}/100`} 
                     status="success"
                 />
           </div>

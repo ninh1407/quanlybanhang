@@ -4,6 +4,7 @@ import { useAppState } from '../state/Store'
 import type { Sku, StockTransaction, Order } from '../domain/types'
 import { AnalyticsApi, type BusinessKPIs, type RevenueHistory, type TopProduct, type ChannelPerformance } from '../api/analytics'
 import { formatVnd } from '../lib/money'
+import { PageHeader } from '../ui-kit/PageHeader'
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -62,64 +63,50 @@ function SmartMetricCard({
   solid?: boolean
   bgColor?: string
 }) {
-  const colorMap = {
-    success: '#10B981',
-    warning: '#F59E0B',
-    danger: '#EF4444',
-    neutral: '#6B7280',
-    info: '#06B6D4'
-  }
-  const color = colorMap[status] || colorMap.neutral
-  const bgColor = customBgColor || (status === 'success' ? '#ECFDF5' : status === 'warning' ? '#FFFBEB' : status === 'danger' ? '#FEF2F2' : status === 'info' ? '#ECFEFF' : '#F3F4F6')
+  const statusClass = status === 'success' ? 'kpi-success' : status === 'warning' ? 'kpi-warning' : status === 'danger' ? 'kpi-danger' : status === 'info' ? 'kpi-info' : 'kpi-neutral'
   
   if (solid) {
     return (
-      <div className="card" style={{ padding: '16px 20px', background: customBgColor || color, color: 'white', border: 'none', height: '100%', borderRadius: 4 }}>
-        <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 8 }}>{value}</div>
-        <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.9 }}>{label}</div>
+      <div className={`card kpi-card kpi-solid ${statusClass}`} style={customBgColor ? { background: customBgColor } : undefined}>
+        <div className="kpi-solid-value">{value}</div>
+        <div className="kpi-solid-label">{label}</div>
       </div>
     )
   }
 
   return (
-    <div className="card" style={{ padding: 16, borderLeft: `4px solid ${color}`, height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, textTransform: 'uppercase' }}>{label}</div>
-          {trend && (
-             <div style={{ 
-                 display: 'flex', alignItems: 'center', gap: 4, 
-                 padding: '2px 6px', borderRadius: 4, 
-                 background: bgColor, color: color, fontSize: 12, fontWeight: 600 
-             }}>
-                 {trend === 'up' ? <TrendingUp size={12}/> : trend === 'down' ? <TrendingDown size={12}/> : <Minus size={12}/>}
-                 {trendValue}
-             </div>
-          )}
-      </div>
-      
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end' }}>
-          <div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {status === 'success' ? 'Tốt' : status === 'warning' ? 'Cần chú ý' : status === 'danger' ? 'Nguy hiểm' : 'Ổn định'}
-              </div>
+    <div className={`card kpi-card ${statusClass}`}>
+      <div className="kpi-head">
+        <div className="kpi-label">{label}</div>
+        {trend ? (
+          <div className="kpi-trend">
+            {trend === 'up' ? <TrendingUp size={12} /> : trend === 'down' ? <TrendingDown size={12} /> : <Minus size={12} />}
+            {trendValue}
           </div>
-          
-          {data && data.length > 0 && (
-              <div style={{ width: 80, height: 40 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={data}>
-                          <defs>
-                              <linearGradient id={`grad-${label.replace(/\s/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
-                                  <stop offset="95%" stopColor={color} stopOpacity={0}/>
-                              </linearGradient>
-                          </defs>
-                          <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#grad-${label.replace(/\s/g, '')})`} />
-                      </AreaChart>
-                  </ResponsiveContainer>
-              </div>
-          )}
+        ) : null}
+      </div>
+
+      <div className="kpi-body">
+        <div>
+          <div className="kpi-value">{value}</div>
+          <div className="kpi-meta">{status === 'success' ? 'Tốt' : status === 'warning' ? 'Cần chú ý' : status === 'danger' ? 'Nguy hiểm' : 'Ổn định'}</div>
+        </div>
+
+        {data && data.length > 0 ? (
+          <div className="kpi-spark">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data}>
+                <defs>
+                  <linearGradient id={`grad-${label.replace(/\s/g, '')}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--kpi-accent)" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="var(--kpi-accent)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="value" stroke="var(--kpi-accent)" strokeWidth={2} fill={`url(#grad-${label.replace(/\s/g, '')})`} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -664,92 +651,97 @@ export function DashboardPage() {
 
   return (
     <div className="page">
-      <div className="row-between" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-            <h1 className="page-title" style={{ fontSize: 24, fontWeight: 700 }}>Tổng quan</h1>
-            <div style={{ marginTop: 4, color: '#6b7280', fontSize: 14 }}>
-                {format(new Date(), 'EEEE, dd/MM/yyyy')}
-            </div>
-        </div>
-        
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-             <div className="tabs" style={{ background: '#f3f4f6', padding: 4, borderRadius: 8, display: 'flex', gap: 4 }}>
-                <button 
-                    className={`tab ${isSameMonth(filter.start, startOfMonth(new Date())) ? 'active' : ''}`} 
-                    onClick={() => setFilter({...filter, start: subDays(new Date(), 7), end: new Date()})}
-                    style={{ padding: '4px 12px', fontSize: 13 }}
-                >
-                    7 ngày qua
-                </button>
-                <button 
-                    className={`tab ${format(filter.start, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') ? 'active' : ''}`} 
-                    onClick={() => setFilter({...filter, start: startOfDay(new Date()), end: endOfDay(new Date())})}
-                    style={{ padding: '4px 12px', fontSize: 13 }}
-                >
-                    Hôm nay
-                </button>
+      <PageHeader
+        title="Tổng quan"
+        subtitle={format(new Date(), 'EEEE, dd/MM/yyyy')}
+        actions={
+          <div className="dashboard-actions">
+            <div className="tabs">
+              <button
+                className={`tab ${isSameMonth(filter.start, startOfMonth(new Date())) ? 'active' : ''}`}
+                onClick={() => setFilter({ ...filter, start: subDays(new Date(), 7), end: new Date() })}
+              >
+                7 ngày qua
+              </button>
+              <button
+                className={`tab ${format(filter.start, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') ? 'active' : ''}`}
+                onClick={() => setFilter({ ...filter, start: startOfDay(new Date()), end: endOfDay(new Date()) })}
+              >
+                Hôm nay
+              </button>
             </div>
 
-             <button onClick={handleExport} style={{ height: 36, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: 'white', cursor: 'pointer', fontSize: 13 }}>
-                 <Download size={16} />
-                 Xuất báo cáo
-             </button>
+            <button className="btn btn-outline btn-small" onClick={handleExport}>
+              <Download size={16} />
+              Xuất báo cáo
+            </button>
 
-             <div className="filter-group" style={{ display: 'flex', alignItems: 'center', background: 'white', padding: '4px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-                 <Calendar size={16} style={{ marginRight: 8, color: '#6b7280' }} />
-                 <input 
-                    type="date" 
-                    value={format(filter.start, 'yyyy-MM-dd')}
-                    onChange={e => setFilter({...filter, start: new Date(e.target.value)})}
-                    style={{ border: 'none', outline: 'none', fontSize: 13, color: '#374151', width: 110 }}
-                 />
-                 <span style={{ color: '#9ca3af', margin: '0 4px' }}>-</span>
-                 <input 
-                    type="date" 
-                    value={format(filter.end, 'yyyy-MM-dd')}
-                    onChange={e => setFilter({...filter, end: new Date(e.target.value)})}
-                    style={{ border: 'none', outline: 'none', fontSize: 13, color: '#374151', width: 110 }}
-                 />
-             </div>
-             
-             <select 
-                value={filter.warehouseId} 
-                onChange={e => setFilter({...filter, warehouseId: e.target.value})}
-                className="select"
-                style={{ height: 36, padding: '0 12px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
-             >
-                 <option value="all">Tất cả kho</option>
-                 {(state.locations || []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-             </select>
-             
-             <select 
-                value={filter.channel} 
-                onChange={e => setFilter({...filter, channel: e.target.value})}
-                className="select"
-                style={{ height: 36, padding: '0 12px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
-             >
-                 <option value="all">Tất cả kênh</option>
-                 <option value="pos">POS</option>
-                 <option value="shopee">Shopee</option>
-                 <option value="lazada">Lazada</option>
-                 <option value="tiktok">TikTok</option>
-                 <option value="wholesale">Bán buôn</option>
-             </select>
-
-             <div className="tabs" style={{ background: '#f3f4f6', padding: 4, borderRadius: 8, display: 'flex', gap: 4 }}>
-                <button className={`tab ${viewMode === 'overview' ? 'active' : ''}`} onClick={() => setViewMode('overview')}>Tổng quan</button>
-                <button className={`tab ${viewMode === 'finance' ? 'active' : ''}`} onClick={() => setViewMode('finance')}>Tài chính</button>
-                <button className={`tab ${viewMode === 'warehouse' ? 'active' : ''}`} onClick={() => setViewMode('warehouse')}>Kho</button>
-                <button className={`tab ${viewMode === 'operation' ? 'active' : ''}`} onClick={() => setViewMode('operation')}>Vận hành</button>
-                <button className={`tab ${viewMode === 'analysis' ? 'active' : ''}`} onClick={() => setViewMode('analysis')}>BI</button>
+            <div className="date-range">
+              <Calendar size={16} />
+              <input
+                type="date"
+                value={format(filter.start, 'yyyy-MM-dd')}
+                onChange={(e) => setFilter({ ...filter, start: new Date(e.target.value) })}
+              />
+              <span className="date-range-sep">-</span>
+              <input
+                type="date"
+                value={format(filter.end, 'yyyy-MM-dd')}
+                onChange={(e) => setFilter({ ...filter, end: new Date(e.target.value) })}
+              />
             </div>
-        </div>
-      </div>
+
+            <select
+              value={filter.warehouseId}
+              onChange={(e) => setFilter({ ...filter, warehouseId: e.target.value })}
+              className="input-compact"
+            >
+              <option value="all">Tất cả kho</option>
+              {(state.locations || []).map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filter.channel}
+              onChange={(e) => setFilter({ ...filter, channel: e.target.value })}
+              className="input-compact"
+            >
+              <option value="all">Tất cả kênh</option>
+              <option value="pos">POS</option>
+              <option value="shopee">Shopee</option>
+              <option value="lazada">Lazada</option>
+              <option value="tiktok">TikTok</option>
+              <option value="wholesale">Bán buôn</option>
+            </select>
+
+            <div className="tabs">
+              <button className={`tab ${viewMode === 'overview' ? 'active' : ''}`} onClick={() => setViewMode('overview')}>
+                Tổng quan
+              </button>
+              <button className={`tab ${viewMode === 'finance' ? 'active' : ''}`} onClick={() => setViewMode('finance')}>
+                Tài chính
+              </button>
+              <button className={`tab ${viewMode === 'warehouse' ? 'active' : ''}`} onClick={() => setViewMode('warehouse')}>
+                Kho
+              </button>
+              <button className={`tab ${viewMode === 'operation' ? 'active' : ''}`} onClick={() => setViewMode('operation')}>
+                Vận hành
+              </button>
+              <button className={`tab ${viewMode === 'analysis' ? 'active' : ''}`} onClick={() => setViewMode('analysis')}>
+                BI
+              </button>
+            </div>
+          </div>
+        }
+      />
       
       {viewMode === 'overview' && (
       <>
       {/* 1. KPI Cards (4 cols) - Matches User Request */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="kpi-grid">
         <SmartMetricCard 
             label="Đơn hàng mới" 
             value={`${metrics.completedOrdersCount} / ${metrics.totalOrders}`} 

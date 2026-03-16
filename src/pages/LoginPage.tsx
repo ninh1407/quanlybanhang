@@ -56,6 +56,10 @@ export function LoginPage() {
         return
       }
 
+      ;(locations || []).forEach((l: any) => {
+        dispatch({ type: 'locations/upsert', location: l })
+      })
+
       // Important: Add user to state before login
       dispatch({ type: 'users/upsert', user })
 

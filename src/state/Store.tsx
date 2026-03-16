@@ -97,9 +97,14 @@ function localReducer(state: AppState, action: AppAction): AppState {
         return state
     }
 
+    const mergedLocations = Array.isArray(action.state.locations) && action.state.locations.length > 0 ? action.state.locations : state.locations
+    const mergedUsers = Array.isArray(action.state.users) && action.state.users.length > 0 ? action.state.users : state.users
+
     const nextState = {
       ...state, // KEEP CURRENT STATE, DON'T RESET TO BASE
       ...action.state,
+      locations: mergedLocations,
+      users: mergedUsers,
       currentUserId: state.currentUserId,
       currentLocationId: state.currentLocationId || 'all', // FORCE DEFAULT 'all' for Admin if null
     }

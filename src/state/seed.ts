@@ -35,6 +35,22 @@ export function createEmptyWarehouseState(): WarehouseState {
   }
 }
 
+export function createEmptyAppState(): AppState {
+  return {
+    ...createEmptyWarehouseState(),
+    users: [],
+    locations: [],
+    channelConfigs: [],
+    skuMappings: [],
+    warehouseRegionMappings: [],
+    allocationRules: [],
+    currentUserId: null,
+    currentLocationId: null,
+    auditLogs: [],
+    sequences: {},
+  }
+}
+
 export function createSeedState(): AppState {
   const createdAt = nowIso()
 

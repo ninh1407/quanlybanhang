@@ -35,6 +35,7 @@
   --text-sidebar-muted: #94A3B8;
   
   --text-main: #0F172A;
+  --text-primary: #0F172A;
   --text-secondary: #475569;
   --text-muted: #64748B;
 
@@ -67,6 +68,7 @@
   --bg-sidebar: #020617;
   
   --text-main: #f8fafc;
+  --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
 
@@ -95,45 +97,38 @@ button { font-family: inherit; }
 /* Tabs (Pill/Rectangle Style from Design) */
   .tabs {
     display: inline-flex;
-    gap: -1px; /* Overlap borders slightly */
+    gap: 4px;
+    padding: 4px;
+    border-radius: var(--radius-md);
+    background: var(--neutral-100);
+    border: 1px solid var(--border-color);
   }
 
   .tab {
-    padding: 8px 24px;
-    font-size: 14px;
-    font-weight: 500;
-    color: #000;
-    background: #F9FAFB; /* Very light grey */
-    border: 1px solid #D1D5DB; /* Light grey border */
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid transparent;
     cursor: pointer;
-    transition: all 0.2s;
-    border-radius: 0;
-    min-width: 120px;
-    display: flex;
+    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+    border-radius: var(--radius-sm);
+    min-width: 0;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 
-  .tab:first-child {
-    border-top-left-radius: 4px;
-    border-bottom-left-radius: 4px;
-  }
-
-  .tab:last-child {
-    border-top-right-radius: 4px;
-    border-bottom-right-radius: 4px;
-  }
-
   .tab:hover {
-    background: #F3F4F6;
+    background: var(--neutral-50);
+    color: var(--text-main);
   }
 
   .tab.active {
-    background: #FFFFFF;
-    font-weight: 600;
-    position: relative;
-    z-index: 1; /* Bring active tab to front */
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    background: var(--bg-surface);
+    color: var(--text-main);
+    box-shadow: var(--shadow-sm);
   }
 
   /* Layout Structure */
@@ -559,6 +554,188 @@ input:disabled, select:disabled {
   border-radius: var(--radius-sm);
 }
 
+.btn-outline {
+  background: var(--bg-surface);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--neutral-50);
+  border-color: transparent;
+}
+
+.btn-icon {
+  padding: 8px;
+  width: 36px;
+  height: 36px;
+}
+
+.input-compact {
+  height: 36px;
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: var(--radius-md);
+}
+
+.dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.date-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.date-range svg {
+  color: var(--text-muted);
+}
+
+.date-range input {
+  border: none;
+  background: transparent;
+  padding: 0;
+  height: 30px;
+  width: 118px;
+  font-size: 13px;
+}
+
+.date-range input:focus {
+  box-shadow: none;
+}
+
+.date-range-sep {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.kpi-card {
+  margin-bottom: 0;
+  padding: 16px;
+  border-left: 4px solid var(--kpi-accent, var(--neutral-400));
+}
+
+.kpi-card.kpi-success { --kpi-accent: var(--success); --kpi-trend-bg: rgba(22, 163, 74, 0.12); }
+.kpi-card.kpi-warning { --kpi-accent: var(--warning); --kpi-trend-bg: rgba(245, 158, 11, 0.12); }
+.kpi-card.kpi-danger { --kpi-accent: var(--danger); --kpi-trend-bg: rgba(239, 68, 68, 0.12); }
+.kpi-card.kpi-info { --kpi-accent: var(--info); --kpi-trend-bg: rgba(59, 130, 246, 0.12); }
+.kpi-card.kpi-neutral { --kpi-accent: var(--neutral-500); --kpi-trend-bg: var(--neutral-100); }
+
+.kpi-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.kpi-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--kpi-trend-bg, var(--neutral-100));
+  color: var(--kpi-accent, var(--neutral-500));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kpi-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.kpi-spark {
+  width: 84px;
+  height: 40px;
+}
+
+.kpi-solid {
+  background: var(--kpi-accent);
+  color: #fff;
+  border: none;
+}
+
+.kpi-solid-value {
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.kpi-solid-label {
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.kpi-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.kpi-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.table tbody tr.selected td {
+  background: var(--primary-50);
+}
+
+.smart-table {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.smart-table .table-wrap {
+  flex: 1;
+  overflow: auto;
+  border-radius: var(--radius-lg);
+}
+
+.smart-table .table td,
+.smart-table .table th {
+  padding: 12px 16px;
+}
+
 .row {
   display: flex;
   gap: 12px;
@@ -620,6 +797,38 @@ input:disabled, select:disabled {
 
 .table tbody tr:hover {
   background-color: var(--neutral-50);
+}
+
+.table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.smart-table-footer {
+  padding: 12px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.advanced-filter {
+  margin-bottom: 16px;
+}
+
+.filter-panel {
+  margin-top: 12px;
+  padding: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.filter-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
 }
 
 /* Utility / Status Colors */

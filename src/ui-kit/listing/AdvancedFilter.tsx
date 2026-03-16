@@ -55,7 +55,7 @@ export function AdvancedFilter({
   }
 
   return (
-    <div className="advanced-filter" style={{ marginBottom: 16 }}>
+    <div className="advanced-filter">
       {/* Top Bar: Search + Quick Filters + Toggle */}
       <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
         {/* Search Box */}
@@ -97,7 +97,6 @@ export function AdvancedFilter({
           <button
             className={`btn ${expanded ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setExpanded(!expanded)}
-            style={{ gap: 6 }}
           >
             <Filter size={16} />
             Bộ lọc
@@ -114,25 +113,10 @@ export function AdvancedFilter({
 
       {/* Expanded Panel */}
       {expanded && filters.length > 2 && (
-        <div
-          className="filter-panel"
-          style={{
-            marginTop: 12,
-            padding: 16,
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 8,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: 16,
-            animation: 'fadeIn 0.2s ease-out',
-          }}
-        >
+        <div className="filter-panel">
           {filters.slice(2).map((f) => (
              <div key={f.key}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                  {f.label}
-                </label>
+                <label className="filter-label">{f.label}</label>
                 {f.type === 'select' || f.type === 'status' ? (
                    <select
                      value={values[f.key] || ''}

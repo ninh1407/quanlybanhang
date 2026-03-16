@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { AnalyticsApi, InventoryKPIs, BusinessKPIs } from '../api/analytics'
 import { formatVnd } from '../lib/money'
@@ -13,6 +13,49 @@ export function AnalyticsInventoryPage() {
   const [bizKpis, setBizKpis] = useState<BusinessKPIs | null>(null)
   const state = useAppState()
   const totalSkuCount = state.skus.length
+
+  const productsById = useMemo(() => new Map(state.products.map(p => [p.id, p])), [state.products])
+  const categoriesById = useMemo(() => new Map(state.categories.map(c => [c.id, c.name])), [state.categories])
+
+  const stockBySku = useMemo(() => {
+    const map = new Map<string, number>()
+    state.stockTransactions.forEach((t) => {
+      const prev = map.get(t.skuId) ?? 0
+      const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
+      map.set(t.skuId, prev + delta)
+    })
+    return map
+  }, [state.stockTransactions])
+
+  const compositionData = useMemo(() => {
+    const map = new Map<string, number>()
+    state.skus.forEach((s) => {
+      const qty = stockBySku.get(s.id) ?? 0
+      if (qty <= 0) return
+      const product = productsById.get(s.productId)
+      const catName = categoriesById.get(product?.categoryId ?? '') || 'Khác'
+      const value = (Number(s.cost) || 0) * qty
+      map.set(catName, (map.get(catName) || 0) + value)
+    })
+
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [state.skus, stockBySku, productsById, categoriesById])
+
+  const topInventorySkus = useMemo(() => {
+    const rows = state.skus
+      .map((s) => {
+        const qty = stockBySku.get(s.id) ?? 0
+        const value = qty > 0 ? (Number(s.cost) || 0) * qty : 0
+        return { sku: s, qty, value }
+      })
+      .filter((r) => r.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5)
+
+    return rows
+  }, [state.skus, stockBySku])
 
   useEffect(() => {
     loadData()
@@ -32,14 +75,6 @@ export function AnalyticsInventoryPage() {
       console.error(e)
     }
   }
-
-  // Mock data for composition since API doesn't return it yet
-  const compositionData = [
-    { name: 'Gia dụng nhà bếp', value: 45 },
-    { name: 'Điện lạnh', value: 25 },
-    { name: 'Gia dụng thông minh', value: 20 },
-    { name: 'Khác', value: 10 },
-  ]
 
   return (
     <div className="page">
@@ -62,7 +97,6 @@ export function AnalyticsInventoryPage() {
             icon={<Package size={24} />} 
             color="blue" 
             formatter={formatVnd}
-            trend={12}
           />
           <KPICard 
             label="Vòng quay kho (năm)" 
@@ -70,7 +104,6 @@ export function AnalyticsInventoryPage() {
             icon={<RefreshCw size={24} />} 
             color="green" 
             formatter={(v: number) => v + ' lần'}
-            trend={5}
           />
           <KPICard 
             label="Số ngày bán hàng (DOH)" 
@@ -78,7 +111,6 @@ export function AnalyticsInventoryPage() {
             icon={<Layers size={24} />} 
             color="purple" 
             formatter={(v: number) => v + ' ngày'}
-            trend={-2}
           />
           <KPICard 
             label="Hàng tồn chết (SKU)" 
@@ -86,7 +118,6 @@ export function AnalyticsInventoryPage() {
             icon={<AlertTriangle size={24} />} 
             color="red" 
             formatter={(v: number) => v + ' mã'}
-            trend={0}
           />
         </div>
 
@@ -94,48 +125,57 @@ export function AnalyticsInventoryPage() {
             <div className="card" style={{ padding: 20 }}>
                 <h3 style={{ margin: '0 0 20px', fontSize: 16 }}>Phân bổ giá trị theo danh mục</h3>
                 <div style={{ height: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={compositionData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={100}
-                                fill="#8884d8"
-                                dataKey="value"
-                                paddingAngle={5}
-                                label={(props: any) => `${props.name} ${(props.percent * 100).toFixed(0)}%`}
-                            >
-                                {compositionData.map((_, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip />
-                            <Legend verticalAlign="bottom" height={36}/>
-                        </PieChart>
-                    </ResponsiveContainer>
+                    {compositionData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={compositionData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={100}
+                                    fill="#8884d8"
+                                    dataKey="value"
+                                    paddingAngle={5}
+                                    label={(props: any) => `${props.name} ${(props.percent * 100).toFixed(0)}%`}
+                                >
+                                    {compositionData.map((_, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                                <Legend verticalAlign="bottom" height={36}/>
+                            </PieChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="center-text">Chưa có dữ liệu</div>
+                    )}
                 </div>
             </div>
 
             <div className="card" style={{ padding: 20 }}>
                 <h3 style={{ margin: '0 0 20px', fontSize: 16 }}>Top SKU Tồn Kho (Giá trị)</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: 300, overflowY: 'auto' }}>
-                    {[1,2,3,4,5].map(i => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div style={{ width: 40, height: 40, background: '#f1f5f9', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#64748b' }}>
-                                #{i}
+                    {topInventorySkus.length > 0 ? topInventorySkus.map((r, idx) => {
+                        const productName = productsById.get(r.sku.productId)?.name ?? r.sku.productId
+                        return (
+                            <div key={r.sku.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ width: 40, height: 40, background: '#f1f5f9', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#64748b' }}>
+                                    #{idx + 1}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 600, fontSize: 14 }}>{productName}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>SKU: {r.sku.skuCode}</div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontWeight: 700 }}>{formatVnd(r.value)}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.qty.toLocaleString('vi-VN')} {r.sku.unit}</div>
+                                </div>
                             </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, fontSize: 14 }}>Laptop Gaming Asus TUF #{100+i}</div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>SKU: LP-AS-00{i}</div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 700 }}>{formatVnd(150000000 - i*10000000)}</div>
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{50 - i*5} chiếc</div>
-                            </div>
-                        </div>
-                    ))}
+                        )
+                    }) : (
+                        <div className="center-text">Chưa có dữ liệu</div>
+                    )}
                 </div>
             </div>
         </div>
@@ -147,21 +187,21 @@ export function AnalyticsInventoryPage() {
                 <MovementBar 
                     label="Fast Moving (Hàng bán chạy)" 
                     count={kpis?.fastMovingSkuCount || 0} 
-                    total={totalSkuCount || 100} // Mock total if not avail
+                    total={totalSkuCount}
                     color="#10b981"
                     desc="Chiếm khoảng 20% danh mục, đóng góp 80% doanh thu."
                 />
                 <MovementBar 
                     label="Slow Moving (Hàng bán chậm)" 
                     count={kpis?.slowMovingSkuCount || 0} 
-                    total={totalSkuCount || 100}
+                    total={totalSkuCount}
                     color="#f59e0b"
                     desc="Cần xem xét khuyến mãi xả hàng."
                 />
                 <MovementBar 
                     label="Dead Stock (Hàng tồn chết)" 
                     count={kpis?.deadStockSkuCount || 0} 
-                    total={totalSkuCount || 100}
+                    total={totalSkuCount}
                     color="#ef4444"
                     desc="Không có giao dịch xuất trong 90 ngày qua."
                 />

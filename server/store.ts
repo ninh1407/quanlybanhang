@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import bcrypt from 'bcryptjs'
-import { createSeedState } from '../src/state/seed'
+import { createEmptyAppState } from '../src/state/seed'
 import type { AppState } from '../src/state/types'
 import { PrismaClient } from '@prisma/client'
 
@@ -19,7 +19,7 @@ class Store {
   state: AppState
 
   constructor() {
-    this.state = createSeedState()
+    this.state = createEmptyAppState()
     this.load()
   }
 
@@ -28,8 +28,7 @@ class Store {
       if (fs.existsSync(DATA_FILE)) {
         const raw = fs.readFileSync(DATA_FILE, 'utf-8')
         const loaded = JSON.parse(raw)
-        // Merge with seed to ensure structure
-        this.state = { ...createSeedState(), ...loaded }
+        this.state = { ...createEmptyAppState(), ...loaded }
         console.log('Loaded state from disk')
 
         // Auto-migrate passwords if needed
@@ -44,7 +43,7 @@ class Store {
         if (changed) this.saveImmediate()
 
       } else {
-        console.log('Created new seed state')
+        console.log('Created new empty state')
       }
     } catch (e) {
       console.error('Failed to load state:', e)

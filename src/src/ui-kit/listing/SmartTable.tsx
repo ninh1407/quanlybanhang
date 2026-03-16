@@ -90,13 +90,13 @@ export function SmartTable<T extends Record<string, any>>({
   }
 
   return (
-    <div className="smart-table-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="table-wrap" style={{ flex: 1, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 8 }}>
-        <table className="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-surface)' }}>
+    <div className="smart-table">
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
             <tr>
               {onSelectionChange && (
-                <th style={{ width: 40, padding: '0 12px', textAlign: 'center' }}>
+                <th style={{ width: 40, textAlign: 'center' }}>
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -111,17 +111,11 @@ export function SmartTable<T extends Record<string, any>>({
               {columns.map((col) => (
                 <th
                   key={col.key}
+                  className={col.sortable ? 'sortable' : undefined}
                   style={{
                     width: col.width,
                     textAlign: col.align ?? 'left',
-                    cursor: col.sortable ? 'pointer' : 'default',
-                    userSelect: 'none',
                     whiteSpace: 'nowrap',
-                    padding: '12px 16px',
-                    color: 'var(--text-secondary)',
-                    fontWeight: 600,
-                    fontSize: 13,
-                    borderBottom: '1px solid var(--border-color)',
                   }}
                   onClick={() => col.sortable && handleSort(col.key)}
                 >
@@ -164,11 +158,7 @@ export function SmartTable<T extends Record<string, any>>({
                 return (
                   <tr 
                     key={String(id)} 
-                    className={isSelected ? 'selected' : ''}
-                    style={{ 
-                      cursor: onRowClick ? 'pointer' : 'default',
-                      background: isSelected ? 'var(--primary-50)' : undefined
-                    }}
+                    className={`${isSelected ? 'selected' : ''}${onRowClick ? ' clickable' : ''}`}
                     onClick={() => onRowClick?.(item)}
                   >
                     {onSelectionChange && (
@@ -186,9 +176,6 @@ export function SmartTable<T extends Record<string, any>>({
                         key={col.key} 
                         style={{ 
                           textAlign: col.align ?? 'left',
-                          padding: '12px 16px',
-                          borderBottom: '1px solid var(--border-color)',
-                          fontSize: 14
                         }}
                       >
                         {col.render ? col.render(item) : item[col.key]}
@@ -203,7 +190,7 @@ export function SmartTable<T extends Record<string, any>>({
       </div>
       
       {pagination && (
-        <div style={{ padding: '12px 0', borderTop: '1px solid var(--border-color)' }}>
+        <div className="smart-table-footer">
           <Pagination
             page={pagination.page}
             pageSize={pagination.pageSize}

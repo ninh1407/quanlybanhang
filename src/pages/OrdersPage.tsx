@@ -25,7 +25,26 @@ import { SavedViewsBar } from '../ui-kit/listing/SavedViewsBar'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { useDialogs } from '../ui-kit/Dialogs'
-import { Layout, List, CheckCircle, Truck, Package, AlertCircle, Clock, Zap, Search, Plus, Minus, Printer, Save, User, CreditCard, Phone, MapPin } from 'lucide-react'
+import {
+  Layout,
+  List,
+  CheckCircle,
+  Truck,
+  Package,
+  AlertCircle,
+  Clock,
+  Zap,
+  Search,
+  Plus,
+  Minus,
+  Printer,
+  Save,
+  User,
+  CreditCard,
+  Phone,
+  MapPin,
+  Trash2,
+} from 'lucide-react'
 import { printOrder } from '../lib/print'
 import { calculateDistance, mockGeocode } from '../lib/geo'
 
@@ -102,6 +121,27 @@ function orderTotal(order: Order): number {
 function getSkuDisplayName(productsById: Map<string, string>, sku: Sku): string {
   const pName = productsById.get(sku.productId) || 'Unknown'
   return `${pName} ${sku.skuCode} ${sku.color} ${sku.size}`
+}
+
+function orderStatusBadge(status: OrderStatus): { label: string; className: string } {
+  const label = orderStatusLabels[status]
+  switch (status) {
+    case 'paid':
+    case 'delivered':
+      return { label, className: 'badge badge-success' }
+    case 'confirmed':
+    case 'packed':
+    case 'shipped':
+      return { label, className: 'badge badge-info' }
+    case 'pending_cancel':
+      return { label, className: 'badge badge-warning' }
+    case 'cancelled':
+    case 'returned':
+      return { label, className: 'badge badge-danger' }
+    case 'draft':
+    default:
+      return { label, className: 'badge badge-neutral' }
+  }
 }
 
 function toOrderItems(items: ItemDraft[]): OrderItem[] {
@@ -339,6 +379,7 @@ export function OrdersPage() {
   const [shippingProofFiles, setShippingProofFiles] = useState<FileList | null>(null)
   const [codImport, setCodImport] = useState('')
   const [usePoints] = useState<number>(0)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   // Quick Add Customer State
   const [showAddCustomer, setShowAddCustomer] = useState(false)
@@ -933,10 +974,10 @@ export function OrdersPage() {
     return (await Promise.all(readers)).filter(Boolean) as OrderAttachment[]
   }
 
-  async function createOrder() {
-    if (!canWrite) return
-    if ((source === 'pos' || type === 'dropship') && orderItems.length === 0) return
-    if (source !== 'pos' && type !== 'dropship' && (Number(subTotalOverride) || 0) <= 0) return
+  async function createOrder(opts?: { statusOverride?: OrderStatus }): Promise<Order | null> {
+    if (!canWrite) return null
+    if ((source === 'pos' || type === 'dropship') && orderItems.length === 0) return null
+    if (source !== 'pos' && type !== 'dropship' && (Number(subTotalOverride) || 0) <= 0) return null
 
     const id = newId('ord')
     const createdAt = nowIso()
@@ -954,7 +995,7 @@ export function OrdersPage() {
     }
 
     // Automation Rules
-    let initialStatus = status
+    let initialStatus = opts?.statusOverride ?? status
     if (total > 5000000 && status !== 'draft') {
         initialStatus = 'confirmed' // Require manual check for high value
         void dialogs.alert({ message: 'Đơn hàng giá trị cao (>5tr). Hệ thống tự động chuyển về trạng thái "Xác nhận" để chờ duyệt kỹ hơn.' })
@@ -1030,6 +1071,7 @@ export function OrdersPage() {
     }
 
     resetForm()
+    return order
   }
 
   function addFinanceIncome(order: Order, amountOverride?: number) {
@@ -1261,14 +1303,6 @@ export function OrdersPage() {
     setCodImport('')
   }
 
-  const stats = useMemo(() => {
-    const total = state.orders.length
-    const returned = state.orders.filter((o) => o.status === 'returned').length
-    const shippedOrDelivered = state.orders.filter((o) => o.status === 'shipped' || o.status === 'delivered' || o.status === 'returned').length
-    const returnRate = shippedOrDelivered > 0 ? returned / shippedOrDelivered : 0
-    return { total, returned, shippedOrDelivered, returnRate }
-  }, [state.orders])
-
   const kanbanColumns = useMemo(() => [
       { id: 'new', label: 'Mới', statuses: ['draft', 'confirmed'] as OrderStatus[], icon: <Clock size={16} /> },
       { id: 'processing', label: 'Đang xử lý', statuses: ['picking', 'packed', 'ready_to_ship'] as OrderStatus[], icon: <Package size={16} /> },
@@ -1303,31 +1337,112 @@ export function OrdersPage() {
           </div>
       </div>
 
-      <div className="grid">
-        <div className="stat">
-          <div className="stat-label">Tổng đơn</div>
-          <div className="stat-value">{stats.total}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">Đơn hoàn</div>
-          <div className="stat-value">{stats.returned}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">Tỷ lệ hoàn</div>
-          <div className="stat-value">{(stats.returnRate * 100).toFixed(1)}%</div>
-        </div>
-      </div>
-
       {canWrite ? (
-        <div className="erp-container" style={{ display: 'grid', gridTemplateColumns: '70% 30%', gap: 20, marginBottom: 40 }}>
+        <div className="order-editor">
+          <div className="card order-editor-header">
+            <div className="order-editor-title">
+              <div>
+                <div className="order-editor-h1">Quản lý đơn hàng</div>
+                <div className="order-editor-sub">
+                  {trackingCode.trim() && source === 'cod' ? `Mã đơn dự kiến: COD-${trackingCode.trim()}` : 'Tạo đơn mới'}
+                  {' · '}
+                  {source === 'pos'
+                    ? 'POS'
+                    : source === 'cod'
+                      ? 'COD / Ship'
+                      : source === 'web'
+                        ? 'Website'
+                        : source === 'social'
+                          ? 'Social'
+                          : 'Khác'}
+                  {' · '}
+                  {(fulfillmentLocationId || defaultLocationId)
+                    ? locationsById.get((fulfillmentLocationId || defaultLocationId) as string)?.name ?? 'Kho'
+                    : 'Kho mặc định'}
+                </div>
+              </div>
+
+              <div className="order-editor-badges">
+                <span className={orderStatusBadge(status).className}>{orderStatusBadge(status).label}</span>
+                <span className="badge badge-neutral">{paymentMethod === 'cod' ? 'COD' : paymentMethod === 'transfer' ? 'Chuyển khoản' : 'Công nợ'}</span>
+              </div>
+            </div>
+
+            <div className="order-editor-actions">
+              <button
+                className="btn btn-small"
+                onClick={() => {
+                  void createOrder({ statusOverride: 'draft' })
+                }}
+              >
+                <Save size={16} />
+                Lưu nháp
+              </button>
+              <button
+                className="btn btn-small"
+                onClick={() => {
+                  void createOrder({ statusOverride: 'confirmed' })
+                }}
+              >
+                <CheckCircle size={16} />
+                Xác nhận
+              </button>
+              <button
+                className="btn btn-small"
+                onClick={() => {
+                  void (async () => {
+                    const o = await createOrder({ statusOverride: status })
+                    if (!o) return
+                    window.open(`#/orders/${o.id}/print`, '_blank')
+                  })()
+                }}
+              >
+                <Printer size={16} />
+                In phiếu
+              </button>
+              <button
+                className="btn btn-small"
+                onClick={() => {
+                  void (async () => {
+                    const o = await createOrder({ statusOverride: status })
+                    if (!o) return
+                    const itemsToPrint = o.items.map((it) => {
+                      const sku = skusById.get(it.skuId)
+                      return {
+                        name: sku ? getSkuDisplayName(productsById, sku) : 'Unknown',
+                        unit: sku ? (sku.unit || 'Cái') : 'Cái',
+                        qty: it.qty,
+                        price: it.price,
+                        total: it.qty * it.price,
+                      }
+                    })
+                    const customer = o.customerId ? customersById.get(o.customerId) ?? null : null
+                    printOrder(o, itemsToPrint, customer, user ?? null)
+                  })()
+                }}
+              >
+                <Package size={16} />
+                In xuất kho
+              </button>
+              <button className="btn btn-small" onClick={resetForm}>
+                <AlertCircle size={16} />
+                Hủy
+              </button>
+            </div>
+          </div>
+
+          <div className="order-create-grid">
             {/* LEFT COLUMN */}
-            <div className="erp-main" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div className="order-left">
                 
                 {/* 1. CUSTOMER & GENERAL INFO */}
-                <div className="card" style={{ padding: 16, border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
-                        <User size={18} className="text-primary" />
-                        <span style={{ fontWeight: 700, color: '#334155' }}>THÔNG TIN KHÁCH HÀNG</span>
+                <div className="card order-section">
+                    <div className="order-section-head">
+                        <div className="order-section-title">
+                          <User size={18} />
+                          <span className="order-step">Bước 1</span>
+                          Khách hàng
+                        </div>
                     </div>
                     
                     <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr' }}>
@@ -1335,7 +1450,7 @@ export function OrdersPage() {
                          <div className="field field-span-2">
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>Tìm khách hàng (F2)</label>
+                                    <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>Tìm khách hàng (F2)</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <select
                                             value={customerId}
@@ -1362,7 +1477,7 @@ export function OrdersPage() {
                             </div>
                             {/* Customer Details Badge */}
                             {customerId && customersById.get(customerId) && (
-                                <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0f9ff', borderRadius: 6, border: '1px solid #bae6fd', display: 'flex', gap: 16, fontSize: 13, alignItems: 'center' }}>
+                                <div className="order-customer-pill">
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <Phone size={14} className="text-primary" />
                                         <b>{customersById.get(customerId)?.phone}</b>
@@ -1379,37 +1494,26 @@ export function OrdersPage() {
                             )}
                          </div>
 
-                         {/* Order Info */}
-                         <div className="field">
-                            <label>Kho xuất hàng</label>
-                            <select value={fulfillmentLocationId} onChange={(e) => setFulfillmentLocationId(e.target.value)}>
-                                <option value="">-- Mặc định --</option>
-                                {locations.map(l => <option key={l.id} value={l.id}>{l.code} - {l.name}</option>)}
-                            </select>
-                         </div>
-                         <div className="field">
-                             <label>Nguồn đơn</label>
-                             <select value={source} onChange={e => setSource(e.target.value as OrderSource)}>
-                                 <option value="pos">Tại quầy (POS)</option>
-                                 <option value="cod">COD / Ship</option>
-                                 <option value="web">Website</option>
-                                 <option value="social">Facebook/Social</option>
-                                 <option value="other">Khác</option>
-                             </select>
-                         </div>
                     </div>
                 </div>
 
                 {/* 2. PRODUCT TABLE (POS STYLE) */}
-                <div className="card" style={{ padding: 0, overflow: 'hidden', border: '1px solid #e2e8f0', minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+                <div className="card order-section" style={{ padding: 0, overflow: 'hidden', minHeight: 420, display: 'flex', flexDirection: 'column' }}>
+                    <div className="order-items-head">
+                      <div className="order-section-title" style={{ margin: 0 }}>
+                        <Package size={18} />
+                        <span className="order-step">Bước 2</span>
+                        Sản phẩm
+                      </div>
+                    </div>
                     {/* Search Bar */}
-                    <div style={{ padding: 16, background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 12 }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                            <Search size={18} style={{ position: 'absolute', left: 12, top: 11, color: '#94a3b8' }} />
+                    <div className="order-items-toolbar">
+                        <div className="order-items-search">
+                            <Search size={18} className="order-items-search-icon" />
                             <input 
                                 id="quick-search-input"
                                 placeholder="Quét mã vạch hoặc nhập tên sản phẩm (F1)..." 
-                                style={{ paddingLeft: 36, height: 40, fontSize: 14, width: '100%', border: '1px solid #cbd5e1', borderRadius: 6 }}
+                                className="order-items-search-input"
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         handleQuickAddProduct(e.currentTarget.value)
@@ -1420,14 +1524,15 @@ export function OrdersPage() {
                         </div>
                         {/* Quick Action Buttons */}
                          <button className="btn" onClick={suggestWarehouse} title="AI Gợi ý kho">
-                            <Zap size={16} fill="#eab308" color="#eab308" /> Gợi ý kho
+                            <Zap size={16} fill="#eab308" color="#eab308" />
+                            Gợi ý kho
                          </button>
                     </div>
 
                     {/* Table */}
                     <div className="table-wrap" style={{ flex: 1 }}>
                         <table className="table" style={{ border: 'none' }}>
-                            <thead style={{ background: '#f1f5f9', color: '#475569', fontSize: 12, textTransform: 'uppercase' }}>
+                            <thead className="order-items-thead">
                                 <tr>
                                     <th style={{ width: 60 }}>#</th>
                                     <th>Mã SKU</th>
@@ -1457,7 +1562,7 @@ export function OrdersPage() {
                                     }
 
                                     return (
-                                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                        <tr key={idx} className="order-items-row">
                                             <td style={{ color: '#94a3b8', textAlign: 'center' }}>{idx + 1}</td>
                                             <td>
                                                 {sku ? (
@@ -1477,11 +1582,11 @@ export function OrdersPage() {
                                                 )}
                                             </td>
                                             <td>
-                                                <div style={{ fontWeight: 500 }}>{sku ? getSkuDisplayName(productsById, sku) : '-'}</div>
+                                                <div className="order-item-name">{sku ? getSkuDisplayName(productsById, sku) : '-'}</div>
                                             </td>
                                             <td style={{ textAlign: 'center' }}>
                                                 {sku ? (
-                                                    <span className="badge" style={{ background: stockColor, color: 'white', padding: '2px 8px', fontSize: 11 }}>
+                                                    <span className="order-stock-pill" style={{ background: stockColor }}>
                                                         {stock}
                                                     </span>
                                                 ) : '-'}
@@ -1519,8 +1624,8 @@ export function OrdersPage() {
                                                 {formatVnd(it.qty * it.price)}
                                             </td>
                                             <td>
-                                                <button onClick={() => removeLine(idx)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                                    <div style={{ padding: 4 }}><Minus size={16} /></div> 
+                                                <button className="order-item-remove" onClick={() => removeLine(idx)} type="button" title="Xóa dòng">
+                                                    <Trash2 size={16} />
                                                 </button>
                                             </td>
                                         </tr>
@@ -1540,12 +1645,42 @@ export function OrdersPage() {
                 </div>
 
                 {/* 3. SHIPPING INFO */}
-                <div className="card" style={{ padding: 16, border: '1px solid #e2e8f0' }}>
-                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <Truck size={18} className="text-primary" />
-                        <span style={{ fontWeight: 700, color: '#334155' }}>VẬN CHUYỂN & GIAO HÀNG</span>
+                <div className="card order-section">
+                     <div className="order-section-head">
+                        <div className="order-section-title">
+                          <Truck size={18} />
+                          <span className="order-step">Bước 3</span>
+                          Giao hàng
+                        </div>
                     </div>
                     <div className="grid-form" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                         <div className="field">
+                            <label>Kho xuất hàng</label>
+                            <select value={fulfillmentLocationId} onChange={(e) => setFulfillmentLocationId(e.target.value)}>
+                                <option value="">-- Mặc định --</option>
+                                {locations.map(l => <option key={l.id} value={l.id}>{l.code} - {l.name}</option>)}
+                            </select>
+                         </div>
+                         <div className="field">
+                             <label>Nguồn đơn</label>
+                             <select value={source} onChange={e => setSource(e.target.value as OrderSource)}>
+                                 <option value="pos">Tại quầy (POS)</option>
+                                 <option value="cod">COD / Ship</option>
+                                 <option value="web">Website</option>
+                                 <option value="social">Facebook/Social</option>
+                                 <option value="other">Khác</option>
+                             </select>
+                         </div>
+                         <div className="field">
+                             <label>Trạng thái đơn</label>
+                             <select value={status} onChange={(e) => setStatus(e.target.value as OrderStatus)}>
+                               {allStatuses.map((s) => (
+                                 <option key={s.value} value={s.value}>
+                                   {s.label}
+                                 </option>
+                               ))}
+                             </select>
+                         </div>
                          <div className="field">
                              <label>Đơn vị vận chuyển</label>
                              <input list="carriers" value={carrierName} onChange={e => setCarrierName(e.target.value)} placeholder="Chọn hoặc nhập..." />
@@ -1566,123 +1701,227 @@ export function OrdersPage() {
                          </div>
                     </div>
                 </div>
+
+                <div className="card order-section">
+                  <div className="order-section-head">
+                    <div className="order-section-title">
+                      <MapPin size={18} />
+                      <span className="order-step">Bước 4</span>
+                      Địa chỉ
+                    </div>
+                  </div>
+                  {customerId && customersById.get(customerId) ? (
+                    <div className="order-address-box">
+                      <div className="order-address-line">
+                        <span className="order-address-label">Khách</span>
+                        <span className="order-address-value">{customersById.get(customerId)?.name}</span>
+                      </div>
+                      <div className="order-address-line">
+                        <span className="order-address-label">SĐT</span>
+                        <span className="order-address-value">{customersById.get(customerId)?.phone}</span>
+                      </div>
+                      <div className="order-address-line">
+                        <span className="order-address-label">Địa chỉ</span>
+                        <span className="order-address-value">{customersById.get(customerId)?.address || 'Chưa có địa chỉ'}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="order-muted">Chọn khách hàng để xem địa chỉ và gợi ý giao hàng.</div>
+                  )}
+                </div>
+
+                <div className="card order-section">
+                  <div className="order-section-head">
+                    <div className="order-section-title">
+                      <Package size={18} />
+                      <span className="order-step">Bước 5</span>
+                      Ghi chú & nâng cao
+                    </div>
+                    <button className="btn btn-small" type="button" onClick={() => setAdvancedOpen(!advancedOpen)}>
+                      {advancedOpen ? 'Thu gọn' : 'Mở'}
+                    </button>
+                  </div>
+                  {advancedOpen ? (
+                    <div className="order-advanced">
+                      <div className="grid-form" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                        <div className="field">
+                          <label>Mã đơn sàn</label>
+                          <input value={platformOrderId} onChange={(e) => setPlatformOrderId(e.target.value)} placeholder="Nhập mã đơn sàn..." />
+                        </div>
+                        <div className="field">
+                          <label>Mã voucher nội bộ</label>
+                          <input value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)} placeholder="Ví dụ: GIAM50K" />
+                        </div>
+                        <div className="field">
+                          <label>VAT</label>
+                          <input type="number" value={vatAmount} onChange={(e) => setVatAmount(Number(e.target.value))} />
+                        </div>
+                        <div className="field">
+                          <label>Phí khác</label>
+                          <input type="number" value={otherFees} onChange={(e) => setOtherFees(Number(e.target.value))} />
+                        </div>
+                        <div className="field field-span-2">
+                          <label>Ghi chú phí khác</label>
+                          <input value={otherFeesNote} onChange={(e) => setOtherFeesNote(e.target.value)} placeholder="Nhập mô tả phí khác..." />
+                        </div>
+                        <div className="field">
+                          <label>Bill thanh toán</label>
+                          <input type="file" multiple onChange={(e) => setPaymentBillFiles(e.target.files)} />
+                        </div>
+                        <div className="field">
+                          <label>Ảnh giao hàng</label>
+                          <input type="file" multiple onChange={(e) => setShippingProofFiles(e.target.files)} />
+                        </div>
+                        <div className="field field-span-2">
+                          <label>Ghi chú nội bộ</label>
+                          <textarea rows={3} value={note} onChange={e => setNote(e.target.value)} className="order-note" placeholder="Ghi chú nội bộ..." />
+                        </div>
+                      </div>
+
+                      <div className="order-advanced-sep" />
+
+                      <div className="order-cod-import">
+                        <div className="order-cod-title">Đồng bộ đơn với web COD tay</div>
+                        <div className="field">
+                          <label>Dán JSON array hoặc CSV/TSV: code,amount,shippingFee,carrierName,trackingCode,status</label>
+                          <textarea value={codImport} onChange={(e) => setCodImport(e.target.value)} rows={5} />
+                        </div>
+                        <div className="row" style={{ gap: 8 }}>
+                          <button className="btn btn-primary" type="button" onClick={importCodOrders}>
+                            Nhập COD
+                          </button>
+                          <button className="btn" type="button" onClick={() => setCodImport('')}>
+                            Xóa nội dung
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
             </div>
 
             {/* RIGHT COLUMN - STICKY */}
-            <div className="erp-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                
-                {/* Payment Box */}
-                <div className="card" style={{ padding: 20, border: '1px solid #e2e8f0', background: 'white', borderRadius: 8 }}>
-                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
-                        <CreditCard size={18} className="text-primary" />
-                        <span style={{ fontWeight: 700, color: '#334155' }}>THANH TOÁN</span>
-                    </div>
-                    
-                    <div className="field" style={{ marginBottom: 12 }}>
-                        <label>Hình thức</label>
-                        <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as any)} style={{ height: 40, fontSize: 14 }}>
-                            <option value="cod">Thanh toán khi nhận (COD)</option>
-                            <option value="transfer">Chuyển khoản</option>
-                            <option value="debt">Ghi nợ (Công nợ)</option>
-                        </select>
+            <div className="order-right">
+                <div className="order-sidebar-sticky" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div className="card order-summary">
+                    <div className="order-section-head">
+                      <div className="order-section-title">
+                        <CreditCard size={18} />
+                        Tóm tắt đơn
+                      </div>
                     </div>
 
-                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14 }}>
-                        <span style={{ color: '#64748b' }}>Tạm tính:</span>
-                        <span style={{ fontWeight: 600 }}>{formatVnd(subTotal)}</span>
+                    <div className="order-summary-row">
+                      <span className="order-summary-label">Số lượng</span>
+                      <span className="order-summary-value">
+                        {orderItems.reduce((s, it) => s + (Number(it.qty) || 0), 0).toLocaleString('vi-VN')} sp
+                      </span>
                     </div>
-                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14 }}>
-                         <span style={{ color: '#64748b' }}>Giảm giá:</span>
-                         <div style={{ textAlign: 'right' }}>
-                             <input 
-                                type="number" 
-                                value={discountPercentInput} 
-                                onChange={e => setDiscountPercentInput(Number(e.target.value))} 
-                                style={{ width: 40, border: 'none', borderBottom: '1px solid #ccc', textAlign: 'center', marginRight: 4 }} 
-                                placeholder="%"
-                             />
-                             <span style={{ fontWeight: 600, color: '#ef4444' }}>-{formatVnd(discountAmount)}</span>
-                         </div>
+                    <div className="order-summary-row">
+                      <span className="order-summary-label">Tạm tính</span>
+                      <span className="order-summary-value">{formatVnd(subTotal)}</span>
                     </div>
-                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 14 }}>
-                         <span style={{ color: '#64748b' }}>Phí vận chuyển:</span>
-                         <span style={{ fontWeight: 600 }}>{formatVnd(shippingFee)}</span>
+                    <div className="order-summary-row">
+                      <span className="order-summary-label">Giảm giá</span>
+                      <div className="order-summary-inline">
+                        <input
+                          type="number"
+                          value={discountPercentInput}
+                          onChange={e => setDiscountPercentInput(Number(e.target.value))}
+                          className="order-discount-input"
+                          placeholder="%"
+                        />
+                        <span className="order-summary-neg">-{formatVnd(discountAmount)}</span>
+                      </div>
                     </div>
-                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontSize: 14 }}>
-                         <span style={{ color: '#64748b' }}>VAT / Phí khác:</span>
-                         <span style={{ fontWeight: 600 }}>{formatVnd(vatAmount + otherFees)}</span>
+                    <div className="order-summary-row">
+                      <span className="order-summary-label">Phí ship</span>
+                      <span className="order-summary-value">{formatVnd(shippingFee)}</span>
+                    </div>
+                    <div className="order-summary-row">
+                      <span className="order-summary-label">VAT / Phí khác</span>
+                      <span className="order-summary-value">{formatVnd(vatAmount + otherFees)}</span>
                     </div>
 
                     <div style={{ borderTop: '2px dashed #e2e8f0', margin: '16px 0' }} />
 
-                    <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}>
-                         <span style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>TỔNG CỘNG:</span>
-                         <span style={{ fontWeight: 800, fontSize: 20, color: '#2563eb' }}>{formatVnd(total)}</span>
+                    <div className="order-total-row">
+                      <span className="order-total-label">Tổng thanh toán</span>
+                      <span className="order-total-value">{formatVnd(total)}</span>
                     </div>
 
-                    <div className="field" style={{ marginBottom: 12, background: '#f8fafc', padding: 12, borderRadius: 6 }}>
-                        <label style={{ fontSize: 12 }}>Khách thanh toán trước</label>
-                        <input 
-                            type="number" 
-                            value={paidAmount} 
-                            onChange={e => setPaidAmount(Number(e.target.value))} 
-                            style={{ fontWeight: 700, color: '#16a34a' }}
-                            placeholder="0"
-                        />
-                        {total - paidAmount > 0 && (
-                            <div style={{ textAlign: 'right', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
-                                Còn nợ: {formatVnd(total - paidAmount)}
-                            </div>
-                        )}
+                    {estimatedProfit > 0 ? (
+                      <div style={{ textAlign: 'center', fontSize: 12, color: '#10b981', marginTop: 8, background: '#ecfdf5', padding: 6, borderRadius: 12 }}>
+                        Lãi dự kiến: {formatVnd(estimatedProfit)}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="card order-section">
+                    <div className="order-section-head">
+                      <div className="order-section-title">
+                        <CheckCircle size={18} />
+                        Thanh toán
+                      </div>
                     </div>
 
-                    {estimatedProfit > 0 && (
-                        <div style={{ textAlign: 'center', fontSize: 12, color: '#10b981', marginBottom: 16, background: '#ecfdf5', padding: 4, borderRadius: 4 }}>
-                            (Lãi dự kiến: {formatVnd(estimatedProfit)})
+                    <div className="field" style={{ marginBottom: 12 }}>
+                      <label>Phương thức</label>
+                      <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as any)} style={{ height: 40, fontSize: 14 }}>
+                        <option value="cod">Thanh toán khi nhận (COD)</option>
+                        <option value="transfer">Chuyển khoản</option>
+                        <option value="debt">Ghi nợ (Công nợ)</option>
+                      </select>
+                    </div>
+
+                    <div className="field" style={{ marginBottom: 12, background: '#f8fafc', padding: 12, borderRadius: 12 }}>
+                      <label style={{ fontSize: 12 }}>Khách thanh toán trước</label>
+                      <input type="number" value={paidAmount} onChange={e => setPaidAmount(Number(e.target.value))} style={{ fontWeight: 900, color: '#16a34a' }} placeholder="0" />
+                      {total - paidAmount > 0 ? (
+                        <div style={{ textAlign: 'right', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                          Còn nợ: {formatVnd(total - paidAmount)}
                         </div>
-                    )}
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-                        <button className="btn btn-primary" onClick={createOrder} style={{ height: 48, fontSize: 16, justifyContent: 'center', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
-                            <Save size={20} /> TẠO ĐƠN (F4)
-                        </button>
-                        <div style={{ display: 'flex', gap: 12 }}>
-                            <button className="btn" onClick={() => { createOrder(); /* Add print logic here */ }} style={{ flex: 1, justifyContent: 'center' }}>
-                                <Printer size={18} /> Lưu & In (F8)
-                            </button>
-                            <button className="btn" onClick={resetForm} style={{ flex: 1, justifyContent: 'center' }}>
-                                <Plus size={18} /> Đơn mới
-                            </button>
-                        </div>
+                      ) : null}
                     </div>
-                </div>
+                  </div>
 
-                <div className="card" style={{ padding: 16 }}>
-                     <label style={{ fontSize: 12, fontWeight: 600 }}>Ghi chú đơn hàng</label>
-                     <textarea rows={3} value={note} onChange={e => setNote(e.target.value)} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: 8 }} placeholder="Ghi chú nội bộ..." />
+                  <div className="card order-section">
+                    <div className="order-section-head">
+                      <div className="order-section-title">
+                        <Save size={18} />
+                        Hành động
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <button className="btn btn-primary" onClick={() => void createOrder()} style={{ height: 48, fontSize: 16, justifyContent: 'center', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
+                        <Save size={20} /> Tạo đơn (F4)
+                      </button>
+                      <button className="btn" onClick={() => void createOrder({ statusOverride: 'draft' })}>
+                        <Save size={18} /> Lưu nháp
+                      </button>
+                      <button className="btn" onClick={() => void createOrder({ statusOverride: 'confirmed' })}>
+                        <CheckCircle size={18} /> Xác nhận
+                      </button>
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          void (async () => {
+                            const o = await createOrder()
+                            if (!o) return
+                            window.open(`#/orders/${o.id}/print`, '_blank')
+                          })()
+                        }}
+                      >
+                        <Printer size={18} /> In phiếu
+                      </button>
+                      <button className="btn" onClick={resetForm}>
+                        <AlertCircle size={18} /> Hủy / Đơn mới
+                      </button>
+                    </div>
+                  </div>
                 </div>
             </div>
-        </div>
-      ) : null}
-
-      {canWrite ? (
-        <div className="card">
-          <div className="card-title">Đồng bộ đơn với web COD tay</div>
-          <div className="field">
-            <label>Dán JSON array hoặc CSV/TSV: code,amount,shippingFee,carrierName,trackingCode,status</label>
-            <textarea
-              value={codImport}
-              onChange={(e) => setCodImport(e.target.value)}
-              rows={6}
-            />
-          </div>
-          <div className="row">
-            <button className="btn btn-primary" onClick={importCodOrders}>
-              Nhập COD
-            </button>
-            <button className="btn" onClick={() => setCodImport('')}>
-              Xóa nội dung
-            </button>
           </div>
         </div>
       ) : null}

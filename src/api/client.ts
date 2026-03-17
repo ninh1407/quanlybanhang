@@ -1,5 +1,22 @@
 import { getServerUrl } from '../config'
 
+function readTokenPair(): { token: string | null; refreshToken: string | null; store: Storage } {
+  const lsToken = localStorage.getItem('auth_token')
+  const ssToken = sessionStorage.getItem('auth_token')
+  const store = lsToken ? localStorage : ssToken ? sessionStorage : localStorage
+  const token = (store === localStorage ? lsToken : ssToken) ?? null
+  const refreshToken = (store === localStorage ? localStorage.getItem('refresh_token') : sessionStorage.getItem('refresh_token'))
+  return { token, refreshToken, store }
+}
+
+function writeTokenPair(store: Storage, accessToken: string, refreshToken?: string) {
+  const other = store === localStorage ? sessionStorage : localStorage
+  store.setItem('auth_token', accessToken)
+  if (refreshToken) store.setItem('refresh_token', refreshToken)
+  other.removeItem('auth_token')
+  other.removeItem('refresh_token')
+}
+
 export async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
   const baseUrl = getServerUrl()
   // Ensure baseUrl doesn't end with slash and path doesn't start with slash if needed, 
@@ -8,7 +25,7 @@ export async function fetchApi<T>(path: string, options: RequestInit = {}): Prom
   
   const url = `${baseUrl}${path.startsWith('/') ? path : '/' + path}`
   
-  const token = localStorage.getItem('auth_token')
+  const { token, refreshToken, store } = readTokenPair()
   
   const headers = {
     'Content-Type': 'application/json',
@@ -23,7 +40,6 @@ export async function fetchApi<T>(path: string, options: RequestInit = {}): Prom
 
   // Handle Token Refresh on 401
   if (res.status === 401) {
-    const refreshToken = localStorage.getItem('refresh_token')
     if (refreshToken) {
         try {
             // Try refresh
@@ -35,8 +51,7 @@ export async function fetchApi<T>(path: string, options: RequestInit = {}): Prom
             
             if (refreshRes.ok) {
                 const data = await refreshRes.json()
-                localStorage.setItem('auth_token', data.accessToken)
-                localStorage.setItem('refresh_token', data.refreshToken)
+                writeTokenPair(store, data.accessToken, data.refreshToken)
                 
                 // Retry original request with new token
                 const newHeaders = {
@@ -50,6 +65,8 @@ export async function fetchApi<T>(path: string, options: RequestInit = {}): Prom
                 // For now, let it fail so UI can handle logout
                 localStorage.removeItem('auth_token')
                 localStorage.removeItem('refresh_token')
+                sessionStorage.removeItem('auth_token')
+                sessionStorage.removeItem('refresh_token')
             }
         } catch (e) {
             console.error('Failed to refresh token', e)

@@ -24,6 +24,9 @@ export function useAuth(): {
 
   const logout = useCallback(() => {
     localStorage.removeItem('auth_token')
+    localStorage.removeItem('refresh_token')
+    sessionStorage.removeItem('auth_token')
+    sessionStorage.removeItem('refresh_token')
     dispatch({ type: 'auth/logout' })
   }, [dispatch])
 

@@ -20,7 +20,7 @@ function hasWarehouseAccess(user: User, warehouseId?: string | null): boolean {
 // Assuming orders are global for now unless they have warehouseId?
 // Actually, orders are usually fulfilled from a warehouse.
 // Let's assume strict mode: User can only see orders from their warehouses.
-    function filterOrdersByUser(orders: Order[], user: User): Order[] {
+function filterOrdersByUser(orders: Order[], user: User): Order[] {
     if (user.role === 'admin' || user.role === 'ceo' || user.role === 'accountant') return orders
     
     // For staff/manager, only show orders where fulfillment warehouse is in allowed list
@@ -30,10 +30,9 @@ function hasWarehouseAccess(user: User, warehouseId?: string | null): boolean {
 
     const allowed = new Set(user.allowedLocationIds || [])
     return orders.filter(o => {
-        // If order has no warehouse, maybe they can see it? Or only if created by them?
-        // Let's simplify: Filter by warehouseId if present
-        if (o.warehouseId || o.fulfillmentLocationId) return allowed.has((o.warehouseId || o.fulfillmentLocationId) as string)
-        return true // Visible if unassigned
+        const locId = (o.fulfillmentLocationId || o.warehouseId) as string | undefined
+        if (locId) return allowed.has(locId)
+        return true
     })
 }
 
@@ -187,30 +186,54 @@ export class AnalyticsService {
     async getInventoryKPIs(user: User) {
         const state = store.state
         const now = new Date()
-        const ninetyDaysAgo = new Date(now.setDate(now.getDate() - 90))
+        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
         
         const skus = state.skus || []
         const txs = state.stockTransactions || []
+        const skusMap = new Map((state.skus || []).map(s => [s.id, s]))
+
+        const stockMap = new Map<string, number>()
+        txs.forEach(t => {
+            if (!hasWarehouseAccess(user, t.warehouseId || t.locationId)) return
+            const delta = t.type === 'in' ? t.qty : t.type === 'out' ? -t.qty : t.qty
+            stockMap.set(t.skuId, (stockMap.get(t.skuId) ?? 0) + delta)
+        })
+
+        const inventoryValue = skus.reduce((sum, s) => {
+            const qty = stockMap.get(s.id) || 0
+            return sum + (s.cost || 0) * qty
+        }, 0)
 
         const outTxs = txs.filter(t => t.type === 'out' && hasWarehouseAccess(user, t.warehouseId || t.locationId))
-        const activeSkuIds = new Set(outTxs.filter(t => new Date(t.createdAt) > ninetyDaysAgo).map(t => t.skuId))
-        
+        const outTxs90 = outTxs.filter(t => new Date(t.createdAt) > ninetyDaysAgo)
+        const outTxs30 = outTxs.filter(t => new Date(t.createdAt) > thirtyDaysAgo)
+
+        const activeSkuIds = new Set(outTxs90.map(t => t.skuId))
         const deadStockSkuCount = skus.filter(s => !activeSkuIds.has(s.id)).length
 
-        const skuOutQty = new Map<string, number>()
-        outTxs.forEach(t => {
-            skuOutQty.set(t.skuId, (skuOutQty.get(t.skuId) || 0) + t.qty)
+        const skuOutQty90 = new Map<string, number>()
+        outTxs90.forEach(t => {
+            skuOutQty90.set(t.skuId, (skuOutQty90.get(t.skuId) || 0) + t.qty)
         })
-        const sortedSkus = Array.from(skuOutQty.entries()).sort((a, b) => b[1] - a[1])
+        const sortedSkus = Array.from(skuOutQty90.entries()).sort((a, b) => b[1] - a[1])
         const fastMovingCount = Math.ceil(sortedSkus.length * 0.2)
         const fastMovingSkuCount = sortedSkus.slice(0, fastMovingCount).length
-        const slowMovingSkuCount = sortedSkus.length - fastMovingCount - deadStockSkuCount
+        const slowMovingSkuCount = Math.max(0, sortedSkus.length - fastMovingSkuCount)
+
+        const cogs30 = outTxs30.reduce((sum, t) => {
+            const sku = skusMap.get(t.skuId)
+            const unitCost = t.unitCost ?? sku?.cost ?? 0
+            return sum + (Number(unitCost) || 0) * (Number(t.qty) || 0)
+        }, 0)
+
+        const daysOnHand = cogs30 > 0 ? inventoryValue / (cogs30 / 30) : 0
         
         return {
-            daysOnHand: 45, 
+            daysOnHand: Number.isFinite(daysOnHand) ? Math.round(daysOnHand) : 0,
             deadStockSkuCount,
             fastMovingSkuCount,
-            slowMovingSkuCount: Math.max(0, slowMovingSkuCount)
+            slowMovingSkuCount
         }
     }
 

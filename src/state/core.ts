@@ -117,7 +117,26 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'customers/delete':
       return { ...state, customers: removeById(state.customers, action.id) }
     case 'orders/upsert':
-      return { ...state, orders: upsertById(state.orders, action.order) }
+      {
+        let order = action.order
+        let sequences = state.sequences
+        if (!order.code || !order.code.trim()) {
+          const ym = yearMonthFromIso(order.createdAt)
+          const seqKey = `order:${ym}`
+          const current = sequences[seqKey] ?? 0
+          const maxExisting = state.orders.reduce((m, o) => {
+            const c = (o.code || '').trim()
+            if (!c.startsWith(`DH-${ym}-`)) return m
+            const tail = c.slice(`DH-${ym}-`.length)
+            const n = Number(tail)
+            return Number.isFinite(n) ? Math.max(m, n) : m
+          }, 0)
+          const next = Math.max(current, maxExisting) + 1
+          sequences = { ...sequences, [seqKey]: next }
+          order = { ...order, code: `DH-${ym}-${String(next).padStart(4, '0')}` }
+        }
+        return { ...state, orders: upsertById(state.orders, order), sequences }
+      }
     case 'orders/delete':
       return {
         ...state,
@@ -208,7 +227,27 @@ export function reducer(state: AppState, action: AppAction): AppState {
         }
       }
     case 'stockVouchers/upsert':
-      return { ...state, stockVouchers: upsertById(state.stockVouchers, action.voucher) }
+      {
+        let voucher = action.voucher
+        let sequences = state.sequences
+        if (!voucher.code || !voucher.code.trim()) {
+          const ym = yearMonthFromIso(voucher.createdAt)
+          const prefix = voucher.type === 'in' ? 'PN' : voucher.type === 'out' ? 'PX' : 'CK'
+          const seqKey = `stockVoucher:${prefix}:${ym}`
+          const current = sequences[seqKey] ?? 0
+          const maxExisting = state.stockVouchers.reduce((m, v) => {
+            const c = (v.code || '').trim()
+            if (!c.startsWith(`${prefix}-${ym}-`)) return m
+            const tail = c.slice(`${prefix}-${ym}-`.length)
+            const n = Number(tail)
+            return Number.isFinite(n) ? Math.max(m, n) : m
+          }, 0)
+          const next = Math.max(current, maxExisting) + 1
+          sequences = { ...sequences, [seqKey]: next }
+          voucher = { ...voucher, code: `${prefix}-${ym}-${String(next).padStart(4, '0')}` }
+        }
+        return { ...state, stockVouchers: upsertById(state.stockVouchers, voucher), sequences }
+      }
     case 'stockVouchers/delete':
       return { ...state, stockVouchers: removeById(state.stockVouchers, action.id) }
     case 'stockVouchers/finalize':

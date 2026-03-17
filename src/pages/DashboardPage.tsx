@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useCallback, useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/Store'
 import type { Sku, StockTransaction, Order } from '../domain/types'
@@ -12,7 +12,24 @@ import {
   AlertTriangle,
   Search,
   Calendar,
-  Download
+  Download,
+  RefreshCw,
+  Plus,
+  ShoppingCart,
+  Package,
+  Boxes,
+  Percent,
+  Wallet,
+  LayoutDashboard,
+  DollarSign,
+  Activity,
+  BarChart3,
+  ArrowDownLeft,
+  ArrowUpRight,
+  HandCoins,
+  BadgePercent,
+  Receipt,
+  CheckSquare
 } from 'lucide-react'
 import {
   AreaChart,
@@ -67,7 +84,13 @@ function SmartMetricCard({
   data,
   trend,
   trendValue,
-  status = 'neutral'
+  status = 'neutral',
+  icon,
+  accent,
+  meta,
+  subtitle,
+  isLoading,
+  onClick,
 }: {
   label: string
   value: string
@@ -75,11 +98,47 @@ function SmartMetricCard({
   trend?: 'up' | 'down' | 'neutral'
   trendValue?: string
   status?: 'success' | 'warning' | 'danger' | 'neutral'
+  icon?: React.ReactNode
+  accent?: string
+  meta?: string
+  subtitle?: string
+  isLoading?: boolean
+  onClick?: () => void
 }) {
   const statusClass = status === 'success' ? 'kpi-success' : status === 'warning' ? 'kpi-warning' : status === 'danger' ? 'kpi-danger' : 'kpi-neutral'
+  const kpiAccent = accent ?? undefined
+  const trendBg =
+    kpiAccent === '#2563EB'
+      ? 'rgba(37, 99, 235, 0.12)'
+      : kpiAccent === '#16A34A'
+        ? 'rgba(22, 163, 74, 0.12)'
+        : kpiAccent === '#F59E0B'
+          ? 'rgba(245, 158, 11, 0.12)'
+          : kpiAccent === '#DC2626'
+            ? 'rgba(220, 38, 38, 0.12)'
+            : kpiAccent === '#7C3AED'
+              ? 'rgba(124, 58, 237, 0.12)'
+              : undefined
   
   return (
-    <div className={`card kpi-card ${statusClass}`}>
+    <div
+      className={`card kpi-card kpi-entity ${statusClass}${onClick ? ' clickable' : ''}`}
+      style={
+        kpiAccent
+          ? ({ ['--kpi-accent' as any]: kpiAccent, ['--kpi-trend-bg' as any]: trendBg ?? undefined } as any)
+          : undefined
+      }
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') onClick()
+            }
+          : undefined
+      }
+    >
       <div className="kpi-head">
         <div className="kpi-label">{label}</div>
         {trend ? (
@@ -91,9 +150,12 @@ function SmartMetricCard({
       </div>
 
       <div className="kpi-body">
-        <div>
-          <div className="kpi-value">{value}</div>
-          <div className="kpi-meta">{status === 'success' ? 'Tốt' : status === 'warning' ? 'Cần chú ý' : status === 'danger' ? 'Nguy hiểm' : 'Ổn định'}</div>
+        <div className="kpi-left">
+          {icon ? <div className="kpi-icon">{icon}</div> : null}
+          <div>
+            <div className={isLoading ? 'kpi-value kpi-skeleton' : 'kpi-value'}>{value}</div>
+            <div className="kpi-meta">{meta ?? (status === 'success' ? 'Tốt' : status === 'warning' ? 'Cần chú ý' : status === 'danger' ? 'Nguy hiểm' : 'Ổn định')}</div>
+          </div>
         </div>
 
         {data && data.length > 0 ? (
@@ -112,6 +174,25 @@ function SmartMetricCard({
           </div>
         ) : null}
       </div>
+
+      {subtitle ? <div className="kpi-sub">{subtitle}</div> : null}
+    </div>
+  )
+}
+
+function DashboardEmpty({ title, hint, actionLabel, onAction }: { title: string; hint?: string; actionLabel?: string; onAction?: () => void }) {
+  return (
+    <div className="dash-empty">
+      <div className="dash-empty-icon">
+        <AlertTriangle size={18} />
+      </div>
+      <div className="dash-empty-title">{title}</div>
+      {hint ? <div className="dash-empty-hint">{hint}</div> : null}
+      {actionLabel && onAction ? (
+        <button className="btn btn-primary btn-small" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -215,16 +296,31 @@ function calculateOrderTotal(o: Order): number {
     return subTotal + (o.shippingFee || 0) - (o.discountAmount || 0) + (o.vatAmount || 0) + (o.otherFees || 0)
 }
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  const first = parts[0]!
+  const last = parts.length > 1 ? parts[parts.length - 1]! : ''
+  const a = first[0] ?? '?'
+  const b = last[0] ?? ''
+  return (a + b).toUpperCase()
+}
+
 export function DashboardPage() {
   const navigate = useNavigate()
   const state = useAppState()
   const [viewMode, setViewMode] = useState<'overview' | 'profit' | 'finance' | 'warehouse' | 'operation' | 'analysis'>('overview')
-  const [filter, setFilter] = useState({
+  const defaultFilter = useMemo(
+    () => ({
       start: startOfMonth(new Date()),
-      end: new Date(), // Today
+      end: new Date(),
       warehouseId: 'all',
-      channel: 'all'
-  })
+      channel: 'all',
+    }),
+    [],
+  )
+  const [filter, setFilter] = useState(defaultFilter)
+  const [draftFilter, setDraftFilter] = useState(defaultFilter)
 
   const [staffRevenueQuery, setStaffRevenueQuery] = useState('')
   const [staffRevenueSort, setStaffRevenueSort] = useState<SortConfig>({ key: 'revenue', direction: 'desc' })
@@ -236,13 +332,42 @@ export function DashboardPage() {
   const [apiTopProducts, setApiTopProducts] = useState<TopProduct[]>([])
   const [apiChannels, setApiChannels] = useState<ChannelPerformance[]>([])
 
+  const [apiLoading, setApiLoading] = useState(false)
+  const [apiReloadKey, setApiReloadKey] = useState(0)
+
+  const reloadApi = useCallback(() => {
+    setApiReloadKey((v) => v + 1)
+  }, [])
+
   useEffect(() => {
-    // Fetch data from API (Architecture Upgrade: Desktop App -> API)
-    AnalyticsApi.getBusinessKPIs(filter.start, filter.end).then(setApiKpi).catch(console.error)
-    AnalyticsApi.getRevenueHistory().then(setApiHistory).catch(console.error)
-    AnalyticsApi.getTopProducts(5).then(setApiTopProducts).catch(console.error)
-    AnalyticsApi.getChannelPerformance(filter.start, filter.end).then(setApiChannels).catch(console.error)
-  }, [filter.start, filter.end])
+    let alive = true
+    setApiLoading(true)
+    Promise.all([
+      AnalyticsApi.getBusinessKPIs(filter.start, filter.end),
+      AnalyticsApi.getRevenueHistory(),
+      AnalyticsApi.getTopProducts(5),
+      AnalyticsApi.getChannelPerformance(filter.start, filter.end),
+    ])
+      .then(([kpi, history, top, channels]) => {
+        if (!alive) return
+        setApiKpi(kpi)
+        setApiHistory(history)
+        setApiTopProducts(top)
+        setApiChannels(channels)
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (!alive) return
+        setApiLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [filter.start, filter.end, apiReloadKey])
+
+  useEffect(() => {
+    setDraftFilter(filter)
+  }, [filter])
   
   const productsById = useMemo(() => new Map((state.products || []).map((p) => [p.id, p.name])), [state.products])
   const agedStock = useMemo(() => {
@@ -297,15 +422,20 @@ export function DashboardPage() {
 
 
 
-    // Cashflow (Filtered by date)
-    const financeTxs = (state.financeTransactions || [])
-        .filter(t => {
-            const d = new Date(t.createdAt)
-            return d >= start && d <= end
-        })
-    const income = financeTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
-    const expense = financeTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+    const financeTxs = (state.financeTransactions || []).filter((t) => {
+      const d = new Date(t.createdAt)
+      return d >= start && d <= end
+    })
+    const financeTxsPrev = (state.financeTransactions || []).filter((t) => {
+      const d = new Date(t.createdAt)
+      return d >= prevStart && d <= prevEnd
+    })
+    const income = financeTxs.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+    const expense = financeTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
     const cashflow = income - expense
+    const incomePrev = financeTxsPrev.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+    const expensePrev = financeTxsPrev.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+    const cashflowPrev = incomePrev - expensePrev
  
      // Inventory Metrics
      const stockMap = new Map<string, number>()
@@ -324,10 +454,16 @@ export function DashboardPage() {
      const inventoryCount = (state.skus || []).length
      const inventoryLow = (state.skus || []).filter(s => (stockMap.get(s.id) || 0) < 10).length
 
-     // Receivables (Global)
-     const receivables = (state.debts || [])
-         .filter(d => d.type === 'receivable' && d.status === 'open')
-         .reduce((sum, d) => sum + d.amount, 0)
+    const now = new Date()
+    const receivableOpen = (state.debts || []).filter((d) => d.type === 'receivable' && d.status === 'open')
+    const receivables = receivableOpen.reduce((sum, d) => sum + d.amount, 0)
+    const receivableOverdueCount = receivableOpen.filter((d) => d.dueDate && new Date(d.dueDate) < now).length
+    const receivableDueSoonCount = receivableOpen.filter((d) => {
+      if (!d.dueDate) return false
+      const due = new Date(d.dueDate)
+      const diffDays = (due.getTime() - now.getTime()) / (1000 * 3600 * 24)
+      return diffDays >= 0 && diffDays <= 7
+    }).length
 
     // Operation Metrics
     const totalOrders = currentOrders.length
@@ -360,6 +496,28 @@ export function DashboardPage() {
         count++
     }
 
+    const cashflowHistory = []
+    d = new Date(start)
+    count = 0
+    while (d <= end && count < maxPoints) {
+      const dayStart = startOfDay(d)
+      const dayEnd = endOfDay(d)
+      const dayTxs = financeTxs.filter((t) => {
+        const td = new Date(t.createdAt)
+        return td >= dayStart && td <= dayEnd
+      })
+      const dayIncome = dayTxs.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+      const dayExpense = dayTxs.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+      cashflowHistory.push({
+        date: format(d, 'dd/MM'),
+        income: dayIncome,
+        expense: dayExpense,
+        cashflow: dayIncome - dayExpense,
+      })
+      d = new Date(d.setDate(d.getDate() + 1))
+      count++
+    }
+
     return {
         revenue,
         revenuePrev,
@@ -367,6 +525,7 @@ export function DashboardPage() {
         profitPrev,
         inventoryValue,
         cashflow,
+        cashflowPrev,
         receivables,
          history,
          currentOrders,
@@ -378,12 +537,73 @@ export function DashboardPage() {
          shipping,
          income,
          expense,
+         incomePrev,
+         expensePrev,
          inventoryCount,
          inventoryLow,
          stockMap,
-         pendingOrdersCount
+         pendingOrdersCount,
+         receivableOverdueCount,
+         receivableDueSoonCount,
+         cashflowHistory
      }
    }, [state.orders, state.skus, state.stockTransactions, state.financeTransactions, state.debts, filter])
+
+  const incomeTrend = useMemo(() => computeTrend(metrics.income, metrics.incomePrev), [metrics.income, metrics.incomePrev])
+  const expenseTrend = useMemo(() => computeTrend(metrics.expense, metrics.expensePrev), [metrics.expense, metrics.expensePrev])
+  const cashflowTrend = useMemo(() => computeTrend(metrics.cashflow, metrics.cashflowPrev), [metrics.cashflow, metrics.cashflowPrev])
+  const margin = useMemo(() => (metrics.revenue ? (metrics.profit / metrics.revenue) * 100 : 0), [metrics.profit, metrics.revenue])
+  const marginPrev = useMemo(() => (metrics.revenuePrev ? (metrics.profitPrev / metrics.revenuePrev) * 100 : 0), [metrics.profitPrev, metrics.revenuePrev])
+  const marginTrend = useMemo(() => computeTrend(margin, marginPrev), [margin, marginPrev])
+
+  const channelOrderCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    metrics.currentOrders.forEach((o) => {
+      const k = o.source || 'other'
+      map.set(k, (map.get(k) ?? 0) + 1)
+    })
+    return map
+  }, [metrics.currentOrders])
+
+  const expenseByCategory = useMemo(() => {
+    const map = new Map<string, number>()
+    const start = startOfDay(filter.start)
+    const end = endOfDay(filter.end)
+    ;(state.financeTransactions || []).forEach((t) => {
+      const d = new Date(t.createdAt)
+      if (d < start || d > end) return
+      if (t.type !== 'expense') return
+      const k = t.category || 'Khác'
+      map.set(k, (map.get(k) ?? 0) + t.amount)
+    })
+    const total = Array.from(map.values()).reduce((s, v) => s + v, 0)
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value, percent: total ? (value / total) * 100 : 0 }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8)
+  }, [state.financeTransactions, filter.start, filter.end, metrics.cashflowHistory])
+
+  const receivableAging = useMemo(() => {
+    const open = (state.debts || []).filter((d) => d.type === 'receivable' && d.status === 'open' && d.dueDate)
+    const now = new Date()
+    const buckets = {
+      notDue: { label: 'Chưa đến hạn', value: 0 },
+      d1_7: { label: 'Quá hạn 1–7 ngày', value: 0 },
+      d8_30: { label: 'Quá hạn 8–30 ngày', value: 0 },
+      d30: { label: 'Quá hạn >30 ngày', value: 0 },
+    }
+    open.forEach((d) => {
+      const due = new Date(d.dueDate!)
+      const days = Math.floor((now.getTime() - due.getTime()) / (1000 * 3600 * 24))
+      if (days <= 0) buckets.notDue.value += d.amount
+      else if (days <= 7) buckets.d1_7.value += d.amount
+      else if (days <= 30) buckets.d8_30.value += d.amount
+      else buckets.d30.value += d.amount
+    })
+    const list = Object.values(buckets)
+    const total = list.reduce((s, v) => s + v.value, 0)
+    return { list, total }
+  }, [state.debts])
 
 
   const operationScore = useMemo(() => {
@@ -439,6 +659,21 @@ export function DashboardPage() {
         .map(([name, val]) => ({ name, revenue: val.revenue, profit: val.profit }))
         .sort((a, b) => b.profit - a.profit)
   }, [metrics.currentOrders, state.locations, state.skus])
+
+  const bestWarehouseByProfit = useMemo(() => {
+    const list = profitByWarehouse.filter((x) => Number(x.revenue) > 0)
+    if (!list.length) return null
+    const best = [...list].sort((a, b) => (Number(b.profit) || 0) - (Number(a.profit) || 0))[0]!
+    const worstMargin = [...list]
+      .map((x) => ({ name: x.name, margin: Number(x.revenue) ? (Number(x.profit) / Number(x.revenue)) * 100 : 0 }))
+      .sort((a, b) => a.margin - b.margin)[0]!
+    return {
+      bestName: best.name,
+      bestProfit: Number(best.profit) || 0,
+      worstMarginName: worstMargin.name,
+      worstMargin: worstMargin.margin,
+    }
+  }, [profitByWarehouse])
 
   const inventoryByCategory = useMemo(() => {
       const map = new Map<string, number>()
@@ -673,7 +908,23 @@ export function DashboardPage() {
         key: 'name',
         title: 'Nhân viên',
         sortable: true,
-        render: (r) => <span style={{ fontWeight: 600 }}>{r.name}</span>,
+        render: (r) => {
+          const rank = staffRevenueRankByRevenue.get(r.id) ?? 0
+          const badge = rank === 1 ? 'badge badge-info' : rank === 2 ? 'badge badge-success' : rank === 3 ? 'badge badge-warning' : 'badge badge-neutral'
+          const badgeLabel = rank ? `#${rank}` : '—'
+          return (
+            <div className="dash-staff-cell">
+              <div className="dash-avatar">{initials(r.name)}</div>
+              <div className="dash-staff-meta">
+                <div className="dash-staff-name">{r.name}</div>
+                <div className="dash-staff-sub">
+                  <span className={badge}>{badgeLabel}</span>
+                  <span className="dash-staff-subtext">TB/đơn: {formatVnd(r.avgOrderValue)}</span>
+                </div>
+              </div>
+            </div>
+          )
+        },
       },
       {
         key: 'ordersCount',
@@ -689,7 +940,17 @@ export function DashboardPage() {
         width: 150,
         align: 'right',
         sortable: true,
-        render: (r) => formatVnd(r.revenue),
+        render: (r) => (
+          <div className="dash-rev-cell">
+            <div className="dash-rev-main">{formatVnd(r.revenue)}</div>
+            <div className="dash-rev-sub">
+              <div className="dash-progress">
+                <div className="dash-progress-bar" style={{ width: `${Math.min(100, Math.max(0, r.revenuePercent))}%` }} />
+              </div>
+              <span className="dash-rev-pct">{r.revenuePercent.toFixed(1)}%</span>
+            </div>
+          </div>
+        ),
       },
       {
         key: 'avgOrderValue',
@@ -764,78 +1025,188 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page dashboard-page">
       <PageHeader
-        title="Tổng quan"
-        subtitle={format(new Date(), 'EEEE, dd/MM/yyyy')}
+        title={
+          viewMode === 'overview'
+            ? 'Tổng quan'
+            : viewMode === 'finance'
+              ? 'Tài chính'
+              : viewMode === 'warehouse'
+                ? 'Kho'
+                : viewMode === 'operation'
+                  ? 'Vận hành'
+                  : 'BI'
+        }
+        subtitle={
+          viewMode === 'finance'
+            ? 'Tổng quan dòng tiền, lợi nhuận và hiệu suất theo kho/kênh'
+            : format(new Date(), 'EEEE, dd/MM/yyyy')
+        }
         actions={
-          <div className="dashboard-actions">
+          <div className="dash-header-actions">
+            <button className="btn btn-small" onClick={reloadApi} title="Làm mới">
+              <RefreshCw size={16} />
+              Làm mới
+            </button>
+            <button className="btn btn-small" onClick={() => navigate('/orders')} title="Tạo đơn">
+              <Plus size={16} />
+              Tạo đơn
+            </button>
+            <button className="btn btn-small" onClick={() => navigate('/stock-vouchers')} title="Nhập kho">
+              <Plus size={16} />
+              Nhập kho
+            </button>
+            {viewMode === 'finance' ? (
+              <>
+                <button className="btn btn-small" onClick={() => navigate('/channel-reconciliation')} title="Đối soát">
+                  <CheckSquare size={16} />
+                  Đối soát
+                </button>
+                <button className="btn btn-small" onClick={() => navigate('/finance/cashflow')} title="Ghi nhận chi phí">
+                  <Receipt size={16} />
+                  Ghi nhận chi phí
+                </button>
+              </>
+            ) : null}
             <button className="btn btn-outline btn-small" onClick={handleExport}>
               <Download size={16} />
               Xuất báo cáo
             </button>
+          </div>
+        }
+      />
 
-            <div className="date-range">
-              <Calendar size={16} />
-              <input
-                type="date"
-                value={format(filter.start, 'yyyy-MM-dd')}
-                onChange={(e) => setFilter({ ...filter, start: new Date(e.target.value) })}
-              />
-              <span className="date-range-sep">-</span>
-              <input
-                type="date"
-                value={format(filter.end, 'yyyy-MM-dd')}
-                onChange={(e) => setFilter({ ...filter, end: new Date(e.target.value) })}
-              />
-            </div>
-
+      <div className="card dash-filterbar">
+        <div className="dash-filter-row">
+          <div className="dash-filter-item">
+            <div className="dash-filter-label">Kho</div>
             <select
-              value={filter.warehouseId}
-              onChange={(e) => setFilter({ ...filter, warehouseId: e.target.value })}
+              value={draftFilter.warehouseId}
+              onChange={(e) => setDraftFilter({ ...draftFilter, warehouseId: e.target.value })}
               className="input-compact"
             >
               <option value="all">Tất cả kho</option>
               {(state.locations || []).map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.name}
+                  {l.code} - {l.name}
                 </option>
               ))}
             </select>
+          </div>
 
+          <div className="dash-filter-item">
+            <div className="dash-filter-label">Kênh bán</div>
             <select
-              value={filter.channel}
-              onChange={(e) => setFilter({ ...filter, channel: e.target.value })}
+              value={draftFilter.channel}
+              onChange={(e) => setDraftFilter({ ...draftFilter, channel: e.target.value })}
               className="input-compact"
             >
               <option value="all">Tất cả kênh</option>
               <option value="pos">POS</option>
+              <option value="web">Website</option>
               <option value="shopee">Shopee</option>
               <option value="lazada">Lazada</option>
               <option value="tiktok">TikTok</option>
               <option value="wholesale">Bán buôn</option>
             </select>
+          </div>
 
-            <div className="tabs">
-              <button className={`tab ${viewMode === 'overview' ? 'active' : ''}`} onClick={() => setViewMode('overview')}>
-                Tổng quan
-              </button>
-              <button className={`tab ${viewMode === 'finance' ? 'active' : ''}`} onClick={() => setViewMode('finance')}>
-                Tài chính
-              </button>
-              <button className={`tab ${viewMode === 'warehouse' ? 'active' : ''}`} onClick={() => setViewMode('warehouse')}>
-                Kho
-              </button>
-              <button className={`tab ${viewMode === 'operation' ? 'active' : ''}`} onClick={() => setViewMode('operation')}>
-                Vận hành
-              </button>
-              <button className={`tab ${viewMode === 'analysis' ? 'active' : ''}`} onClick={() => setViewMode('analysis')}>
-                BI
-              </button>
+          <div className="dash-filter-item dash-filter-date">
+            <div className="dash-filter-label">Khoảng thời gian</div>
+            <div className="date-range">
+              <Calendar size={16} />
+              <input
+                type="date"
+                value={format(draftFilter.start, 'yyyy-MM-dd')}
+                onChange={(e) => setDraftFilter({ ...draftFilter, start: new Date(e.target.value) })}
+              />
+              <span className="date-range-sep">-</span>
+              <input
+                type="date"
+                value={format(draftFilter.end, 'yyyy-MM-dd')}
+                onChange={(e) => setDraftFilter({ ...draftFilter, end: new Date(e.target.value) })}
+              />
             </div>
           </div>
-        }
-      />
+
+          <div className="dash-filter-actions">
+            <button
+              className="btn btn-primary btn-small"
+              onClick={() => {
+                setFilter(draftFilter)
+              }}
+            >
+              Áp dụng
+            </button>
+            <button
+              className="btn btn-small"
+              onClick={() => {
+                setFilter(defaultFilter)
+                setDraftFilter(defaultFilter)
+              }}
+            >
+              Đặt lại
+            </button>
+          </div>
+        </div>
+
+        <div className="dash-filter-chips">
+          <div className="dash-chip">
+            {draftFilter.warehouseId === 'all'
+              ? 'Tất cả kho'
+              : state.locations.find((l) => l.id === draftFilter.warehouseId)?.name ?? 'Kho'}
+          </div>
+          <div className="dash-chip">{draftFilter.channel === 'all' ? 'Tất cả kênh' : `Kênh: ${draftFilter.channel}`}</div>
+          <div className="dash-chip">{format(draftFilter.start, 'dd/MM/yyyy')} - {format(draftFilter.end, 'dd/MM/yyyy')}</div>
+          <div className="dash-chip dash-chip-muted">Cập nhật: {format(new Date(), 'HH:mm')}</div>
+        </div>
+
+        <div className="dash-tabs">
+          <button className={`dash-tab ${viewMode === 'overview' ? 'active' : ''}`} onClick={() => setViewMode('overview')}>
+            <LayoutDashboard size={16} />
+            Tổng quan
+          </button>
+          <button className={`dash-tab ${viewMode === 'finance' ? 'active' : ''}`} onClick={() => setViewMode('finance')}>
+            <DollarSign size={16} />
+            Tài chính
+          </button>
+          <button className={`dash-tab ${viewMode === 'warehouse' ? 'active' : ''}`} onClick={() => setViewMode('warehouse')}>
+            <Boxes size={16} />
+            Kho
+          </button>
+          <button className={`dash-tab ${viewMode === 'operation' ? 'active' : ''}`} onClick={() => setViewMode('operation')}>
+            <Activity size={16} />
+            Vận hành
+          </button>
+          <button className={`dash-tab ${viewMode === 'analysis' ? 'active' : ''}`} onClick={() => setViewMode('analysis')}>
+            <BarChart3 size={16} />
+            BI
+          </button>
+        </div>
+
+        <div className="dash-channel-tabs">
+          {([
+            { key: 'all', label: 'Tất cả kênh' },
+            { key: 'pos', label: 'POS' },
+            { key: 'web', label: 'Website' },
+            { key: 'shopee', label: 'Shopee' },
+            { key: 'lazada', label: 'Lazada' },
+            { key: 'tiktok', label: 'TikTok' },
+            { key: 'wholesale', label: 'Bán buôn' },
+          ] as const).map((t) => (
+            <button
+              key={t.key}
+              className={`dash-chip-tab ${draftFilter.channel === t.key ? 'active' : ''}`}
+              onClick={() => setDraftFilter({ ...draftFilter, channel: t.key })}
+            >
+              {t.key === 'all'
+                ? `${t.label} (${metrics.currentOrders.length.toLocaleString('vi-VN')})`
+                : `${t.label} (${(channelOrderCounts.get(t.key) ?? 0).toLocaleString('vi-VN')})`}
+            </button>
+          ))}
+        </div>
+      </div>
       
       {viewMode === 'overview' && (
       <>
@@ -843,39 +1214,68 @@ export function DashboardPage() {
       <div className="kpi-grid">
         <SmartMetricCard 
             label="Doanh thu" 
-            value={apiKpi ? formatVnd(apiKpi.revenue) : 'Loading...'} 
+            value={apiKpi ? formatVnd(apiKpi.revenue) : '—'} 
             trend={revenueTrend?.trend}
             trendValue={revenueTrend?.trendValue}
             status="neutral"
+            accent="#2563EB"
+            icon={<ShoppingCart size={18} />}
+            meta="So với kỳ trước"
+            isLoading={apiLoading}
             data={apiHistory.map(h => ({ value: h.revenue }))}
+            onClick={() => navigate('/analytics/sales')}
         />
         <SmartMetricCard 
             label="Lợi nhuận" 
-            value={apiKpi ? formatVnd(apiKpi.netProfit) : 'Loading...'} 
+            value={apiKpi ? formatVnd(apiKpi.netProfit) : '—'} 
             data={apiHistory.map(h => ({ value: h.profit }))}
             trend={profitTrend?.trend}
             trendValue={profitTrend?.trendValue}
             status={(apiKpi?.netProfit || 0) > 0 ? 'success' : 'danger'}
+            accent="#16A34A"
+            icon={<TrendingUp size={18} />}
+            meta="So với kỳ trước"
+            isLoading={apiLoading}
+            onClick={() => navigate('/analytics/sales')}
         />
         <SmartMetricCard 
             label="Dòng tiền" 
-            value={apiKpi ? formatVnd(apiKpi.cashFlow) : 'Loading...'} 
+            value={apiKpi ? formatVnd(apiKpi.cashFlow) : '—'} 
             status={(apiKpi?.cashFlow || 0) > 0 ? 'success' : 'danger'}
+            accent="#7C3AED"
+            icon={<Wallet size={18} />}
+            meta="Trong kỳ"
+            isLoading={apiLoading}
+            onClick={() => navigate('/finance/overview')}
         />
         <SmartMetricCard 
             label="Giá trị tồn kho" 
-            value={apiKpi ? formatVnd(apiKpi.inventoryValue) : 'Loading...'} 
+            value={apiKpi ? formatVnd(apiKpi.inventoryValue) : '—'} 
             status="warning"
+            accent="#F59E0B"
+            icon={<Boxes size={18} />}
+            meta="Giá trị ước tính"
+            isLoading={apiLoading}
+            onClick={() => navigate('/inventory')}
         />
         <SmartMetricCard 
             label="Đơn chờ xử lý" 
             value={`${metrics.pendingOrdersCount}`} 
             status={metrics.pendingOrdersCount > 10 ? 'warning' : 'success'}
+            accent={metrics.pendingOrdersCount > 10 ? '#F59E0B' : '#16A34A'}
+            icon={<Package size={18} />}
+            meta="Cần xử lý"
+            onClick={() => navigate('/orders?status=confirmed')}
         />
         <SmartMetricCard 
             label="Tỷ lệ Xử lý đơn" 
-            value={apiKpi ? `${apiKpi.fulfillmentRate}%` : 'Loading...'} 
+            value={apiKpi ? `${apiKpi.fulfillmentRate}%` : '—'} 
             status="success"
+            accent="#16A34A"
+            icon={<Percent size={18} />}
+            meta="Trong kỳ"
+            isLoading={apiLoading}
+            onClick={() => navigate('/order-monitoring')}
         />
       </div>
 
@@ -883,7 +1283,7 @@ export function DashboardPage() {
       <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-title">Xu hướng doanh thu (12 tháng)</div>
           <div style={{ height: 320 }}>
-              {apiHistory.length > 0 ? (
+              {apiHistory.length > 0 && apiHistory.some((h) => Number(h.revenue) > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={apiHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <defs>
@@ -906,37 +1306,46 @@ export function DashboardPage() {
                     </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="center-text">Chưa có dữ liệu</div>
+                <DashboardEmpty
+                  title={apiLoading ? 'Đang tải dữ liệu...' : 'Chưa có dữ liệu doanh thu'}
+                  hint="Tạo đơn hàng hoặc chọn khoảng thời gian khác để xem xu hướng."
+                  actionLabel="Tạo đơn"
+                  onAction={() => navigate('/orders')}
+                />
               )}
           </div>
       </div>
 
       {/* 3. Deep Dive (4 Columns) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 20 }}>
+      <div className="dash-widgets-4">
            {/* Channel Sales */}
            <div className="card">
               <div className="card-title">Kênh bán hàng</div>
               <div style={{ height: 250 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                          <Pie
-                            data={apiChannels.length ? apiChannels : revenueByChannel}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={50}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                            nameKey="channel"
-                          >
-                            {(apiChannels.length ? apiChannels : revenueByChannel).map((_entry, index) => (
-                              <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042'][index % 4]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
-                          <Legend />
-                      </PieChart>
-                  </ResponsiveContainer>
+                  {(apiChannels.length ? apiChannels : revenueByChannel).some((d: any) => Number(d.value) > 0) ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                              data={apiChannels.length ? apiChannels : revenueByChannel}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={52}
+                              outerRadius={86}
+                              paddingAngle={5}
+                              dataKey="value"
+                              nameKey="channel"
+                            >
+                              {(apiChannels.length ? apiChannels : revenueByChannel).map((_entry: any, index: number) => (
+                                <Cell key={`cell-${index}`} fill={['#2563EB', '#16A34A', '#F59E0B', '#7C3AED', '#0EA5E9', '#EF4444'][index % 6]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <DashboardEmpty title={apiLoading ? 'Đang tải dữ liệu...' : 'Chưa có dữ liệu kênh'} hint="Kênh sẽ hiển thị khi có đơn hàng." />
+                  )}
               </div>
            </div>
 
@@ -944,14 +1353,18 @@ export function DashboardPage() {
            <div className="card">
               <div className="card-title">Top Sản phẩm</div>
               <div style={{ height: 250 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <BarChart layout="vertical" data={apiTopProducts.length ? apiTopProducts : topSkus} margin={{ left: 0, right: 10 }}>
-                          <XAxis type="number" hide />
-                          <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                          <Tooltip cursor={{ fill: 'transparent' }} />
-                          <Bar dataKey="value" fill="#2563EB" radius={[0, 4, 4, 0]} barSize={16} />
-                      </BarChart>
-                  </ResponsiveContainer>
+                  {(apiTopProducts.length ? apiTopProducts : topSkus).some((d: any) => Number(d.value) > 0) ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart layout="vertical" data={apiTopProducts.length ? apiTopProducts : topSkus} margin={{ left: 0, right: 10 }}>
+                            <XAxis type="number" hide />
+                            <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <Tooltip cursor={{ fill: 'transparent' }} formatter={(v: any) => formatVnd(Number(v) || 0)} />
+                            <Bar dataKey="value" fill="#2563EB" radius={[0, 6, 6, 0]} barSize={18} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <DashboardEmpty title="Chưa có top sản phẩm" hint="Doanh thu theo SKU sẽ xuất hiện khi có đơn." />
+                  )}
               </div>
            </div>
 
@@ -959,13 +1372,17 @@ export function DashboardPage() {
            <div className="card">
               <div className="card-title">Lợi nhuận Kho</div>
               <div style={{ height: 250 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={profitByWarehouse} margin={{ left: 0 }}>
-                          <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                          <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
-                          <Bar dataKey="profit" fill="#10B981" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                  </ResponsiveContainer>
+                  {profitByWarehouse.some((d) => Math.abs(Number(d.profit) || 0) > 0) ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={profitByWarehouse} margin={{ left: 0 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                            <Bar dataKey="profit" fill="#16A34A" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <DashboardEmpty title="Chưa có dữ liệu lợi nhuận" hint="Hệ thống tính theo giá bán - giá vốn SKU." />
+                  )}
               </div>
            </div>
 
@@ -973,62 +1390,83 @@ export function DashboardPage() {
            <div className="card">
               <div className="card-title">Phân bổ tồn kho</div>
               <div style={{ height: 250 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <Treemap data={inventoryByCategory} dataKey="size" aspectRatio={1} stroke="#fff" fill="#8884d8">
-                          <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
-                      </Treemap>
-                  </ResponsiveContainer>
+                  {inventoryByCategory.some((d: any) => Number(d.size) > 0) ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <Treemap data={inventoryByCategory} dataKey="size" aspectRatio={1} stroke="#fff" fill="#7C3AED">
+                            <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                        </Treemap>
+                    </ResponsiveContainer>
+                  ) : (
+                    <DashboardEmpty title="Chưa có dữ liệu tồn" hint="Nhập kho hoặc chọn kho cụ thể để xem phân bổ." actionLabel="Tồn kho" onAction={() => navigate('/inventory')} />
+                  )}
               </div>
            </div>
       </div>
 
       {/* 4. Customer & Sales Leaderboard */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+      <div className="dash-widgets-2">
            <div className="card">
-              <div className="card-title">Phân khúc khách hàng</div>
+              <div className="card-title">
+                <span>Phân khúc khách hàng</span>
+                <button className="btn btn-small" onClick={() => navigate('/customers')}>Xem</button>
+              </div>
               <div style={{ height: 300 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                          <Pie
-                            data={customerSegments}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={100}
-                            paddingAngle={5}
-                            dataKey="value"
-                          >
-                            {customerSegments.map((entry: any, index: number) => (
-                              <Cell key={`cell-${index}`} fill={entry.color || '#8884d8'} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                          <Legend />
-                      </PieChart>
-                  </ResponsiveContainer>
+                  {customerSegments.some((s: any) => Number(s.value) > 0 && s.name !== 'Chưa có dữ liệu') ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                              data={customerSegments}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={64}
+                              outerRadius={104}
+                              paddingAngle={4}
+                              dataKey="value"
+                            >
+                              {customerSegments.map((entry: any, index: number) => (
+                                <Cell key={`cell-${index}`} fill={entry.color || '#2563EB'} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <DashboardEmpty title="Chưa có dữ liệu phân khúc" hint="Phân khúc sẽ hiển thị khi có lịch sử mua hàng." actionLabel="Khách hàng" onAction={() => navigate('/customers')} />
+                  )}
               </div>
            </div>
            
            <div className="card">
-              <div className="card-title">Top Nhân viên kinh doanh</div>
+              <div className="card-title">
+                <span>Top Nhân viên kinh doanh</span>
+                <button className="btn btn-small" onClick={() => navigate('/staff')}>Nhân sự</button>
+              </div>
               <div style={{ height: 300 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <BarChart layout="vertical" data={salesLeaderboard} margin={{ left: 40 }}>
-                          <XAxis type="number" tickFormatter={(val) => formatAxisMoney(Number(val))} />
-                          <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} />
-                          <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
-                          <Bar dataKey="value" fill="#3B82F6" barSize={20} radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                  </ResponsiveContainer>
+                  {salesLeaderboard.some((s: any) => Number(s.value) > 0) ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart layout="vertical" data={salesLeaderboard} margin={{ left: 40 }}>
+                            <XAxis type="number" tickFormatter={(val) => formatAxisMoney(Number(val))} axisLine={false} tickLine={false} />
+                            <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                            <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                            <Bar dataKey="value" fill="#2563EB" barSize={20} radius={[0, 6, 6, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <DashboardEmpty title="Chưa có dữ liệu theo nhân viên" hint="Doanh thu theo nhân viên lấy từ đơn hàng đã tạo." actionLabel="Tạo đơn" onAction={() => navigate('/orders')} />
+                  )}
               </div>
            </div>
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
-        <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
-          <div className="card-title" style={{ margin: 0 }}>Checklist doanh thu nhân viên</div>
-          <div style={{ position: 'relative', width: 320 }}>
-            <Search size={16} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
+        <div className="dash-table-head">
+          <div>
+            <div className="dash-section-title">Checklist doanh thu nhân viên</div>
+            <div className="dash-section-sub">Tổng {staffRevenueFilteredSorted.length.toLocaleString('vi-VN')} nhân viên trong kỳ</div>
+          </div>
+          <div className="dash-search">
+            <Search size={16} className="dash-search-icon" />
             <input
               placeholder="Tìm theo tên nhân viên..."
               value={staffRevenueQuery}
@@ -1036,11 +1474,10 @@ export function DashboardPage() {
                 setStaffRevenueQuery(e.target.value)
                 setStaffRevenuePage(1)
               }}
-              style={{ paddingLeft: 34, width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-color)' }}
             />
           </div>
         </div>
-        <div style={{ padding: 20, height: 420 }}>
+        <div style={{ padding: 20, height: 460 }}>
           <SmartTable
             columns={staffRevenueColumns}
             data={staffRevenuePageData}
@@ -1122,63 +1559,347 @@ export function DashboardPage() {
 
       {viewMode === 'finance' && (
          <>
-           <div className="card-title" style={{ marginBottom: 12 }}>Dòng tiền (Cashflow)</div>
-           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-               <SmartMetricCard label="Thu (Income)" value={formatVnd(metrics.income)} status="success" />
-               <SmartMetricCard label="Chi (Expense)" value={formatVnd(metrics.expense)} status="danger" />
-               <SmartMetricCard label="Dòng tiền ròng" value={formatVnd(metrics.cashflow)} status={metrics.cashflow > 0 ? 'success' : 'danger'} />
-               <SmartMetricCard label="Công nợ phải thu" value={formatVnd(metrics.receivables)} status="warning" />
+           <div className="finance-section">
+             <div className="finance-section-head">
+               <div>
+                 <div className="finance-section-title">Dòng tiền</div>
+                 <div className="finance-section-sub">Thu/chi, dòng tiền ròng và công nợ trong kỳ</div>
+               </div>
+               <div className="finance-section-actions">
+                 <div className="dash-chip dash-chip-muted">Last updated {format(new Date(), 'HH:mm')}</div>
+               </div>
+             </div>
+
+             <div className="finance-kpi-grid">
+               <SmartMetricCard
+                 label="Thu (Income)"
+                 value={formatVnd(metrics.income)}
+                 trend={incomeTrend?.trend}
+                 trendValue={incomeTrend?.trendValue}
+                 status="success"
+                 accent="#16A34A"
+                 icon={<ArrowDownLeft size={18} />}
+                 meta="So với kỳ trước"
+                 data={metrics.cashflowHistory.map((h: any) => ({ value: Number(h.income) || 0 }))}
+                 onClick={() => navigate('/finance/cashflow')}
+               />
+               <SmartMetricCard
+                 label="Chi (Expense)"
+                 value={formatVnd(metrics.expense)}
+                 trend={expenseTrend?.trend}
+                 trendValue={expenseTrend?.trendValue}
+                 status="danger"
+                 accent="#DC2626"
+                 icon={<ArrowUpRight size={18} />}
+                 meta="So với kỳ trước"
+                 data={metrics.cashflowHistory.map((h: any) => ({ value: Number(h.expense) || 0 }))}
+                 onClick={() => navigate('/finance/cashflow')}
+               />
+               <SmartMetricCard
+                 label="Dòng tiền ròng"
+                 value={formatVnd(metrics.cashflow)}
+                 trend={cashflowTrend?.trend}
+                 trendValue={cashflowTrend?.trendValue}
+                 status={metrics.cashflow > 0 ? 'success' : 'warning'}
+                 accent="#7C3AED"
+                 icon={<Wallet size={18} />}
+                 meta="So với kỳ trước"
+                 data={metrics.cashflowHistory.map((h: any) => ({ value: Number(h.cashflow) || 0 }))}
+                 onClick={() => navigate('/finance/overview')}
+               />
+               <SmartMetricCard
+                 label="Công nợ phải thu"
+                 value={formatVnd(metrics.receivables)}
+                 trend={metrics.receivableDueSoonCount > 0 ? 'up' : metrics.receivableOverdueCount > 0 ? 'down' : 'neutral'}
+                 trendValue={
+                   metrics.receivableDueSoonCount > 0
+                     ? `${metrics.receivableDueSoonCount} đến hạn`
+                     : metrics.receivableOverdueCount > 0
+                       ? `${metrics.receivableOverdueCount} quá hạn`
+                       : 'ổn định'
+                 }
+                 status={metrics.receivableOverdueCount > 0 ? 'danger' : metrics.receivableDueSoonCount > 0 ? 'warning' : 'neutral'}
+                 accent="#F59E0B"
+                 icon={<HandCoins size={18} />}
+                 meta="Theo công nợ mở"
+                 subtitle={
+                   metrics.receivableOverdueCount > 0
+                     ? `Có ${metrics.receivableOverdueCount} khoản quá hạn`
+                     : metrics.receivableDueSoonCount > 0
+                       ? `Có ${metrics.receivableDueSoonCount} khoản đến hạn 7 ngày`
+                       : 'Không có khoản đến hạn'
+                 }
+                 onClick={() => navigate('/finance/debts')}
+               />
+             </div>
            </div>
 
-           <div className="card-title" style={{ marginBottom: 12 }}>Kết quả kinh doanh (P&L)</div>
-           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-                <SmartMetricCard label="Doanh thu thuần" value={formatVnd(metrics.revenue)} status="success" />
-                <SmartMetricCard label="Giá vốn" value={formatVnd(metrics.cost)} status="warning" />
-                <SmartMetricCard label="Lợi nhuận gộp" value={formatVnd(metrics.profit)} status="success" />
-                <SmartMetricCard label="Biên lợi nhuận" value={`${metrics.revenue ? ((metrics.profit / metrics.revenue) * 100).toFixed(1) : 0}%`} status="neutral" />
+           <div className="finance-section">
+             <div className="finance-section-head">
+               <div>
+                 <div className="finance-section-title">Kết quả kinh doanh</div>
+                 <div className="finance-section-sub">Doanh thu, giá vốn, lợi nhuận và biên lợi nhuận</div>
+               </div>
+               <div className="finance-section-actions">
+                 <button className="btn btn-small" onClick={() => navigate('/analytics/sales')}>Báo cáo</button>
+               </div>
+             </div>
+
+             <div className="finance-kpi-grid">
+               <SmartMetricCard
+                 label="Doanh thu thuần"
+                 value={formatVnd(metrics.revenue)}
+                 trend={revenueTrend?.trend}
+                 trendValue={revenueTrend?.trendValue}
+                 status="neutral"
+                 accent="#2563EB"
+                 icon={<ShoppingCart size={18} />}
+                 meta="So với kỳ trước"
+                 data={metrics.history.map((h: any) => ({ value: Number(h.revenue) || 0 }))}
+                 onClick={() => navigate('/analytics/sales')}
+               />
+               <SmartMetricCard
+                 label="Giá vốn"
+                 value={formatVnd(metrics.cost)}
+                 status="warning"
+                 accent="#F59E0B"
+                 icon={<Receipt size={18} />}
+                 meta="Trong kỳ"
+                 onClick={() => navigate('/analytics/sales')}
+               />
+               <SmartMetricCard
+                 label="Lợi nhuận gộp"
+                 value={formatVnd(metrics.profit)}
+                 trend={profitTrend?.trend}
+                 trendValue={profitTrend?.trendValue}
+                 status={metrics.profit >= 0 ? 'success' : 'danger'}
+                 accent="#16A34A"
+                 icon={<TrendingUp size={18} />}
+                 meta="So với kỳ trước"
+                 data={metrics.history.map((h: any) => ({ value: Number(h.profit) || 0 }))}
+                 onClick={() => navigate('/analytics/sales')}
+               />
+               <SmartMetricCard
+                 label="Biên lợi nhuận"
+                 value={`${margin.toFixed(1)}%`}
+                 trend={marginTrend?.trend}
+                 trendValue={marginTrend?.trendValue}
+                 status={margin >= 25 ? 'success' : margin >= 10 ? 'warning' : 'danger'}
+                 accent="#0EA5E9"
+                 icon={<BadgePercent size={18} />}
+                 meta="So với kỳ trước"
+                 onClick={() => navigate('/analytics/sales')}
+               />
+             </div>
            </div>
-           
-           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                <div className="card">
-                   <div className="card-title">Lợi nhuận theo Kho</div>
-                   <div style={{ height: 350 }}>
-                       <ResponsiveContainer width="100%" height="100%">
-                           <BarChart data={profitByWarehouse} layout="vertical" margin={{ left: 20 }}>
-                               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                               <XAxis type="number" tickFormatter={(val) => formatAxisMoney(val)} />
-                               <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} />
-                               <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
-                               <Legend />
-                               <Bar dataKey="revenue" name="Doanh thu" fill="#8884d8" barSize={20} />
-                               <Bar dataKey="profit" name="Lợi nhuận gộp" fill="#82ca9d" barSize={20} />
-                           </BarChart>
-                       </ResponsiveContainer>
+
+           <div className="finance-charts">
+             <div className="card">
+               <div className="card-title">
+                 <span>Lợi nhuận theo kho</span>
+                 {bestWarehouseByProfit ? (
+                   <span className="badge badge-neutral">
+                     Top: {bestWarehouseByProfit.bestName} ({formatVnd(bestWarehouseByProfit.bestProfit)})
+                   </span>
+                 ) : null}
+               </div>
+               {profitByWarehouse.some((d) => Math.abs(Number(d.profit) || 0) > 0) ? (
+                 <>
+                   {bestWarehouseByProfit ? (
+                     <div className="finance-chart-sub">
+                       Biên thấp nhất: {bestWarehouseByProfit.worstMarginName} ({bestWarehouseByProfit.worstMargin.toFixed(1)}%)
+                     </div>
+                   ) : null}
+                   <div style={{ height: 360 }}>
+                     <ResponsiveContainer width="100%" height="100%">
+                       <BarChart data={profitByWarehouse.slice(0, 5)} layout="vertical" margin={{ left: 24, right: 16 }}>
+                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                         <XAxis type="number" tickFormatter={(val) => formatAxisMoney(Number(val))} axisLine={false} tickLine={false} />
+                         <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                         <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                         <Legend />
+                         <Bar dataKey="revenue" name="Doanh thu" fill="#2563EB" barSize={18} radius={[0, 6, 6, 0]} />
+                         <Bar dataKey="profit" name="Lợi nhuận gộp" fill="#16A34A" barSize={18} radius={[0, 6, 6, 0]} />
+                       </BarChart>
+                     </ResponsiveContainer>
                    </div>
-                </div>
-                <div className="card">
-                   <div className="card-title">Doanh thu theo Kênh bán</div>
-                   <div style={{ height: 350 }}>
-                       <ResponsiveContainer width="100%" height="100%">
-                           <PieChart>
-                               <Pie
-                                 data={revenueByChannel}
-                                 cx="50%"
-                                 cy="50%"
-                                 innerRadius={60}
-                                 outerRadius={100}
-                                 paddingAngle={5}
-                                  dataKey="value"
-                                  label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                >
-                                  {revenueByChannel.map((_entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042'][index % 4]} />
-                                  ))}
-                                </Pie>
-                                <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
-                           </PieChart>
-                       </ResponsiveContainer>
+                 </>
+               ) : (
+                 <div style={{ height: 360 }}>
+                   <DashboardEmpty title="Chưa có dữ liệu theo kho" hint="Cần đơn hàng và giá vốn SKU để tính lợi nhuận." actionLabel="Tạo đơn" onAction={() => navigate('/orders')} />
+                 </div>
+               )}
+             </div>
+
+             <div className="card">
+               <div className="card-title">
+                 <span>Doanh thu theo kênh bán</span>
+                 <button className="btn btn-small" onClick={() => navigate('/channel-reconciliation')}>Đối soát</button>
+               </div>
+               {revenueByChannel.some((d: any) => Number(d.value) > 0) ? (
+                 <div className="finance-channel-split">
+                   <div style={{ height: 320 }}>
+                     <ResponsiveContainer width="100%" height="100%">
+                       <PieChart>
+                         <Pie
+                           data={revenueByChannel}
+                           cx="50%"
+                           cy="50%"
+                           innerRadius={70}
+                           outerRadius={110}
+                           paddingAngle={4}
+                           dataKey="value"
+                           nameKey="name"
+                         >
+                           {revenueByChannel.map((_entry: any, index: number) => (
+                             <Cell key={`cell-${index}`} fill={['#2563EB', '#16A34A', '#F59E0B', '#7C3AED', '#0EA5E9', '#EF4444'][index % 6]} />
+                           ))}
+                         </Pie>
+                         <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                       </PieChart>
+                     </ResponsiveContainer>
                    </div>
-                </div>
+
+                   <div className="finance-mini-list">
+                     {revenueByChannel
+                       .slice(0, 7)
+                       .map((c: any) => (
+                         <button
+                           key={c.name}
+                           type="button"
+                           className="finance-mini-row"
+                           onClick={() => {
+                             const k = c.name === 'POS (Cửa hàng)' ? 'pos' : c.name === 'Website' ? 'web' : c.name === 'Shopee' ? 'shopee' : c.name === 'Lazada' ? 'lazada' : c.name === 'TikTok' ? 'tiktok' : 'all'
+                             setDraftFilter({ ...draftFilter, channel: k })
+                           }}
+                         >
+                           <div className="finance-mini-left">
+                             <span className="finance-mini-name">{c.name}</span>
+                             <span className="finance-mini-sub">{c.percent?.toFixed ? `${c.percent.toFixed(1)}%` : ''}</span>
+                           </div>
+                           <div className="finance-mini-right">{formatVnd(Number(c.value) || 0)}</div>
+                         </button>
+                       ))}
+                     <button className="btn btn-small" onClick={() => navigate('/analytics/sales')}>Xem chi tiết</button>
+                   </div>
+                 </div>
+               ) : (
+                 <div style={{ height: 360 }}>
+                   <DashboardEmpty title="Chưa có dữ liệu kênh" hint="Kênh sẽ hiển thị khi có đơn hàng." />
+                 </div>
+               )}
+             </div>
+           </div>
+
+           <div className="finance-extras">
+             <div className="card">
+               <div className="card-title">
+                 <span>Chi phí theo nhóm</span>
+                 <span className="badge badge-neutral">{formatVnd(metrics.expense)}</span>
+               </div>
+               {expenseByCategory.some((x) => Number(x.value) > 0) ? (
+                 <div className="finance-channel-split">
+                   <div style={{ height: 260 }}>
+                     <ResponsiveContainer width="100%" height="100%">
+                       <PieChart>
+                         <Pie
+                           data={expenseByCategory}
+                           cx="50%"
+                           cy="50%"
+                           innerRadius={60}
+                           outerRadius={100}
+                           paddingAngle={4}
+                           dataKey="value"
+                           nameKey="name"
+                         >
+                           {expenseByCategory.map((_entry: any, index: number) => (
+                             <Cell key={`cell-${index}`} fill={['#DC2626', '#F59E0B', '#7C3AED', '#2563EB', '#16A34A', '#0EA5E9'][index % 6]} />
+                           ))}
+                         </Pie>
+                         <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} />
+                       </PieChart>
+                     </ResponsiveContainer>
+                   </div>
+                   <div className="finance-mini-list">
+                     {expenseByCategory.map((x) => (
+                       <div key={x.name} className="finance-mini-row" style={{ cursor: 'default' }}>
+                         <div className="finance-mini-left">
+                           <span className="finance-mini-name">{x.name}</span>
+                           <span className="finance-mini-sub">{x.percent.toFixed(1)}%</span>
+                         </div>
+                         <div className="finance-mini-right">{formatVnd(x.value)}</div>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               ) : (
+                 <div style={{ height: 260 }}>
+                   <DashboardEmpty title="Chưa có dữ liệu chi phí" hint="Ghi nhận chi phí trong Dòng tiền để xem breakdown." actionLabel="Ghi chi phí" onAction={() => navigate('/finance/cashflow')} />
+                 </div>
+               )}
+             </div>
+
+             <div className="card">
+               <div className="card-title">
+                 <span>Aging công nợ</span>
+                 <button className="btn btn-small" onClick={() => navigate('/finance/debts')}>Công nợ</button>
+               </div>
+               {receivableAging.total > 0 ? (
+                 <div className="finance-aging">
+                   {receivableAging.list.map((b: any) => {
+                     const pct = receivableAging.total ? (b.value / receivableAging.total) * 100 : 0
+                     return (
+                       <div key={b.label} className="finance-aging-row">
+                         <div className="finance-aging-left">
+                           <div className="finance-aging-label">{b.label}</div>
+                           <div className="finance-aging-bar">
+                             <div className="finance-aging-barfill" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+                           </div>
+                         </div>
+                         <div className="finance-aging-right">
+                           <div className="finance-aging-amt">{formatVnd(b.value)}</div>
+                           <div className="finance-aging-pct">{pct.toFixed(1)}%</div>
+                         </div>
+                       </div>
+                     )
+                   })}
+                 </div>
+               ) : (
+                 <div style={{ height: 260 }}>
+                   <DashboardEmpty title="Chưa có công nợ phải thu" hint="Aging sẽ hiển thị khi có công nợ mở." actionLabel="Công nợ" onAction={() => navigate('/finance/debts')} />
+                 </div>
+               )}
+             </div>
+
+             <div className="card">
+               <div className="card-title">
+                 <span>Xu hướng lợi nhuận</span>
+                 <span className="badge badge-neutral">Trong kỳ</span>
+               </div>
+               {metrics.history.some((h: any) => Number(h.profit) !== 0) ? (
+                 <div style={{ height: 260 }}>
+                   <ResponsiveContainer width="100%" height="100%">
+                     <AreaChart data={metrics.history} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                       <defs>
+                         <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                           <stop offset="5%" stopColor="#16A34A" stopOpacity={0.12} />
+                           <stop offset="95%" stopColor="#16A34A" stopOpacity={0} />
+                         </linearGradient>
+                       </defs>
+                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                       <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={(val) => formatAxisMoney(Number(val))} />
+                       <Tooltip formatter={(val: number | undefined) => formatVnd(val ?? 0)} contentStyle={{ borderRadius: 10 }} />
+                       <Area type="monotone" dataKey="profit" stroke="#16A34A" strokeWidth={3} fill="url(#colorProfit)" />
+                     </AreaChart>
+                   </ResponsiveContainer>
+                 </div>
+               ) : (
+                 <div style={{ height: 260 }}>
+                   <DashboardEmpty title="Chưa có dữ liệu lợi nhuận" hint="Tạo đơn hàng và cập nhật giá vốn SKU để xem xu hướng." actionLabel="Tạo đơn" onAction={() => navigate('/orders')} />
+                 </div>
+               )}
+             </div>
            </div>
          </>
        )}

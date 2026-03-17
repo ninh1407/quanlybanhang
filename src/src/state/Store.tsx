@@ -158,7 +158,7 @@ export function StoreProvider(props: { children: ReactNode }) {
     
     // Get token
 // ... existing code ...
-    const token = localStorage.getItem('auth_token')
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')
 
     console.log('Connecting to socket:', socketUrl, token ? '(Authenticated)' : '(Guest)')
     

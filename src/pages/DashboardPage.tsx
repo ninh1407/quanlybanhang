@@ -5,6 +5,9 @@ import type { Sku, StockTransaction, Order } from '../domain/types'
 import { AnalyticsApi, type BusinessKPIs, type RevenueHistory, type TopProduct, type ChannelPerformance } from '../api/analytics'
 import { formatVnd } from '../lib/money'
 import { PageHeader } from '../ui-kit/PageHeader'
+import { FilterBar } from '../ui-kit/FilterBar'
+import { EmptyState } from '../ui-kit/EmptyState'
+import { LoadingState } from '../ui-kit/LoadingState'
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -181,19 +184,20 @@ function SmartMetricCard({
 }
 
 function DashboardEmpty({ title, hint, actionLabel, onAction }: { title: string; hint?: string; actionLabel?: string; onAction?: () => void }) {
+  const isLoading = title.toLowerCase().includes('đang tải')
+  if (isLoading) return <LoadingState title={title} rows={5} />
   return (
-    <div className="dash-empty">
-      <div className="dash-empty-icon">
-        <AlertTriangle size={18} />
-      </div>
-      <div className="dash-empty-title">{title}</div>
-      {hint ? <div className="dash-empty-hint">{hint}</div> : null}
-      {actionLabel && onAction ? (
-        <button className="btn btn-primary btn-small" onClick={onAction}>
-          {actionLabel}
-        </button>
-      ) : null}
-    </div>
+    <EmptyState
+      title={title}
+      hint={hint}
+      action={
+        actionLabel && onAction ? (
+          <button className="btn btn-primary btn-small" onClick={onAction}>
+            {actionLabel}
+          </button>
+        ) : null
+      }
+    />
   )
 }
 
@@ -1077,79 +1081,84 @@ export function DashboardPage() {
         }
       />
 
-      <div className="card dash-filterbar">
-        <div className="dash-filter-row">
-          <div className="dash-filter-item">
-            <div className="dash-filter-label">Kho</div>
-            <select
-              value={draftFilter.warehouseId}
-              onChange={(e) => setDraftFilter({ ...draftFilter, warehouseId: e.target.value })}
-              className="input-compact"
-            >
-              <option value="all">Tất cả kho</option>
-              {(state.locations || []).map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.code} - {l.name}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="card dash-filterbar card--nohover">
+        <FilterBar
+          left={
+            <>
+              <div className="dash-filter-item">
+                <div className="dash-filter-label">Kho</div>
+                <select
+                  value={draftFilter.warehouseId}
+                  onChange={(e) => setDraftFilter({ ...draftFilter, warehouseId: e.target.value })}
+                  className="input-compact"
+                >
+                  <option value="all">Tất cả kho</option>
+                  {(state.locations || []).map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.code} - {l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="dash-filter-item">
-            <div className="dash-filter-label">Kênh bán</div>
-            <select
-              value={draftFilter.channel}
-              onChange={(e) => setDraftFilter({ ...draftFilter, channel: e.target.value })}
-              className="input-compact"
-            >
-              <option value="all">Tất cả kênh</option>
-              <option value="pos">POS</option>
-              <option value="web">Website</option>
-              <option value="shopee">Shopee</option>
-              <option value="lazada">Lazada</option>
-              <option value="tiktok">TikTok</option>
-              <option value="wholesale">Bán buôn</option>
-            </select>
-          </div>
+              <div className="dash-filter-item">
+                <div className="dash-filter-label">Kênh bán</div>
+                <select
+                  value={draftFilter.channel}
+                  onChange={(e) => setDraftFilter({ ...draftFilter, channel: e.target.value })}
+                  className="input-compact"
+                >
+                  <option value="all">Tất cả kênh</option>
+                  <option value="pos">POS</option>
+                  <option value="web">Website</option>
+                  <option value="shopee">Shopee</option>
+                  <option value="lazada">Lazada</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="wholesale">Bán buôn</option>
+                </select>
+              </div>
 
-          <div className="dash-filter-item dash-filter-date">
-            <div className="dash-filter-label">Khoảng thời gian</div>
-            <div className="date-range">
-              <Calendar size={16} />
-              <input
-                type="date"
-                value={format(draftFilter.start, 'yyyy-MM-dd')}
-                onChange={(e) => setDraftFilter({ ...draftFilter, start: new Date(e.target.value) })}
-              />
-              <span className="date-range-sep">-</span>
-              <input
-                type="date"
-                value={format(draftFilter.end, 'yyyy-MM-dd')}
-                onChange={(e) => setDraftFilter({ ...draftFilter, end: new Date(e.target.value) })}
-              />
-            </div>
-          </div>
-
-          <div className="dash-filter-actions">
-            <button
-              className="btn btn-primary btn-small"
-              onClick={() => {
-                setFilter(draftFilter)
-              }}
-            >
-              Áp dụng
-            </button>
-            <button
-              className="btn btn-small"
-              onClick={() => {
-                setFilter(defaultFilter)
-                setDraftFilter(defaultFilter)
-              }}
-            >
-              Đặt lại
-            </button>
-          </div>
-        </div>
+              <div className="dash-filter-item dash-filter-date">
+                <div className="dash-filter-label">Khoảng thời gian</div>
+                <div className="date-range">
+                  <Calendar size={16} />
+                  <input
+                    type="date"
+                    value={format(draftFilter.start, 'yyyy-MM-dd')}
+                    onChange={(e) => setDraftFilter({ ...draftFilter, start: new Date(e.target.value) })}
+                  />
+                  <span className="date-range-sep">-</span>
+                  <input
+                    type="date"
+                    value={format(draftFilter.end, 'yyyy-MM-dd')}
+                    onChange={(e) => setDraftFilter({ ...draftFilter, end: new Date(e.target.value) })}
+                  />
+                </div>
+              </div>
+            </>
+          }
+          right={
+            <>
+              <button
+                className="btn btn-primary btn-small"
+                onClick={() => {
+                  setFilter(draftFilter)
+                }}
+              >
+                Áp dụng
+              </button>
+              <button
+                className="btn btn-small"
+                onClick={() => {
+                  setFilter(defaultFilter)
+                  setDraftFilter(defaultFilter)
+                }}
+              >
+                Đặt lại
+              </button>
+            </>
+          }
+        />
 
         <div className="dash-filter-chips">
           <div className="dash-chip">

@@ -186,7 +186,7 @@ export function HelpPage() {
           {/* Hero */}
           <div id="intro" style={styles.hero}>
             <div style={styles.badge}><Info size={14} /> Tài liệu chính thức</div>
-            <h1 style={styles.h1}>Hướng dẫn sử dụng <br/><span style={{color: '#007AFF'}}>Điện Máy Xanh</span></h1>
+            <h1 style={styles.h1}>Hướng dẫn sử dụng <br/><span style={{color: '#007AFF'}}>Ứng dụng Quản Lý</span></h1>
             <p style={styles.lead}>Tài liệu chi tiết từng bước cho mọi tính năng trong hệ thống quản lý bán hàng.</p>
           </div>
 

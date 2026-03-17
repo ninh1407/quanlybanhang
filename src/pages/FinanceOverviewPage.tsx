@@ -10,6 +10,9 @@ import { newId } from '../lib/id'
 import { formatVnd } from '../lib/money'
 import { useStore } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
+import { FilterBar } from '../ui-kit/FilterBar'
+import { EmptyState } from '../ui-kit/EmptyState'
+import { LoadingState } from '../ui-kit/LoadingState'
 import { useSettings } from '../settings/useSettings'
 import { useDialogs } from '../ui-kit/Dialogs'
 
@@ -293,6 +296,14 @@ export function FinanceOverviewPage() {
 
   const cashbookRows = useMemo(() => txs.slice(0, 400), [txs])
 
+  const isLikelyLoading =
+    state.currentUserId !== null &&
+    state.locations.length === 0 &&
+    state.users.length === 0 &&
+    state.products.length === 0 &&
+    state.skus.length === 0 &&
+    state.orders.length === 0
+
   return (
     <div className="page">
       <PageHeader
@@ -312,27 +323,39 @@ export function FinanceOverviewPage() {
         }
       />
 
-      <div className="card">
-        <div className="card-title">Bộ lọc kỳ</div>
-        <div className="grid-form">
-          <div className="field">
-            <label>Từ ngày</label>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </div>
-          <div className="field">
-            <label>Đến ngày</label>
-            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-          </div>
-          <div className="field">
-            <label>Gom theo</label>
-            <select value={bucket} onChange={(e) => setBucket(e.target.value as 'day' | 'week' | 'month')}>
-              <option value="day">Ngày</option>
-              <option value="week">Tuần</option>
-              <option value="month">Tháng</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      <FilterBar
+        left={
+          <>
+            <div className="field" style={{ minWidth: 180 }}>
+              <label>Từ ngày</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="field" style={{ minWidth: 180 }}>
+              <label>Đến ngày</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+            <div className="field" style={{ minWidth: 160 }}>
+              <label>Gom theo</label>
+              <select value={bucket} onChange={(e) => setBucket(e.target.value as 'day' | 'week' | 'month')}>
+                <option value="day">Ngày</option>
+                <option value="week">Tuần</option>
+                <option value="month">Tháng</option>
+              </select>
+            </div>
+          </>
+        }
+        right={
+          <button className="btn btn-outline btn-small" onClick={() => { setStartDate(defaultStart); setEndDate(today); setBucket('day') }}>
+            Reset
+          </button>
+        }
+      />
+
+      {isLikelyLoading ? (
+        <LoadingState title="Đang tải dữ liệu tài chính..." rows={7} />
+      ) : state.orders.length === 0 && state.financeTransactions.length === 0 ? (
+        <EmptyState title="Chưa có dữ liệu tài chính" hint="Tạo đơn hàng hoặc ghi nhận giao dịch để bắt đầu." />
+      ) : null}
 
       <div className="grid">
         <div className="stat">
@@ -365,7 +388,7 @@ export function FinanceOverviewPage() {
         </div>
         <div className="stat">
           <div className="stat-label">Còn lại trong hũ</div>
-          <div className="stat-value" style={{ color: report.taxRemaining < 0 ? 'red' : undefined }}>
+          <div className="stat-value" style={{ color: report.taxRemaining < 0 ? 'var(--danger)' : undefined }}>
             {formatVnd(report.taxRemaining)}
           </div>
         </div>

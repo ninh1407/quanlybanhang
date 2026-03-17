@@ -8,6 +8,9 @@ import { newId } from '../lib/id'
 import { formatVnd } from '../lib/money'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
+import { FilterBar } from '../ui-kit/FilterBar'
+import { EmptyState } from '../ui-kit/EmptyState'
+import { LoadingState } from '../ui-kit/LoadingState'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { CheckSquare, Square, Database, AlertTriangle, ArrowUp, LogIn, LogOut, RefreshCw } from 'lucide-react'
 import { useSettings } from '../settings/useSettings'
@@ -94,34 +97,31 @@ const StockRow = memo(function StockRow(props: {
   onSelect: () => void
 }) {
   const { sku, productName, stock, avgCost, selected, onSelect } = props
-  
-  // Custom logic: >50 Green, 10-50 Yellow, <10 Red
-  let color = 'var(--text-main)'
-  if (stock > 50) color = 'var(--success)'
-  else if (stock >= 10) color = 'var(--warning-700)'
-  else color = 'var(--danger)'
+  const qtyClass =
+    stock > 50
+      ? 'inv-stock-qty inv-stock-qty--ok'
+      : stock >= 10
+        ? 'inv-stock-qty inv-stock-qty--low'
+        : 'inv-stock-qty inv-stock-qty--neg'
 
   return (
     <tr className={selected ? 'tr-selected' : ''}>
-      <td className="sticky-col-1" style={{ background: selected ? 'var(--primary-50)' : 'var(--bg-surface)' }}>
-        <div 
-            onClick={(e) => { e.stopPropagation(); onSelect() }} 
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
+      <td className="sticky-col-1">
+        <div onClick={(e) => { e.stopPropagation(); onSelect() }} className="inv-select-toggle inv-select-toggle--cell">
             {selected ? <CheckSquare size={18} color="var(--primary-600)" /> : <Square size={18} color="var(--text-muted)" />}
         </div>
       </td>
-      <td className="sticky-col-2" style={{ background: selected ? 'var(--primary-50)' : 'var(--bg-surface)' }}>
-         <div style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--primary-700)' }}>{sku.skuCode}</div>
+      <td className="sticky-col-2">
+         <div className="inv-sku-code">{sku.skuCode}</div>
       </td>
       <td>
-        <div style={{ fontWeight: 500 }}>{productName}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <div className="inv-product-name">{productName}</div>
+        <div className="inv-product-meta">
              {sku.color} {sku.size ? `/ ${sku.size}` : ''}
         </div>
       </td>
       <td>
-         <span style={{ fontWeight: 600, color }}>{stock}</span>
+         <span className={qtyClass}>{stock}</span>
       </td>
       <td>{formatVnd(stock * avgCost)}</td>
     </tr>
@@ -403,58 +403,74 @@ export function InventoryPage() {
      return { totalItems, totalStock, totalValue, lowStock }
   }, [skus.length, stockRows, lowStockSkus.length])
 
+  const isLikelyLoading =
+    state.currentUserId !== null &&
+    state.locations.length === 0 &&
+    state.users.length === 0 &&
+    state.products.length === 0 &&
+    state.skus.length === 0 &&
+    state.stockTransactions.length === 0
+
   return (
-    <div className="page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
+    <div className="page page--full inv-page">
       <PageHeader title="Quản lý kho" />
+      {isLikelyLoading ? (
+        <LoadingState title="Đang tải dữ liệu kho..." rows={8} />
+      ) : skus.length === 0 ? (
+        <EmptyState title="Chưa có SKU" hint="Tạo sản phẩm/SKU trước để xem tồn kho." />
+      ) : (
+        <>
+          <div className="inv-kpis">
+            <div className="card card--dense card--nohover inv-kpi">
+              <div className="inv-kpi-icon inv-kpi-icon--primary">
+                <Database size={24} />
+              </div>
+              <div>
+                <div className="inv-kpi-label">Giá trị tồn kho</div>
+                <div className="inv-kpi-value">{formatVnd(stats.totalValue)}</div>
+              </div>
+            </div>
+            <div className="card card--dense card--nohover inv-kpi">
+              <div className="inv-kpi-icon inv-kpi-icon--success">
+                <ArrowUp size={24} />
+              </div>
+              <div>
+                <div className="inv-kpi-label">Tổng số lượng</div>
+                <div className="inv-kpi-value">{stats.totalStock}</div>
+              </div>
+            </div>
+            <div className="card card--dense card--nohover inv-kpi">
+              <div className="inv-kpi-icon inv-kpi-icon--info">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <div className="inv-kpi-label">Sản phẩm (SKU)</div>
+                <div className="inv-kpi-value">{stats.totalItems}</div>
+              </div>
+            </div>
+            <div
+              className={`card card--dense card--nohover inv-kpi${stats.lowStock > 0 ? ' inv-kpi--warn' : ''}`}
+            >
+              <div className="inv-kpi-icon inv-kpi-icon--warning">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <div className="inv-kpi-label">Cảnh báo tồn thấp</div>
+                <div className="inv-kpi-value inv-kpi-value--warning">
+                  {stats.lowStock}
+                </div>
+              </div>
+            </div>
+          </div>
 
-      {/* KPI Cards */}
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-         <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ padding: 12, borderRadius: 12, background: 'var(--primary-50)', color: 'var(--primary-600)' }}>
-               <Database size={24} />
-            </div>
-            <div>
-               <div className="text-muted" style={{ fontSize: 13, fontWeight: 500 }}>Giá trị tồn kho</div>
-               <div style={{ fontSize: 20, fontWeight: 700 }}>{formatVnd(stats.totalValue)}</div>
-            </div>
-         </div>
-         <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ padding: 12, borderRadius: 12, background: 'var(--success-50)', color: 'var(--success-600)' }}>
-               <ArrowUp size={24} />
-            </div>
-            <div>
-               <div className="text-muted" style={{ fontSize: 13, fontWeight: 500 }}>Tổng số lượng</div>
-               <div style={{ fontSize: 20, fontWeight: 700 }}>{stats.totalStock}</div>
-            </div>
-         </div>
-         <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ padding: 12, borderRadius: 12, background: 'var(--info-50)', color: 'var(--info-600)' }}>
-               <AlertTriangle size={24} />
-            </div>
-            <div>
-               <div className="text-muted" style={{ fontSize: 13, fontWeight: 500 }}>Sản phẩm (SKU)</div>
-               <div style={{ fontSize: 20, fontWeight: 700 }}>{stats.totalItems}</div>
-            </div>
-         </div>
-         <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 16, border: stats.lowStock > 0 ? '2px solid var(--warning)' : undefined }}>
-            <div style={{ padding: 12, borderRadius: 12, background: 'var(--warning-50)', color: 'var(--warning-600)' }}>
-               <AlertTriangle size={24} />
-            </div>
-            <div>
-               <div className="text-muted" style={{ fontSize: 13, fontWeight: 500 }}>Cảnh báo tồn thấp</div>
-               <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--warning-700)' }}>{stats.lowStock}</div>
-            </div>
-         </div>
-      </div>
-
-      {/* Main Content */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 16 }}>
-          {/* Left Panel: Current Stock */}
-          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div className="card-title">Tồn kho hiện tại</div>
-            <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                <div className="field">
-                <select value={locationId} onChange={(e) => stockList.patchFilters({ locationId: e.target.value })} style={{ fontSize: 13, padding: '6px 8px' }}>
+          <FilterBar
+            left={
+              <>
+                <select
+                  value={locationId}
+                  onChange={(e) => stockList.patchFilters({ locationId: e.target.value })}
+                  className="input-compact"
+                >
                   {(user?.role === 'admin' || user?.role === 'manager') && <option value="all">Tất cả kho</option>}
                   {locations.map((l) => (
                     <option key={l.id} value={l.id}>
@@ -462,23 +478,31 @@ export function InventoryPage() {
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="field">
                 <input
                   value={stockList.state.q}
                   onChange={(e) => stockList.patch({ q: e.target.value })}
                   placeholder="Tìm SKU..."
-                  style={{ fontSize: 13, padding: '6px 8px' }}
+                  className="input-compact inv-filter-search"
                 />
-              </div>
-            </div>
+              </>
+            }
+            right={
+              <button className="btn btn-outline btn-small" onClick={() => stockList.reset()}>
+                <RefreshCw size={16} /> Reset
+              </button>
+            }
+          />
+
+          <div className="inv-main">
+            <div className="card inv-panel">
+              <div className="card-title">Tồn kho hiện tại</div>
             
-            <div className="table-wrap" style={{ flex: 1, minHeight: 0 }}>
+            <div className="table-wrap inv-table-wrap">
               <table className="table sticky-header">
                 <thead>
                   <tr>
-                    <th className="sticky-col-1" style={{ width: 40 }}>
-                        <div onClick={toggleSelectAll} style={{ cursor: 'pointer' }}>
+                    <th className="sticky-col-1 inv-col-select">
+                        <div onClick={toggleSelectAll} className="inv-select-toggle">
                             {selectedIds.size > 0 ? <CheckSquare size={16} /> : <Square size={16} />}
                         </div>
                     </th>
@@ -513,13 +537,13 @@ export function InventoryPage() {
           </div>
 
           {/* Right Panel: Add Transaction & History */}
-          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div className="card inv-panel">
             {canWrite && (
-              <div style={{ marginBottom: 16, borderBottom: '1px solid var(--border-color)', paddingBottom: 16 }}>
-                 <div className="card-title" style={{ fontSize: 14 }}>Nhập / Xuất nhanh</div>
+              <div className="inv-quicktx">
+                 <div className="card-title inv-card-title-sm">Nhập / Xuất nhanh</div>
                  
                  {/* Tabs for In/Out/Adjust */}
-                 <div className="tabs" style={{ marginBottom: 16 }}>
+                 <div className="tabs inv-tabs">
                     <button className={`tab ${type === 'in' ? 'active' : ''}`} onClick={() => setType('in')}>
                         <LogIn size={14} /> Nhập kho
                     </button>
@@ -531,40 +555,40 @@ export function InventoryPage() {
                     </button>
                  </div>
 
-                 <div className="grid-form" style={{ gridTemplateColumns: '1fr', gap: 12 }}>
+                 <div className="grid-form inv-grid-1">
                     <div className="field">
-                       <label style={{ fontSize: 11 }}>Sản phẩm (SKU)</label>
-                       <select value={skuId} onChange={(e) => setSkuId(e.target.value)} style={{ fontSize: 13, padding: '8px' }}>
+                       <label className="inv-label">Sản phẩm (SKU)</label>
+                       <select value={skuId} onChange={(e) => setSkuId(e.target.value)} className="input-compact">
                          {skus.map((s) => (
                            <option key={s.id} value={s.id}>{skuLabel(productsById, s)}</option>
                          ))}
                        </select>
                     </div>
-                    <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div className="grid-form inv-grid-2">
                         <div className="field">
-                           <label style={{ fontSize: 11 }}>Số lượng</label>
-                           <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} style={{ fontSize: 13, padding: '8px' }} />
+                           <label className="inv-label">Số lượng</label>
+                           <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} className="input-compact" />
                         </div>
                         {type === 'in' && (
                              <div className="field">
-                               <label style={{ fontSize: 11 }}>Giá nhập</label>
-                               <input type="number" value={unitCost} onChange={(e) => setUnitCost(Number(e.target.value))} style={{ fontSize: 13, padding: '8px' }} />
+                               <label className="inv-label">Giá nhập</label>
+                               <input type="number" value={unitCost} onChange={(e) => setUnitCost(Number(e.target.value))} className="input-compact" />
                             </div>
                         )}
                     </div>
                     <div className="field">
-                        <label style={{ fontSize: 11 }}>Ghi chú</label>
-                        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ fontSize: 13, padding: '8px' }} />
+                        <label className="inv-label">Ghi chú</label>
+                        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="inv-textarea" />
                     </div>
-                    <button className="btn btn-primary" onClick={addTx} style={{ height: 36 }}>
+                    <button className="btn btn-primary inv-tx-submit" onClick={addTx}>
                          {type === 'in' ? 'Nhập kho' : type === 'out' ? 'Xuất kho' : 'Cập nhật tồn'}
                     </button>
                  </div>
               </div>
             )}
             
-            <div className="card-title" style={{ fontSize: 14 }}>Lịch sử gần đây</div>
-            <div className="table-wrap" style={{ flex: 1, minHeight: 0 }}>
+            <div className="card-title inv-card-title-sm">Lịch sử gần đây</div>
+            <div className="table-wrap inv-table-wrap">
               <table className="table">
                 <thead>
                   <tr>
@@ -577,18 +601,24 @@ export function InventoryPage() {
                 <tbody>
                   {pagedHistoryTxs.slice(0, 15).map((t) => { // Show max 15 recent
                     const sku = skusById.get(t.skuId)
+                    const qtyClass =
+                      t.type === 'out'
+                        ? 'inv-history-qty inv-history-qty-out'
+                        : t.type === 'in'
+                          ? 'inv-history-qty inv-history-qty-in'
+                          : 'inv-history-qty'
                     return (
                       <tr key={t.id}>
-                        <td style={{ fontSize: 12 }} className="text-muted">{formatDateTime(t.createdAt)}</td>
+                        <td className="text-muted inv-history-date">{formatDateTime(t.createdAt)}</td>
                         <td>
-                            <span className={`badge ${t.type === 'in' ? 'badge-success' : t.type === 'out' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: 10, padding: '2px 6px' }}>
+                            <span className={`badge inv-badge-xs ${t.type === 'in' ? 'badge-success' : t.type === 'out' ? 'badge-warning' : 'badge-neutral'}`}>
                                 {t.type === 'in' ? 'Nhập' : t.type === 'out' ? 'Xuất' : 'ĐC'}
                             </span>
                         </td>
-                        <td style={{ fontWeight: 600, color: t.type === 'out' ? 'var(--danger)' : 'var(--success)' }}>
+                        <td className={qtyClass}>
                             {t.type === 'out' ? -t.qty : t.qty}
                         </td>
-                        <td style={{ fontSize: 12 }}>{sku?.skuCode}</td>
+                        <td className="inv-history-sku">{sku?.skuCode}</td>
                       </tr>
                     )
                   })}
@@ -596,27 +626,9 @@ export function InventoryPage() {
               </table>
             </div>
           </div>
-      </div>
-      
-      <style>{`
-        .sticky-col-1 {
-            position: sticky;
-            left: 0;
-            z-index: 10;
-            background: var(--bg-surface);
-            border-right: 1px solid var(--border-color);
-        }
-        .sticky-col-2 {
-            position: sticky;
-            left: 48px;
-            z-index: 10;
-            background: var(--bg-surface);
-            border-right: 1px solid var(--border-color);
-        }
-        .tr-selected td {
-            background: var(--primary-50);
-        }
-      `}</style>
+          </div>
+        </>
+      )}
     </div>
   )
 }

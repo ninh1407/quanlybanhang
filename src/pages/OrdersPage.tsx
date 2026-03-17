@@ -24,6 +24,9 @@ import { Pagination } from '../ui-kit/listing/Pagination'
 import { SavedViewsBar } from '../ui-kit/listing/SavedViewsBar'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
+import { FilterBar } from '../ui-kit/FilterBar'
+import { EmptyState } from '../ui-kit/EmptyState'
+import { LoadingState } from '../ui-kit/LoadingState'
 import { useDialogs } from '../ui-kit/Dialogs'
 import {
   Layout,
@@ -491,6 +494,14 @@ export function OrdersPage() {
     () => state.orders.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [state.orders],
   )
+
+  const isLikelyLoading =
+    state.currentUserId !== null &&
+    state.locations.length === 0 &&
+    state.users.length === 0 &&
+    state.products.length === 0 &&
+    state.skus.length === 0 &&
+    state.orders.length === 0
 
   const list = useListView<OrdersFilters>('orders', {
     q: '',
@@ -1313,29 +1324,26 @@ export function OrdersPage() {
 
   return (
     <div className="page">
-      <div className="row-between" style={{ marginBottom: 20 }}>
-          <PageHeader title="Quản lý đơn hàng" />
-          <div className="row">
-              <button className="btn" onClick={() => exportOrders('xlsx')}>
-                Xuất Excel
-              </button>
-              <button className="btn" onClick={() => exportOrders('csv')}>
-                Xuất CSV
-              </button>
-              <button 
-                className={`btn ${viewMode === 'kanban' ? 'btn-primary' : ''}`} 
-                onClick={() => setViewMode('kanban')}
-              >
-                  <Layout size={16} /> Kanban
-              </button>
-              <button 
-                className={`btn ${viewMode === 'table' ? 'btn-primary' : ''}`} 
-                onClick={() => setViewMode('table')}
-              >
-                  <List size={16} /> Danh sách
-              </button>
+      <PageHeader
+        title="Quản lý đơn hàng"
+        subtitle="Tạo đơn, theo dõi trạng thái và đối soát"
+        actions={
+          <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <button className="btn" onClick={() => exportOrders('xlsx')}>
+              Xuất Excel
+            </button>
+            <button className="btn" onClick={() => exportOrders('csv')}>
+              Xuất CSV
+            </button>
+            <button className={`btn ${viewMode === 'kanban' ? 'btn-primary' : ''}`} onClick={() => setViewMode('kanban')}>
+              <Layout size={16} /> Kanban
+            </button>
+            <button className={`btn ${viewMode === 'table' ? 'btn-primary' : ''}`} onClick={() => setViewMode('table')}>
+              <List size={16} /> Danh sách
+            </button>
           </div>
-      </div>
+        }
+      />
 
       {canWrite ? (
         <div className="order-editor">
@@ -2039,25 +2047,28 @@ export function OrdersPage() {
           </div>
         </div>
 
-        <div className="row row-between" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            Hiển thị {filteredOrders.length}/{orders.length} đơn
-          </div>
-          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            <SavedViewsBar
-              views={list.views}
-              onApply={list.applyView}
-              onSave={list.saveCurrentAs}
-              onDelete={list.deleteView}
-            />
-            <button className="btn btn-small" onClick={list.reset}>
-              Reset
-            </button>
-          </div>
-        </div>
+        <FilterBar
+          left={
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 700 }}>
+              Hiển thị {filteredOrders.length}/{orders.length} đơn
+            </div>
+          }
+          right={
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <SavedViewsBar views={list.views} onApply={list.applyView} onSave={list.saveCurrentAs} onDelete={list.deleteView} />
+              <button className="btn btn-small" onClick={list.reset}>
+                Reset
+              </button>
+            </div>
+          }
+        />
       </div>
 
-      {viewMode === 'kanban' ? (
+      {isLikelyLoading ? (
+        <LoadingState title="Đang tải dữ liệu đơn hàng..." rows={7} />
+      ) : filteredOrders.length === 0 ? (
+        <EmptyState title="Chưa có đơn hàng" hint="Tạo đơn mới hoặc nới bộ lọc để xem dữ liệu." />
+      ) : viewMode === 'kanban' ? (
           <div style={{ display: 'flex', gap: 16, overflowX: 'auto', height: 'calc(100vh - 300px)', paddingBottom: 16, marginBottom: 20 }}>
               {kanbanColumns.map(col => (
                   <div key={col.id} style={{ minWidth: 280, width: 280, background: 'var(--neutral-100)', borderRadius: 8, display: 'flex', flexDirection: 'column' }}>

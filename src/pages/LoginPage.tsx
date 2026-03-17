@@ -6,6 +6,16 @@ import { useAuth } from '../auth/auth'
 import { accessibleLocations } from '../domain/warehouseAccess'
 import { Store, User, Lock, ArrowRight, Settings, RefreshCw, Eye, EyeOff } from 'lucide-react'
 import { getServerUrl, getSavedIp, saveServerIp, DEFAULT_SERVER_IP } from '../config'
+import { loadSettings } from '../settings/settings'
+
+function titleCase(s: string): string {
+  return s
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
 
 export function LoginPage() {
   const { dispatch } = useStore()
@@ -22,6 +32,7 @@ export function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string; general?: string }>({})
   const [showConfig, setShowConfig] = useState(false)
   const [serverIp, setServerIp] = useState(getSavedIp())
+  const brandName = useMemo(() => titleCase(loadSettings().companyName || 'Điện Máy Xanh'), [])
 
   useEffect(() => {
     let remember = true
@@ -130,7 +141,7 @@ export function LoginPage() {
           <div className="auth-logo">
             <Store size={34} />
           </div>
-          <h1 className="auth-title">Quản lý gia dụng</h1>
+          <h1 className="auth-title">{brandName}</h1>
           <p className="auth-subtitle">Đăng nhập để tiếp tục vào hệ thống quản lý</p>
         </div>
         

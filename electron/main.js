@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron'
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -100,7 +100,7 @@ function createWindow() {
     minHeight: 720,
     show: true,
     titleBarStyle: 'default',
-    title: 'Ứng dụng quản lý bán hàng',
+    title: 'Điện Máy Xanh',
     icon: path.join(__dirname, '..', 'public', 'app-icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -123,6 +123,15 @@ function createWindow() {
 
 app.whenReady().then(() => {
   ipcMain.handle('license:getHwid', async () => getOrCreateStableHwid())
+
+  ipcMain.handle('shell:openExternal', async (_event, url) => {
+    if (typeof url !== 'string') return false
+    const trimmed = url.trim()
+    if (!trimmed) return false
+    if (!/^https?:\/\//i.test(trimmed)) return false
+    await shell.openExternal(trimmed)
+    return true
+  })
   
   // Update IPC handlers
   ipcMain.handle('update:check', () => {

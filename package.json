@@ -1,10 +1,10 @@
 {
   "name": "ung-dung-quan-ly-ban-hang",
-  "productName": "Ứng dụng quản lý bán hàng",
+  "productName": "Điện Máy Xanh",
   "description": "Phần mềm quản lý bán hàng đa kho",
   "author": "Ninh <ninh1407@github.com>",
   "private": true,
-  "version": "5.0.7",
+  "version": "5.0.8",
   "type": "module",
   "main": "electron/main.js",
   "repository": {
@@ -73,8 +73,8 @@
   },
   "build": {
     "appId": "com.dmxx.salesadmin",
-    "productName": "Ứng dụng quản lý bán hàng",
-    "artifactName": "UngDungQuanLyBanHang-Setup-${version}.${ext}",
+    "productName": "Điện Máy Xanh",
+    "artifactName": "DienMayXanh-Setup-${version}.${ext}",
     "directories": {
       "output": "release_v3"
     },
@@ -92,6 +92,7 @@
     ],
     "win": {
       "icon": "build/icon.ico",
+      "executableName": "DienMayXanh",
       "target": [
         "nsis"
       ]

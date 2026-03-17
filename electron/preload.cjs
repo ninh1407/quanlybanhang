@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('desktop', {
   platform: process.platform,
   getHwid: () => ipcRenderer.invoke('license:getHwid'),
+
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   
   // Update methods
   getVersion: () => ipcRenderer.invoke('app:getVersion'),

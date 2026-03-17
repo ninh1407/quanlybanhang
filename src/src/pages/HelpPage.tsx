@@ -25,6 +25,45 @@ export function HelpPage() {
   const { can } = useAuth()
   const [activeSection, setActiveSection] = useState('intro')
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeVideo, setActiveVideo] = useState<{ title: string; url: string } | null>(null)
+
+  const videos = useMemo(() => {
+    return [
+      {
+        title: 'Tổng quan hệ thống',
+        meta: '05:20 • Giới thiệu các module chính',
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      },
+      {
+        title: 'Quy trình bán hàng',
+        meta: '08:15 • Tạo đơn, thanh toán, giao hàng',
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      },
+      {
+        title: 'Kiểm kho & Cân bằng',
+        meta: '06:45 • Kiểm kê và xử lý lệch kho',
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      },
+    ]
+  }, [])
+
+  const openExternal = (url: string) => {
+    const anyWin = window as any
+    if (anyWin?.desktop?.openExternal) {
+      anyWin.desktop.openExternal(url)
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  const toEmbedUrl = (url: string) => {
+    const u = url.trim()
+    if (!u) return null
+    const yt = u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/)
+    if (yt?.[1]) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1&rel=0`
+    if (u.endsWith('.mp4') || u.endsWith('.webm')) return u
+    return u
+  }
 
   const allSections = [
     { id: 'intro', title: 'Giới thiệu chung', icon: <BookOpen size={18} />, permission: null },
@@ -49,6 +88,8 @@ export function HelpPage() {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
+
+  const embedUrl = activeVideo ? toEmbedUrl(activeVideo.url) : null
 
   // Styles
   const styles = {
@@ -365,35 +406,152 @@ export function HelpPage() {
                 <div><h2 style={styles.h2}>Video hướng dẫn</h2><div style={styles.h2Sub}>Học nhanh qua video trực quan</div></div>
               </div>
               <div style={styles.grid3}>
-                  <div style={styles.featureCard}>
-                      <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div style={{ width: 0, height: 0, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderLeft: '12px solid white', marginLeft: 4 }}></div>
-                          </div>
+                  {videos.map((v) => (
+                    <div key={v.title} style={styles.featureCard}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setActiveVideo({ title: v.title, url: v.url })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') setActiveVideo({ title: v.title, url: v.url })
+                        }}
+                        style={{
+                          width: '100%',
+                          aspectRatio: '16/9',
+                          background: 'linear-gradient(135deg, #0b1220, #000)',
+                          borderRadius: 12,
+                          marginBottom: 12,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          border: '1px solid rgba(0,0,0,0.08)',
+                        }}
+                      >
+                        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: 0, height: 0, borderTop: '9px solid transparent', borderBottom: '9px solid transparent', borderLeft: '14px solid white', marginLeft: 4 }} />
+                        </div>
                       </div>
-                      <h4 style={styles.featureTitle}>Tổng quan hệ thống</h4>
-                      <p style={styles.featureText}>05:20 • Giới thiệu các module chính</p>
-                  </div>
-                  <div style={styles.featureCard}>
-                      <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div style={{ width: 0, height: 0, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderLeft: '12px solid white', marginLeft: 4 }}></div>
-                          </div>
+                      <h4 style={styles.featureTitle}>{v.title}</h4>
+                      <p style={styles.featureText}>{v.meta}</p>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                        <button
+                          type="button"
+                          onClick={() => setActiveVideo({ title: v.title, url: v.url })}
+                          style={{
+                            border: '1px solid #E5E5EA',
+                            background: '#fff',
+                            borderRadius: 10,
+                            padding: '8px 10px',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Xem trong app
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openExternal(v.url)}
+                          style={{
+                            border: '1px solid #E5E5EA',
+                            background: '#F2F2F7',
+                            borderRadius: 10,
+                            padding: '8px 10px',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Mở trình duyệt
+                        </button>
                       </div>
-                      <h4 style={styles.featureTitle}>Quy trình bán hàng</h4>
-                      <p style={styles.featureText}>08:15 • Tạo đơn, thanh toán, giao hàng</p>
-                  </div>
-                  <div style={styles.featureCard}>
-                      <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div style={{ width: 0, height: 0, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', borderLeft: '12px solid white', marginLeft: 4 }}></div>
-                          </div>
-                      </div>
-                      <h4 style={styles.featureTitle}>Kiểm kho & Cân bằng</h4>
-                      <p style={styles.featureText}>06:45 • Kiểm kê và xử lý lệch kho</p>
-                  </div>
+                    </div>
+                  ))}
               </div>
           </section>
+
+          {activeVideo ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setActiveVideo(null)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(15, 23, 42, 0.55)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 20,
+                zIndex: 9999,
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: 'min(980px, 95vw)',
+                  borderRadius: 16,
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+                  overflow: 'hidden',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #E5E5EA' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1C1C1E' }}>{activeVideo.title}</div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => openExternal(activeVideo.url)}
+                      style={{
+                        border: '1px solid #E5E5EA',
+                        background: '#F2F2F7',
+                        borderRadius: 10,
+                        padding: '8px 10px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Mở trình duyệt
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveVideo(null)}
+                      style={{
+                        border: '1px solid #E5E5EA',
+                        background: '#fff',
+                        borderRadius: 10,
+                        padding: '8px 10px',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+                <div style={{ width: '100%', aspectRatio: '16/9', background: '#000' }}>
+                  {embedUrl && (embedUrl.endsWith('.mp4') || embedUrl.endsWith('.webm')) ? (
+                    <video src={embedUrl} controls autoPlay style={{ width: '100%', height: '100%' }} />
+                  ) : embedUrl ? (
+                    <iframe
+                      src={embedUrl}
+                      title={activeVideo.title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      style={{ width: '100%', height: '100%', border: 0 }}
+                    />
+                  ) : (
+                    <div style={{ color: '#fff', padding: 20 }}>Không có link video.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
 
            {/* Footer */}
            <div style={styles.footer}>

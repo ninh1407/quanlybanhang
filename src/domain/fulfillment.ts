@@ -1,4 +1,4 @@
-import { Location, WarehouseRegionMapping, AllocationRule } from './types'
+import { AppLocation, WarehouseRegionMapping, AllocationRule } from '../../shared/types/domain'
 import { calculateDistance, mockGeocode } from '../lib/geo'
 
 export type StockMap = Map<string, number> // key: skuId::locationId
@@ -9,7 +9,7 @@ export function getStockKey(skuId: string, locationId: string): string {
 
 export function findBestLocationForOrder(
     items: { skuId: string; qty: number }[],
-    locations: Location[],
+    locations: AppLocation[],
     stockMap: StockMap,
     customerAddress?: string,
     regionMappings?: WarehouseRegionMapping[],
@@ -96,18 +96,18 @@ export function findBestLocationForOrder(
         
         // D. Stock Level Bonus (Prefer higher stock to avoid depletion)
         const stockRule = rules?.find(r => r.active && r.type === 'stock_level')
-        const totalStock = items.reduce((sum, item) => sum + (stockMap.get(getStockKey(item.skuId, loc.id)) ?? 0), 0)
+        const totalStock = items.reduce((sum: any, item: any) => sum + (stockMap.get(getStockKey(item.skuId, loc.id)) ?? 0), 0)
         const stockScore = Math.min(500, totalStock)
         const stockWeight = stockRule ? (11 - stockRule.priority) : 1
         score += stockScore * stockWeight
         debug.push(`Stock ${totalStock}: +${stockScore * stockWeight}`)
         
-        // console.log(`Location ${loc.code} Score: ${score}`, debug)
+        // console.log(`AppLocation ${loc.code} Score: ${score}`, debug)
         return { id: loc.id, score, totalStock }
     })
     
     // Sort by Score DESC
-    scores.sort((a, b) => b.score - a.score)
+    scores.sort((a: any, b: any) => b.score - a.score)
     
     return scores[0].id
 }

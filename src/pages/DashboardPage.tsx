@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState } from '../state/Store'
-import type { Sku, StockTransaction, Order } from '../domain/types'
+import type { Sku, StockTransaction, Order } from '../../shared/types/domain'
 import { AnalyticsApi, type BusinessKPIs, type RevenueHistory, type TopProduct, type ChannelPerformance } from '../api/analytics'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { FilterBar } from '../ui-kit/FilterBar'
 import { EmptyState } from '../ui-kit/EmptyState'
@@ -249,7 +249,7 @@ function calculateAgedStock(
 
   // Sort IN transactions by date descending (newest first)
   inTxsBySku.forEach((list) => {
-    list.sort((a, b) => {
+    list.sort((a: any, b: any) => {
         const da = a.entryDate || a.createdAt
         const db = b.entryDate || b.createdAt
         return db.localeCompare(da)
@@ -292,7 +292,7 @@ function calculateAgedStock(
     }
   })
 
-  return result.sort((a, b) => b.agedQty - a.agedQty)
+  return result.sort((a: any, b: any) => b.agedQty - a.agedQty)
 }
 
 function calculateOrderTotal(o: Order): number {
@@ -409,7 +409,7 @@ export function DashboardPage() {
     const calcProfit = (list: Order[]) => list.reduce((sum, o) => {
         if (o.status === 'cancelled') return sum
         const rev = calculateOrderTotal(o)
-        const cost = (o.items || []).reduce((s, i) => s + (skusMap.get(i.skuId)?.cost || 0) * i.qty, 0)
+        const cost = (o.items || []).reduce((s: any, i: any) => s + (skusMap.get(i.skuId)?.cost || 0) * i.qty, 0)
         return sum + (rev - cost)
     }, 0)
 
@@ -420,7 +420,7 @@ export function DashboardPage() {
 
     const cost = currentOrders.reduce((sum, o) => {
          if (o.status === 'cancelled') return sum
-         return sum + (o.items || []).reduce((s, i) => s + (skusMap.get(i.skuId)?.cost || 0) * i.qty, 0)
+         return sum + (o.items || []).reduce((s: any, i: any) => s + (skusMap.get(i.skuId)?.cost || 0) * i.qty, 0)
     }, 0)
     const shipping = currentOrders.reduce((sum, o) => sum + (o.shippingFee || 0), 0)
 
@@ -583,7 +583,7 @@ export function DashboardPage() {
     const total = Array.from(map.values()).reduce((s, v) => s + v, 0)
     return Array.from(map.entries())
       .map(([name, value]) => ({ name, value, percent: total ? (value / total) * 100 : 0 }))
-      .sort((a, b) => b.value - a.value)
+      .sort((a: any, b: any) => b.value - a.value)
       .slice(0, 8)
   }, [state.financeTransactions, filter.start, filter.end, metrics.cashflowHistory])
 
@@ -637,7 +637,7 @@ export function DashboardPage() {
       const total = Array.from(map.values()).reduce((a, b) => a + b, 0)
       return Array.from(map.entries())
           .map(([name, value]) => ({ name, value, percent: total ? (value / total) * 100 : 0 }))
-          .sort((a, b) => b.value - a.value)
+          .sort((a: any, b: any) => b.value - a.value)
   }, [metrics.currentOrders])
 
   const profitByWarehouse = useMemo(() => {
@@ -650,7 +650,7 @@ export function DashboardPage() {
        if (o.status === 'cancelled') return
        const locName = locs.get(o.fulfillmentLocationId || '') || 'Unknown'
        const rev = calculateOrderTotal(o)
-       const cost = (o.items || []).reduce((s, i) => s + (skusMap.get(i.skuId)?.cost || 0) * i.qty, 0)
+       const cost = (o.items || []).reduce((s: any, i: any) => s + (skusMap.get(i.skuId)?.cost || 0) * i.qty, 0)
        
        const curr = map.get(locName) || { revenue: 0, profit: 0 }
        map.set(locName, { 
@@ -661,16 +661,16 @@ export function DashboardPage() {
     
     return Array.from(map.entries())
         .map(([name, val]) => ({ name, revenue: val.revenue, profit: val.profit }))
-        .sort((a, b) => b.profit - a.profit)
+        .sort((a: any, b: any) => b.profit - a.profit)
   }, [metrics.currentOrders, state.locations, state.skus])
 
   const bestWarehouseByProfit = useMemo(() => {
     const list = profitByWarehouse.filter((x) => Number(x.revenue) > 0)
     if (!list.length) return null
-    const best = [...list].sort((a, b) => (Number(b.profit) || 0) - (Number(a.profit) || 0))[0]!
+    const best = [...list].sort((a: any, b: any) => (Number(b.profit) || 0) - (Number(a.profit) || 0))[0]!
     const worstMargin = [...list]
       .map((x) => ({ name: x.name, margin: Number(x.revenue) ? (Number(x.profit) / Number(x.revenue)) * 100 : 0 }))
-      .sort((a, b) => a.margin - b.margin)[0]!
+      .sort((a: any, b: any) => a.margin - b.margin)[0]!
     return {
       bestName: best.name,
       bestProfit: Number(best.profit) || 0,
@@ -682,7 +682,7 @@ export function DashboardPage() {
   const inventoryByCategory = useMemo(() => {
       const map = new Map<string, number>()
       const skus = state.skus || []
-      const productsMap = new Map((state.products || []).map(p => [p.id, p]))
+      const productsMap = new Map((state.products || []).map((p: any) => [p.id, p]))
       const catsMap = new Map((state.categories || []).map(c => [c.id, c.name]))
       
       skus.forEach(s => {
@@ -694,8 +694,8 @@ export function DashboardPage() {
       
       return Array.from(map.entries())
           .map(([name, value]) => ({ name, size: value }))
-          .filter(x => x.size > 0)
-          .sort((a, b) => b.size - a.size)
+          .filter((x: any) => x.size > 0)
+          .sort((a: any, b: any) => b.size - a.size)
   }, [state.skus, state.products, state.categories, metrics.stockMap])
 
   const topSkus = useMemo(() => {
@@ -710,7 +710,7 @@ export function DashboardPage() {
       })
       
       const sorted = [...skuSales.entries()]
-          .sort((a, b) => b[1] - a[1])
+          .sort((a: any, b: any) => b[1] - a[1])
           .slice(0, 5)
           .map(([skuId, qty]) => {
               const sku = (state.skus || []).find(s => s.id === skuId)
@@ -771,7 +771,7 @@ export function DashboardPage() {
           { name: 'Mới', value: brandNew, color: '#10B981' },
           { name: 'Thân thiết', value: loyal, color: '#3B82F6' },
           { name: 'Ngủ đông', value: sleeping, color: '#6B7280' }
-      ].filter(x => x.value > 0)
+      ].filter((x: any) => x.value > 0)
       return data.length ? data : [{ name: 'Chưa có dữ liệu', value: 1, color: '#E5E7EB' }]
   }, [metrics.currentOrders])
 
@@ -797,7 +797,7 @@ export function DashboardPage() {
   const categoryStats = useMemo(() => {
       const map = new Map<string, number>()
       const skus = new Map((state.skus || []).map(s => [s.id, s]))
-      const prods = new Map((state.products || []).map(p => [p.id, p]))
+      const prods = new Map((state.products || []).map((p: any) => [p.id, p]))
       const cats = new Map((state.categories || []).map(c => [c.id, c.name]))
 
       ;(state.orders || []).forEach(o => {
@@ -813,7 +813,7 @@ export function DashboardPage() {
 
       return Array.from(map.entries())
           .map(([name, value]) => ({ name, value }))
-          .sort((a, b) => b.value - a.value)
+          .sort((a: any, b: any) => b.value - a.value)
   }, [state.orders, state.skus, state.products, state.categories])
 
   type StaffRevenueRow = {
@@ -855,13 +855,13 @@ export function DashboardPage() {
 
   const salesLeaderboard = useMemo(() => {
     return [...staffRevenueRows]
-      .sort((a, b) => b.revenue - a.revenue)
+      .sort((a: any, b: any) => b.revenue - a.revenue)
       .slice(0, 10)
       .map((r) => ({ name: r.name, value: r.revenue }))
   }, [staffRevenueRows])
 
   const staffRevenueRankByRevenue = useMemo(() => {
-    const sorted = [...staffRevenueRows].sort((a, b) => b.revenue - a.revenue)
+    const sorted = [...staffRevenueRows].sort((a: any, b: any) => b.revenue - a.revenue)
     const rankMap = new Map<string, number>()
     sorted.forEach((r, i) => rankMap.set(r.id, i + 1))
     return rankMap
@@ -875,7 +875,7 @@ export function DashboardPage() {
 
     const sorted = [...filtered]
     const dir = staffRevenueSort.direction === 'asc' ? 1 : -1
-    sorted.sort((a, b) => {
+    sorted.sort((a: any, b: any) => {
       switch (staffRevenueSort.key) {
         case 'name':
           return a.name.localeCompare(b.name, 'vi') * dir
@@ -978,7 +978,7 @@ export function DashboardPage() {
   const topProfitSkus = useMemo(() => {
       const map = new Map<string, number>()
       const skus = new Map((state.skus || []).map(s => [s.id, s]))
-      const products = new Map((state.products || []).map(p => [p.id, p.name]))
+      const products = new Map((state.products || []).map((p: any) => [p.id, p.name]))
       
       ;(state.orders || []).forEach(o => {
           if (o.status === 'cancelled') return
@@ -993,7 +993,7 @@ export function DashboardPage() {
       
       return Array.from(map.entries())
           .map(([name, value]) => ({ name, value }))
-          .sort((a, b) => b.value - a.value)
+          .sort((a: any, b: any) => b.value - a.value)
           .slice(0, 10)
   }, [state.orders, state.skus, state.products])
 

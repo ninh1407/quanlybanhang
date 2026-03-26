@@ -54,7 +54,7 @@ export function useNotifications(): {
 
   const items = useMemo(() => {
       const all = [...derivedItems, ...persistentItems]
-      return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      return all.sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))
   }, [derivedItems, persistentItems])
 
   const unreadCount = useMemo(() => {

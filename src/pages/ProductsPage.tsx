@@ -1,16 +1,19 @@
 import { useMemo, useState, useRef } from 'react'
 import { useAuth } from '../auth/auth'
-import type { Product, Sku } from '../domain/types'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
-import { formatVnd } from '../lib/money'
+import type { Product, Sku } from '../../shared/types/domain'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
+import { formatVnd } from '../../shared/lib/money'
 import { useAppDispatch, useAppState } from '../state/Store'
+import { ProductVariantsEditor } from '../components/products/ProductVariantsEditor'
+import type { SkuDraft, SkuDraftErrors, VariantSetupMode } from '../components/products/types'
+import { buildSkuCode } from '../components/products/skuCode'
 import { Drawer } from '../ui-kit/Drawer'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { SmartTable, Column, SortConfig } from '../ui-kit/listing/SmartTable'
 import { AdvancedFilter, FilterDef } from '../ui-kit/listing/AdvancedFilter'
-import { Plus, Edit, Save, Upload, Download, FileSpreadsheet, Image as ImageIcon, Tag } from 'lucide-react'
+import { Plus, Edit, Save, Upload, Download, FileSpreadsheet, Image as ImageIcon, Tag, Sparkles, CopyPlus } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 function autoInternalCode(): string {
@@ -69,6 +72,9 @@ export function ProductsPage() {
 
   const [editingSkuId, setEditingSkuId] = useState<string | null>(null)
   const [skuForm, setSkuForm] = useState(emptySkuForm)
+  const [variantSetupMode, setVariantSetupMode] = useState<VariantSetupMode>('single')
+  const [variantDrafts, setVariantDrafts] = useState<SkuDraft[]>([])
+  const [variantErrors, setVariantErrors] = useState<SkuDraftErrors>({})
 
   // Filter states
   const [filterValues, setFilterValues] = useState<Record<string, any>>({})
@@ -89,6 +95,7 @@ export function ProductsPage() {
   const categoriesById = useMemo(() => new Map(state.categories.map((c) => [c.id, c.name])), [state.categories])
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
   const productObjById = useMemo(() => new Map(state.products.map((p) => [p.id, p])), [state.products])
+  const allSkuCodes = useMemo(() => new Set(state.skus.map((s) => (s.skuCode || '').trim().toUpperCase())), [state.skus])
 
   const stockQtyBySkuId = useMemo(() => {
     const m = new Map<string, number>()
@@ -173,7 +180,7 @@ export function ProductsPage() {
     }
 
     // Sort
-    return list.sort((a, b) => {
+    return list.sort((a: any, b: any) => {
       const pa = productObjById.get(a.productId)
       const pb = productObjById.get(b.productId)
       
@@ -378,6 +385,29 @@ export function ProductsPage() {
     setProductForm({ ...emptyProductForm, internalCode })
     setEditingSkuId(null)
     setSkuForm({ ...emptySkuForm, skuCode: `${internalCode}-DEFAULT` })
+    setVariantSetupMode('single')
+    setVariantDrafts([
+      {
+        id: newId('sku'),
+        productId: '',
+        createdAt: nowIso(),
+        skuCode: `${internalCode}-DEFAULT`,
+        color: '',
+        size: '',
+        material: '',
+        volume: '',
+        capacity: '',
+        power: '',
+        unit: 'cái',
+        cost: 0,
+        price: 0,
+        active: true,
+        kind: 'single',
+        components: [],
+        _isNew: true,
+      },
+    ])
+    setVariantErrors({})
     setDrawerMode('product')
     setIsDrawerOpen(true)
   }
@@ -400,13 +430,93 @@ export function ProductsPage() {
     })
     setEditingSkuId(null)
     setSkuForm(emptySkuForm)
+    const existingSkus = state.skus.filter((s) => s.productId === p.id && s.kind === 'single')
+    const inferredMode: VariantSetupMode =
+      existingSkus.length > 1 || existingSkus.some((s) => (s.color || '').trim() || (s.size || '').trim())
+        ? 'multi'
+        : 'single'
+    setVariantSetupMode(inferredMode)
+    if (existingSkus.length) {
+      setVariantDrafts(existingSkus.map((s) => ({ ...s, _isNew: false })))
+    } else {
+      setVariantDrafts([
+        {
+          id: newId('sku'),
+          productId: p.id,
+          createdAt: nowIso(),
+          skuCode: `${p.internalCode}-DEFAULT`,
+          color: '',
+          size: '',
+          material: '',
+          volume: '',
+          capacity: '',
+          power: '',
+          unit: 'cái',
+          cost: 0,
+          price: 0,
+          active: true,
+          kind: 'single',
+          components: [],
+          _isNew: true,
+        },
+      ])
+    }
+    setVariantErrors({})
     setDrawerMode('product')
     setIsDrawerOpen(true)
   }
 
-  function saveProduct() {
+  function validateVariantDrafts(): SkuDraftErrors {
+    const errs: SkuDraftErrors = {}
+    const codeToIds = new Map<string, string[]>()
+    variantDrafts.forEach((d) => {
+      const code = (d.skuCode || '').trim().toUpperCase()
+      if (!code) {
+        errs[d.id] = [...(errs[d.id] || []), 'Thiếu skuCode']
+        return
+      }
+      const next = codeToIds.get(code) || []
+      next.push(d.id)
+      codeToIds.set(code, next)
+    })
+    codeToIds.forEach((ids, code) => {
+      if (ids.length <= 1) return
+      ids.forEach((id) => {
+        errs[id] = [...(errs[id] || []), `Trùng skuCode (${code}) trong danh sách`]
+      })
+    })
+
+    variantDrafts.forEach((d) => {
+      const code = (d.skuCode || '').trim().toUpperCase()
+      const exists = state.skus.find((s) => (s.skuCode || '').trim().toUpperCase() === code && s.id !== d.id)
+      if (exists) {
+        errs[d.id] = [...(errs[d.id] || []), 'skuCode đã tồn tại trong hệ thống']
+      }
+      const price = Number(d.price) || 0
+      const cost = Number(d.cost) || 0
+      if (price < 0) errs[d.id] = [...(errs[d.id] || []), 'Giá bán không được âm']
+      if (cost < 0) errs[d.id] = [...(errs[d.id] || []), 'Giá vốn không được âm']
+    })
+
+    return errs
+  }
+
+  async function saveProduct() {
     if (!canWrite) return
     if (!productForm.name.trim()) return
+
+    const draftErrors = validateVariantDrafts()
+    setVariantErrors(draftErrors)
+    const errCount = Object.keys(draftErrors).length
+    if (errCount > 0) {
+      await dialogs.alert({ message: `Có ${errCount} biến thể đang lỗi. Vui lòng kiểm tra lại skuCode/giá/vốn.` })
+      return
+    }
+    if (variantDrafts.length === 0) {
+      await dialogs.alert({ message: 'Cần có ít nhất 1 SKU để lưu sản phẩm.' })
+      return
+    }
+
     const existing = editingProductId ? state.products.find((p) => p.id === editingProductId) : undefined
     const product: Product = {
       id: existing?.id ?? newId('prd'),
@@ -424,29 +534,52 @@ export function ProductsPage() {
       active: productForm.active,
       isHidden: productForm.isHidden,
     }
-    dispatch({ type: 'products/upsert', product })
-    
-    if (!existing) {
-      const sku: Sku = {
-        id: newId('sku'),
+
+    const mappedSkus: Sku[] = variantDrafts.map((d) => {
+      const existingSku = state.skus.find((s) => s.id === d.id) ?? null
+      return {
+        id: existingSku?.id ?? d.id,
         productId: product.id,
-        skuCode: (skuForm.skuCode.trim() || `${product.internalCode}-DEFAULT`).trim(),
-        color: skuForm.color.trim(),
-        size: skuForm.size.trim(),
-        material: skuForm.material?.trim(),
-        volume: skuForm.volume?.trim(),
-      capacity: skuForm.capacity?.trim(),
-      power: skuForm.power?.trim(),
-      unit: skuForm.unit.trim() || 'cái',
-      cost: Number(skuForm.cost) || 0,
-        price: Number(skuForm.price) || 0,
-        active: skuForm.active,
+        createdAt: existingSku?.createdAt ?? d.createdAt ?? nowIso(),
+        skuCode: (d.skuCode || '').trim(),
+        color: (d.color || '').trim(),
+        size: (d.size || '').trim(),
+        material: (d.material || '').trim(),
+        volume: (d.volume || '').trim(),
+        capacity: (d.capacity || '').trim(),
+        power: (d.power || '').trim(),
+        unit: (d.unit || 'cái').trim() || 'cái',
+        cost: Number(d.cost) || 0,
+        price: Number(d.price) || 0,
+        active: Boolean(d.active),
         kind: 'single',
         components: [],
-        createdAt: nowIso(),
       }
-      dispatch({ type: 'skus/upsert', sku })
+    })
+
+    const changedCostPrice = mappedSkus.filter((sku) => {
+      const before = state.skus.find((s) => s.id === sku.id) ?? null
+      if (!before) return false
+      return Number(before.cost) !== Number(sku.cost) || Number(before.price) !== Number(sku.price)
+    })
+
+    let reason: string | null = ''
+    if (changedCostPrice.length > 0) {
+      reason = await dialogs.prompt({ message: 'Nhập lý do thay đổi giá vốn/giá bán (bắt buộc):', required: true })
+      if (reason == null) return
+      if (!reason.trim()) {
+        await dialogs.alert({ message: 'Vui lòng nhập lý do thay đổi giá.' })
+        return
+      }
     }
+
+    dispatch({ type: 'products/upsert', product })
+    mappedSkus.forEach((sku) => {
+      const before = state.skus.find((s) => s.id === sku.id) ?? null
+      const needReason = before ? Number(before.cost) !== Number(sku.cost) || Number(before.price) !== Number(sku.price) : false
+      if (needReason) dispatch({ type: 'skus/upsert', sku, meta: { reason: (reason || '').trim() } })
+      else dispatch({ type: 'skus/upsert', sku })
+    })
     setIsDrawerOpen(false)
   }
 
@@ -456,6 +589,18 @@ export function ProductsPage() {
     setSkuForm(emptySkuForm)
     setDrawerMode('sku')
     setIsDrawerOpen(true)
+  }
+
+  function generateSkuCodeForCurrentForm(next?: Partial<typeof skuForm>) {
+    const product = editingProductId ? state.products.find((p) => p.id === editingProductId) : null
+    if (!product) return
+    const merged = { ...skuForm, ...next }
+    const code =
+      buildSkuCode(
+        { prefix: product.internalCode, separator: '-', order: ['prefix', 'color', 'size'] },
+        { color: merged.color || '', size: merged.size || '' },
+      ) || `${product.internalCode}-DEFAULT`
+    setSkuForm((prev) => ({ ...prev, ...next, skuCode: code }))
   }
 
   function startEditSku(s: Sku) {
@@ -831,7 +976,7 @@ export function ProductsPage() {
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         title={drawerMode === 'product' ? (editingProductId ? 'Sửa sản phẩm' : 'Thêm sản phẩm') : (editingSkuId ? 'Sửa SKU' : 'Thêm SKU')}
-        width={600}
+        width={drawerMode === 'product' ? 980 : 600}
         footer={
           <>
             <button className="btn" onClick={() => setIsDrawerOpen(false)}>Hủy</button>
@@ -987,64 +1132,31 @@ export function ProductsPage() {
                  </div>
               </div>
 
-              {!editingProductId ? (
-                <div>
-                  <h4 style={{ margin: '0 0 16px', color: 'var(--primary-600)', borderBottom: '1px solid var(--border-color)', paddingBottom: 8 }}>
-                    🧾 SKU mặc định
-                  </h4>
-                  <div className="field">
-                    <label>Mã SKU</label>
-                    <input
-                      value={skuForm.skuCode}
-                      onChange={(e) => setSkuForm({ ...skuForm, skuCode: e.target.value })}
-                      placeholder={`${productForm.internalCode || 'SP-...'}-DEFAULT`}
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                  </div>
-                  <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div className="field">
-                      <label>Giá bán</label>
-                      <input
-                        type="number"
-                        value={skuForm.price}
-                        onChange={(e) => setSkuForm({ ...skuForm, price: Number(e.target.value) })}
-                        style={{ fontWeight: 600, color: 'var(--success)' }}
-                      />
-                    </div>
-                    <div className="field">
-                      <label>Giá vốn</label>
-                      <input
-                        type="number"
-                        value={skuForm.cost}
-                        onChange={(e) => setSkuForm({ ...skuForm, cost: Number(e.target.value) })}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div className="field">
-                      <label>Đơn vị</label>
-                      <input value={skuForm.unit} onChange={(e) => setSkuForm({ ...skuForm, unit: e.target.value })} />
-                    </div>
-                    <div className="field">
-                      <label>Trạng thái</label>
-                      <select value={skuForm.active ? '1' : '0'} onChange={(e) => setSkuForm({ ...skuForm, active: e.target.value === '1' })}>
-                        <option value="1">Đang bán</option>
-                        <option value="0">Ngưng bán</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div className="field">
-                      <label>Màu sắc</label>
-                      <input value={skuForm.color} onChange={(e) => setSkuForm({ ...skuForm, color: e.target.value })} placeholder="VD: Đỏ" />
-                    </div>
-                    <div className="field">
-                      <label>Kích thước</label>
-                      <input value={skuForm.size} onChange={(e) => setSkuForm({ ...skuForm, size: e.target.value })} placeholder="VD: L" />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+              <div>
+                <h4 style={{ margin: '0 0 16px', color: 'var(--primary-600)', borderBottom: '1px solid var(--border-color)', paddingBottom: 8 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <Sparkles size={16} /> Biến thể & SKU
+                  </span>
+                </h4>
+
+                <ProductVariantsEditor
+                  mode={variantSetupMode}
+                  onChangeMode={setVariantSetupMode}
+                  internalCode={productForm.internalCode}
+                  drafts={variantDrafts}
+                  onSetDrafts={setVariantDrafts}
+                  qtyBySkuId={availableQtyBySkuId}
+                  errors={variantErrors}
+                  allSkuCodes={allSkuCodes}
+                  newId={() => newId('sku')}
+                  nowIso={nowIso}
+                  onOpenExistingSku={(skuId) => {
+                    const s = state.skus.find((x) => x.id === skuId) || null
+                    if (!s) return
+                    startEditSku(s)
+                  }}
+                />
+              </div>
            </div>
         ) : (
           <div style={{ display: 'grid', gap: 16 }}>
@@ -1063,15 +1175,33 @@ export function ProductsPage() {
                     }}
                  >
                    <option value="">-- Chọn sản phẩm --</option>
-                   {state.products.map(p => (
+                   {state.products.map((p: any) => (
                      <option key={p.id} value={p.id}>{p.name} ({p.internalCode})</option>
                    ))}
                  </select>
                </div>
              )}
-             <div className="field">
+             <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="field">
+                <label>Màu sắc</label>
+                <input value={skuForm.color} onChange={(e) => generateSkuCodeForCurrentForm({ color: e.target.value })} placeholder="VD: Xanh, Đỏ..." />
+              </div>
+              <div className="field">
+                <label>Kích thước</label>
+                <input value={skuForm.size} onChange={(e) => generateSkuCodeForCurrentForm({ size: e.target.value })} placeholder="VD: L, XL, 42..." />
+              </div>
+            </div>
+            <div className="field">
               <label>Mã SKU <span className="text-danger">*</span></label>
-              <input value={skuForm.skuCode} onChange={(e) => setSkuForm({ ...skuForm, skuCode: e.target.value })} style={{ fontFamily: 'monospace' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input value={skuForm.skuCode} onChange={(e) => setSkuForm({ ...skuForm, skuCode: e.target.value })} style={{ fontFamily: 'monospace' }} />
+                <button type="button" className="btn btn-small" onClick={() => generateSkuCodeForCurrentForm()}>
+                  <CopyPlus size={14} /> Tự sinh
+                </button>
+              </div>
+              <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
+                Gợi ý mã theo dạng: Mã sản phẩm + Màu + Size để nhân viên dễ tìm và dễ quét.
+              </div>
             </div>
              <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="field">
@@ -1096,16 +1226,6 @@ export function ProductsPage() {
                 <option value="single">Sản phẩm đơn</option>
                 <option value="bundle">Combo / Set</option>
               </select>
-            </div>
-            <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div className="field">
-                <label>Màu sắc</label>
-                <input value={skuForm.color} onChange={(e) => setSkuForm({ ...skuForm, color: e.target.value })} placeholder="VD: Xanh, Đỏ..." />
-              </div>
-              <div className="field">
-                <label>Kích thước</label>
-                <input value={skuForm.size} onChange={(e) => setSkuForm({ ...skuForm, size: e.target.value })} placeholder="VD: L, XL, 42..." />
-              </div>
             </div>
             <div className="grid-form" style={{ gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
               <div className="field">

@@ -1,5 +1,5 @@
-import type { AppState } from '../state/types'
-import type { StockTransaction } from '../domain/types'
+import type { AppState } from '../../shared/types/app'
+import type { StockTransaction } from '../../shared/types/domain'
 import { loadSettings } from '../settings/settings'
 import { prevMonthRange, soldQtyBySku } from '../domain/analytics'
 

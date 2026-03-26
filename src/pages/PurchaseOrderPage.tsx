@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/auth'
-import type { PurchaseOrder, PurchaseOrderLine, PurchaseOrderStatus } from '../domain/types'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
+import type { PurchaseOrder, PurchaseOrderLine, PurchaseOrderStatus } from '../../shared/types/domain'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { Pagination } from '../ui-kit/listing/Pagination'
@@ -34,7 +34,7 @@ export function PurchaseOrderPage() {
   
   const suppliersById = useMemo(() => new Map(suppliers.map(s => [s.id, s])), [suppliers])
   const locationsById = useMemo(() => new Map(locations.map(l => [l.id, l])), [locations])
-  const productsById = useMemo(() => new Map(state.products.map(p => [p.id, p])), [state.products])
+  const productsById = useMemo(() => new Map(state.products.map((p: any) => [p.id, p])), [state.products])
   const skusById = useMemo(() => new Map(skus.map(s => [s.id, s])), [skus])
 
   const list = useListView<Filters>('purchase_orders', {
@@ -54,7 +54,7 @@ export function PurchaseOrderPage() {
     return state.purchaseOrders
       .filter(o => list.state.filters.status === 'all' || o.status === list.state.filters.status)
       .filter(o => !needle || o.code.toLowerCase().includes(needle) || suppliersById.get(o.supplierId)?.name.toLowerCase().includes(needle))
-      .sort((a, b) => (list.state.sortDir === 'asc' ? 1 : -1) * (a.createdAt.localeCompare(b.createdAt)))
+      .sort((a: any, b: any) => (list.state.sortDir === 'asc' ? 1 : -1) * (a.createdAt.localeCompare(b.createdAt)))
   }, [state.purchaseOrders, list.state, suppliersById])
 
   const paged = useMemo(() => {
@@ -85,7 +85,7 @@ export function PurchaseOrderPage() {
     if (!selected || !canWrite) return
     const next = { ...selected, ...patch, updatedAt: nowIso() }
     // Recalculate total
-    next.totalAmount = next.items.reduce((sum, item) => sum + (item.qty * item.unitCost), 0)
+    next.totalAmount = next.items.reduce((sum: any, item: any) => sum + (item.qty * item.unitCost), 0)
     dispatch({ type: 'purchaseOrders/upsert', order: next })
   }
 
@@ -96,7 +96,7 @@ export function PurchaseOrderPage() {
     
     // Recalculate total immediately for this update
     const next = { ...selected, items: newItems, updatedAt: nowIso() }
-    next.totalAmount = next.items.reduce((sum, item) => sum + (item.qty * item.unitCost), 0)
+    next.totalAmount = next.items.reduce((sum: any, item: any) => sum + (item.qty * item.unitCost), 0)
     
     dispatch({ type: 'purchaseOrders/upsert', order: next })
   }
@@ -107,7 +107,7 @@ export function PurchaseOrderPage() {
     const newItem: PurchaseOrderLine = { skuId: sku?.id ?? '', qty: 1, unitCost: sku?.cost ?? 0, receivedQty: 0 }
     
     const next = { ...selected, items: [...selected.items, newItem], updatedAt: nowIso() }
-    next.totalAmount = next.items.reduce((sum, item) => sum + (item.qty * item.unitCost), 0)
+    next.totalAmount = next.items.reduce((sum: any, item: any) => sum + (item.qty * item.unitCost), 0)
     
     dispatch({ type: 'purchaseOrders/upsert', order: next })
   }
@@ -117,7 +117,7 @@ export function PurchaseOrderPage() {
     const newItems = selected.items.filter((_, i) => i !== idx)
     
     const next = { ...selected, items: newItems, updatedAt: nowIso() }
-    next.totalAmount = next.items.reduce((sum, item) => sum + (item.qty * item.unitCost), 0)
+    next.totalAmount = next.items.reduce((sum: any, item: any) => sum + (item.qty * item.unitCost), 0)
     
     dispatch({ type: 'purchaseOrders/upsert', order: next })
   }
@@ -275,7 +275,7 @@ export function PurchaseOrderPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {selected.items.map((item, idx) => (
+                                {selected.items.map((item: any, idx: number) => (
                                     <tr key={idx}>
                                         <td>
                                             <select 

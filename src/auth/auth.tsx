@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
-import type { Permission, User } from '../domain/types'
-import { hasPermission } from '../domain/permissions'
+import type { Permission, User } from '../../shared/types/domain'
+import { hasPermission } from '../../shared/domain/permissions'
 import { useAppDispatch, useAppState } from '../state/Store'
 
 export function useAuth(): {

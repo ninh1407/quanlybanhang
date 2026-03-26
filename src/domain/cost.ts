@@ -1,10 +1,10 @@
-import type { Id, StockTransaction } from './types'
+import type { Id, StockTransaction } from '../../shared/types/domain'
 
 export function getAverageCost(stockTransactions: StockTransaction[], skuId: Id): number {
   const txs = stockTransactions
     .filter((t) => t.skuId === skuId)
     .slice()
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt))
 
   let qty = 0
   let avg = 0

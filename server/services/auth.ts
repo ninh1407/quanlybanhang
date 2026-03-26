@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { prisma } from '../store' // Use prisma instead of store
-import type { User } from '../../src/domain/types'
+import type { User } from '../../shared/types/domain'
 import { lstat } from 'fs'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dmx-secret-key-2024-secure-v1'

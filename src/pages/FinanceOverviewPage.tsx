@@ -4,10 +4,10 @@ import { useAuth } from '../auth/auth'
 import { getAverageCost } from '../domain/cost'
 import { X, Paperclip } from 'lucide-react'
 import { validateAttachmentFiles } from '../lib/attachments'
-import type { FinanceAttachment, FinanceAttachmentType, FinanceTxType, OrderStatus, Sku } from '../domain/types'
-import { formatDateTime, nowIso } from '../lib/date'
-import { newId } from '../lib/id'
-import { formatVnd } from '../lib/money'
+import type { FinanceAttachment, FinanceAttachmentType, FinanceTxType, OrderStatus, Sku } from '../../shared/types/domain'
+import { formatDateTime, nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
+import { formatVnd } from '../../shared/lib/money'
 import { useStore } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { FilterBar } from '../ui-kit/FilterBar'
@@ -68,7 +68,7 @@ export function FinanceOverviewPage() {
   const dialogs = useDialogs()
   
   const txs = useMemo(
-    () => state.financeTransactions.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () => state.financeTransactions.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)),
     [state.financeTransactions],
   )
 
@@ -218,13 +218,13 @@ export function FinanceOverviewPage() {
   const revenueCategoryRows = useMemo(() => {
     return Array.from(report.revenueByCategory.entries())
       .map(([k, v]) => ({ category: k, amount: v }))
-      .sort((a, b) => b.amount - a.amount)
+      .sort((a: any, b: any) => b.amount - a.amount)
   }, [report.revenueByCategory])
 
   const expenseCategoryRows = useMemo(() => {
     return Array.from(report.expenseByCategory.entries())
       .map(([k, v]) => ({ category: k, amount: v }))
-      .sort((a, b) => b.amount - a.amount)
+      .sort((a: any, b: any) => b.amount - a.amount)
   }, [report.expenseByCategory])
 
   async function addTx() {
@@ -291,7 +291,7 @@ export function FinanceOverviewPage() {
   }
 
   const orderReceivables = useMemo(() => {
-    return state.orders.filter((o) => isOrderReceivableStatus(o.status)).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return state.orders.filter((o) => isOrderReceivableStatus(o.status)).slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))
   }, [state.orders])
 
   const cashbookRows = useMemo(() => txs.slice(0, 400), [txs])

@@ -111,7 +111,7 @@ export function mockGeocode(address: string): { lat: number; lng: number } | nul
     }
 
     // Sort cities by name length desc to match longest first (e.g. "Hồ Chí Minh" before "Hồ")
-    const sortedCities = Object.keys(cityCoords).sort((a, b) => b.length - a.length);
+    const sortedCities = Object.keys(cityCoords).sort((a: any, b: any) => b.length - a.length);
 
     // Check for city name in address
     for (const city of sortedCities) {

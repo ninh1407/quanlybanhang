@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/auth'
-import type { Supplier } from '../domain/types'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
+import type { Supplier } from '../../shared/types/domain'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
 import { useStore } from '../state/Store'
 import { EmptyState } from '../ui-kit/EmptyState'
 import { PageHeader } from '../ui-kit/PageHeader'
@@ -34,7 +34,7 @@ export function SuppliersPage() {
   const [form, setForm] = useState(() => ({ ...emptyForm, code: autoSupplierCode() }))
 
   const suppliers = useMemo(() => {
-    return state.suppliers.slice().sort((a, b) => a.name.localeCompare(b.name))
+    return state.suppliers.slice().sort((a: any, b: any) => a.name.localeCompare(b.name))
   }, [state.suppliers])
 
   function startCreate() {

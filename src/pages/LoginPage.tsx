@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { createEmptyWarehouseState } from '../state/seed'
+import { createEmptyWarehouseState } from '../../shared/state/seed'
 import { useStore } from '../state/Store'
 import { useAuth } from '../auth/auth'
-import { accessibleLocations } from '../domain/warehouseAccess'
+import { accessibleLocations } from '../../shared/domain/warehouseAccess'
 import { Store, User, Lock, ArrowRight, Settings, RefreshCw, Eye, EyeOff } from 'lucide-react'
 import { getServerUrl, getSavedIp, saveServerIp, DEFAULT_SERVER_IP } from '../config'
 import { loadSettings } from '../settings/settings'
@@ -32,7 +32,7 @@ export function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string; general?: string }>({})
   const [showConfig, setShowConfig] = useState(false)
   const [serverIp, setServerIp] = useState(getSavedIp())
-  const brandName = useMemo(() => titleCase(loadSettings().companyName || 'Điện Máy Xanh'), [])
+  const brandName = useMemo(() => titleCase(loadSettings().companyName || 'Nam Phương'), [])
 
   useEffect(() => {
     let remember = true

@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import { useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 import { useAuth } from '../auth/auth'
 import { parseISO, subMonths } from 'date-fns'
 
@@ -106,7 +106,7 @@ export function WarehousePerformancePage() {
               stockValue,
               cogs
           }
-      }).sort((a, b) => b.stockValue - a.stockValue)
+      }).sort((a: any, b: any) => b.stockValue - a.stockValue)
   }, [accessibleLocations, state.orders, state.stockTransactions, state.skus, period])
 
   return (

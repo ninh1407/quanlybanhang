@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/auth'
-import type { Category } from '../domain/types'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
+import type { Category } from '../../shared/types/domain'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { SmartTable, Column, SortConfig } from '../ui-kit/listing/SmartTable'
@@ -49,7 +49,7 @@ export function CategoriesPage() {
   }, [state.categories, state.products, state.skus, state.stockTransactions])
 
   const categories = useMemo(() => {
-    const list = state.categories.slice().sort((a, b) => {
+    const list = state.categories.slice().sort((a: any, b: any) => {
        if (sortConfig.key === 'products') {
           const countA = state.products.filter(p => p.categoryId === a.id).length
           const countB = state.products.filter(p => p.categoryId === b.id).length

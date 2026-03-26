@@ -1,4 +1,4 @@
-import type { Id, Order } from './types'
+import type { Id, Order } from '../../shared/types/domain'
 
 export function prevMonthRange(now: Date = new Date()): { start: Date; end: Date } {
   const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)

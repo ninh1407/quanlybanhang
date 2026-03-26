@@ -1,10 +1,10 @@
 {
   "name": "ung-dung-quan-ly-ban-hang",
-  "productName": "Điện Máy Xanh",
+  "productName": "Nam Phương",
   "description": "Phần mềm quản lý bán hàng đa kho",
   "author": "Ninh <ninh1407@github.com>",
   "private": true,
-  "version": "5.0.9",
+  "version": "5.0.11",
   "type": "module",
   "main": "electron/main.js",
   "repository": {
@@ -22,7 +22,7 @@
     "desktop:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env ELECTRON_RENDERER_URL=http://localhost:5173 electron .\"",
     "desktop:build": "cross-env DESKTOP=true npm run build",
     "desktop:dist": "npm run desktop:build && electron-builder --win --x64 -p never",
-    "desktop:portable": "npm run desktop:build && electron-builder --win --x64 -c.win.target=portable -c.artifactName=UngDungQuanLyBanHang-Portable-${version}.${ext} -p never",
+    "desktop:portable": "npm run desktop:build && electron-builder --win --x64 -c.win.target=portable -c.artifactName=NamPhuong-Portable-${version}.${ext} -p never",
     "db:setup": "npx prisma@5.22.0 generate && npx prisma@5.22.0 db push",
     "db:migrate-data": "npx tsx scripts/migrate-json-to-pg.ts"
   },
@@ -72,9 +72,9 @@
     "wait-on": "^8.0.5"
   },
   "build": {
-    "appId": "com.dmxx.salesadmin",
-    "productName": "Điện Máy Xanh",
-    "artifactName": "DienMayXanh-Setup-${version}.${ext}",
+    "appId": "com.namphuong.salesadmin",
+    "productName": "Nam Phương",
+    "artifactName": "NamPhuong-Setup-${version}.${ext}",
     "directories": {
       "output": "release_v3"
     },
@@ -92,7 +92,7 @@
     ],
     "win": {
       "icon": "build/icon.ico",
-      "executableName": "DienMayXanh",
+      "executableName": "NamPhuong",
       "target": [
         "nsis"
       ]

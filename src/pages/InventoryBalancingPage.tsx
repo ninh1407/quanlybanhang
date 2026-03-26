@@ -2,14 +2,14 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppState, useAppDispatch } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { Sku, TransferOrder } from '../domain/types'
+import { Sku, TransferOrder } from '../../shared/types/domain'
 import { subDays, parseISO } from 'date-fns'
 import { ArrowRight, Truck, TrendingUp, AlertTriangle, Package, DollarSign } from 'lucide-react'
-import { newId } from '../lib/id'
-import { nowIso } from '../lib/date'
+import { newId } from '../../shared/lib/id'
+import { nowIso } from '../../shared/lib/date'
 import { useAuth } from '../auth/auth'
 import { useDialogs } from '../ui-kit/Dialogs'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 
 function skuLabel(productsById: Map<string, string>, sku: Sku): string {
   const productName = productsById.get(sku.productId) ?? sku.productId
@@ -56,7 +56,7 @@ export function InventoryBalancingPage() {
       })
   }
 
-  // 1. Calculate Stock & Sales per Location per SKU
+  // 1. Calculate Stock & Sales per AppLocation per SKU
   const analysis = useMemo(() => {
     // Map<skuId, Map<locationId, { stock: number, sales30d: number }>>
     const data = new Map<string, Map<string, { stock: number; sales30d: number }>>()
@@ -97,7 +97,7 @@ export function InventoryBalancingPage() {
         const locId = o.fulfillmentLocationId || locations[0]?.id
         if (!locId) return
 
-        o.items.forEach(item => {
+        o.items.forEach((item: any) => {
             const sMap = data.get(item.skuId)
             if (!sMap) return
             const lData = sMap.get(locId)

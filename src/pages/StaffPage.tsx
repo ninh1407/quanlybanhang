@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { fetchApi } from '../api/client'
 import { useAuth } from '../auth/auth'
-import { groupPermissions, rolePermissions } from '../domain/permissions'
-import type { Role, User } from '../domain/types'
-import { newId } from '../lib/id'
+import { groupPermissions, rolePermissions } from '../../shared/domain/permissions'
+import type { Role, User } from '../../shared/types/domain'
+import { newId } from '../../shared/lib/id'
 import { useStore } from '../state/Store'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { PageHeader } from '../ui-kit/PageHeader'
@@ -39,11 +39,11 @@ export function StaffPage() {
   const [selectedRoleForMatrix, setSelectedRoleForMatrix] = useState<Role>('manager')
 
   const users = useMemo(() => {
-    return state.users.slice().sort((a, b) => a.username.localeCompare(b.username))
+    return state.users.slice().sort((a: any, b: any) => a.username.localeCompare(b.username))
   }, [state.users])
 
   const activeLocations = useMemo(() => {
-    return state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code))
+    return state.locations.filter((l) => l.active).slice().sort((a: any, b: any) => a.code.localeCompare(b.code))
   }, [state.locations])
 
   const dialogs = useDialogs()
@@ -331,20 +331,20 @@ export function StaffPage() {
                     </tr>
                     </thead>
                     <tbody>
-                    {groupPermissions(rolePermissions[selectedRoleForMatrix]).map((g) => (
+                    {groupPermissions(rolePermissions[selectedRoleForMatrix]).map((g: any) => (
                         <tr key={g.moduleKey}>
                             <td style={{ fontWeight: 600 }}>{g.moduleLabel}</td>
-                            <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':read')) ? 'var(--success)' : 'var(--text-muted)' }}>
-                                {g.actions.some(a => a.code.includes(':read')) ? '✓' : '—'}
+                            <td style={{ textAlign: 'center', color: g.actions.some((a: any) => a.code.includes(':read')) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                {g.actions.some((a: any) => a.code.includes(':read')) ? '✓' : '—'}
                             </td>
-                            <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':write')) ? 'var(--success)' : 'var(--text-muted)' }}>
-                                {g.actions.some(a => a.code.includes(':write')) ? '✓' : '—'}
+                            <td style={{ textAlign: 'center', color: g.actions.some((a: any) => a.code.includes(':write')) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                {g.actions.some((a: any) => a.code.includes(':write')) ? '✓' : '—'}
                             </td>
-                            <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':write')) ? 'var(--success)' : 'var(--text-muted)' }}>
-                                {g.actions.some(a => a.code.includes(':write')) ? '✓' : '—'}
+                            <td style={{ textAlign: 'center', color: g.actions.some((a: any) => a.code.includes(':write')) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                {g.actions.some((a: any) => a.code.includes(':write')) ? '✓' : '—'}
                             </td>
-                            <td style={{ textAlign: 'center', color: g.actions.some(a => a.code.includes(':delete')) ? 'var(--success)' : 'var(--text-muted)' }}>
-                                {g.actions.some(a => a.code.includes(':delete')) ? '✓' : '—'}
+                            <td style={{ textAlign: 'center', color: g.actions.some((a: any) => a.code.includes(':delete')) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                {g.actions.some((a: any) => a.code.includes(':delete')) ? '✓' : '—'}
                             </td>
                         </tr>
                     ))}

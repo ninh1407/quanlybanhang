@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useNotifications } from '../notifications/useNotifications'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { formatDateTime } from '../lib/date'
+import { formatDateTime } from '../../shared/lib/date'
 import { Bell, Check, Clock, AlertTriangle, Info, CheckCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
@@ -10,7 +10,7 @@ export function NotificationsPage() {
   const nav = useNavigate()
 
   const sorted = useMemo(() => {
-    return items.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return items.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))
   }, [items])
 
   function getIcon(type: string) {

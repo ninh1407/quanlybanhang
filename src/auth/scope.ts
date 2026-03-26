@@ -1,4 +1,4 @@
-import { User } from '../domain/types'
+import { User } from '../../shared/types/domain'
 
 export function filterByScope<T extends { locationId?: string | null }>(
     data: T[], 

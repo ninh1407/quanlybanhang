@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { AnalyticsApi, InventoryKPIs, BusinessKPIs } from '../api/analytics'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 import { Package, RefreshCw, AlertTriangle, Layers } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useAppState } from '../state/Store'
@@ -14,7 +14,7 @@ export function AnalyticsInventoryPage() {
   const state = useAppState()
   const totalSkuCount = state.skus.length
 
-  const productsById = useMemo(() => new Map(state.products.map(p => [p.id, p])), [state.products])
+  const productsById = useMemo(() => new Map(state.products.map((p: any) => [p.id, p])), [state.products])
   const categoriesById = useMemo(() => new Map(state.categories.map(c => [c.id, c.name])), [state.categories])
 
   const stockBySku = useMemo(() => {
@@ -40,7 +40,7 @@ export function AnalyticsInventoryPage() {
 
     return Array.from(map.entries())
       .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
+      .sort((a: any, b: any) => b.value - a.value)
   }, [state.skus, stockBySku, productsById, categoriesById])
 
   const topInventorySkus = useMemo(() => {
@@ -51,7 +51,7 @@ export function AnalyticsInventoryPage() {
         return { sku: s, qty, value }
       })
       .filter((r) => r.value > 0)
-      .sort((a, b) => b.value - a.value)
+      .sort((a: any, b: any) => b.value - a.value)
       .slice(0, 5)
 
     return rows

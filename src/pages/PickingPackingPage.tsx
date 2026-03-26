@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useAppState, useAppDispatch } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { Order, OrderStatus, Sku, Product } from '../domain/types'
+import { Order, OrderStatus, Sku, Product } from '../../shared/types/domain'
 import { Check, Truck, Box, Search, Package, X, ScanBarcode } from 'lucide-react'
 import { useDialogs } from '../ui-kit/Dialogs'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
 
 function PickingModal({ 
     order, 
@@ -30,9 +30,9 @@ function PickingModal({
     }, [])
 
     const items = order.items || []
-    const totalItems = items.reduce((s, i) => s + i.qty, 0)
+    const totalItems = items.reduce((s: any, i: any) => s + i.qty, 0)
     const totalPicked = Object.values(pickedCounts).reduce((s, n) => s + n, 0)
-    const isComplete = items.every(i => (pickedCounts[i.skuId] || 0) >= i.qty)
+    const isComplete = items.every((i: any) => (pickedCounts[i.skuId] || 0) >= i.qty)
 
     const handleScan = (e: React.FormEvent) => {
         e.preventDefault()
@@ -53,7 +53,7 @@ function PickingModal({
         }
 
         // Find item in order
-        const item = items.find(i => i.skuId === sku.id)
+        const item = items.find((i: any) => i.skuId === sku.id)
         if (!item) {
             // alert('Item not in order')
             setScanInput('')
@@ -117,7 +117,7 @@ function PickingModal({
                             </tr>
                         </thead>
                         <tbody>
-                            {items.map(item => {
+                            {items.map((item: any) => {
                                 const sku = skus.find(s => s.id === item.skuId)
                                 const product = products.find(p => p.id === sku?.productId)
                                 const picked = pickedCounts[item.skuId] || 0
@@ -174,7 +174,7 @@ export function PickingPackingPage() {
             statusFilter.includes(o.status) &&
             (state.currentLocationId ? o.fulfillmentLocationId === state.currentLocationId : true) &&
             (searchCode ? o.code.toLowerCase().includes(searchCode.toLowerCase()) : true)
-        ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) // FIFO
+        ).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) // FIFO
     }, [state.orders, activeTab, state.currentLocationId, searchCode])
 
     const handleAction = async (order: Order, action: 'start_pick' | 'finish_pick' | 'pack' | 'ship') => {
@@ -210,7 +210,7 @@ export function PickingPackingPage() {
         // If Shipping, deduct stock if not already done (assuming stock deducted at 'shipped' or 'confirmed' based on policy)
         // In this system, let's assume stock is reserved at 'confirmed' but deducted from ledger at 'shipped'.
         if (nextStatus === 'shipped') {
-             (order.items || []).forEach(item => {
+             (order.items || []).forEach((item: any) => {
                  dispatch({
                      type: 'stock/add',
                      tx: {
@@ -297,7 +297,7 @@ export function PickingPackingPage() {
                                 <td>{state.customers.find(c => c.id === order.customerId)?.name || 'Khách lẻ'}</td>
                                 <td>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        {(order.items || []).map(i => {
+                                        {(order.items || []).map((i: any) => {
                                             const sku = state.skus.find(s => s.id === i.skuId)
                                             return (
                                                 <div key={i.skuId} style={{ fontSize: 12 }}>

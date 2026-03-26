@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
-import { userCanAccessLocation } from '../domain/warehouseAccess'
+import { userCanAccessLocation } from '../../shared/domain/warehouseAccess'
 import { useAppState } from '../state/Store'
 
 export function RequireWarehouse(props: { children: ReactNode }) {

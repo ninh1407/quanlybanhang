@@ -1,5 +1,5 @@
 import { saveJson } from '../lib/persist'
-import type { AppState } from './types'
+import type { AppState } from '../../shared/types/app'
 
 export type BackupFileV1 = {
   kind: 'web_cp_backup'

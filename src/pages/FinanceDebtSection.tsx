@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import type { Debt, DebtType, FinanceTransaction, FinanceTxType, Order, OrderStatus } from '../domain/types'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
-import { formatVnd } from '../lib/money'
+import type { Debt, DebtType, FinanceTransaction, FinanceTxType, Order, OrderStatus } from '../../shared/types/domain'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
+import { formatVnd } from '../../shared/lib/money'
 import { useDialogs } from '../ui-kit/Dialogs'
 
 function sum(numbers: number[]): number {
@@ -29,11 +29,11 @@ export function FinanceDebtSection(props: {
   const [note, setNote] = useState('')
 
   const openDebts = useMemo(
-    () => props.debts.filter((d) => d.status === 'open').slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () => props.debts.filter((d) => d.status === 'open').slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)),
     [props.debts],
   )
   const settledDebts = useMemo(
-    () => props.debts.filter((d) => d.status === 'settled').slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () => props.debts.filter((d) => d.status === 'settled').slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)),
     [props.debts],
   )
 

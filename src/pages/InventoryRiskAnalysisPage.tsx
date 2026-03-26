@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Sku, StockTransaction } from '../domain/types'
+import { Sku, StockTransaction } from '../../shared/types/domain'
 import { differenceInDays, parseISO } from 'date-fns'
 import {
   BarChart,
@@ -15,7 +15,7 @@ import {
 import { Tag, Truck } from 'lucide-react'
 import { useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { useNavigate } from 'react-router-dom'
 
@@ -83,7 +83,7 @@ export function InventoryRiskAnalysisPage() {
       if (arr) arr.push(t)
       else groupedTxs.set(t.skuId, [t])
     })
-    groupedTxs.forEach((arr) => arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt)))
+    groupedTxs.forEach((arr) => arr.sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt)))
 
     const stats = new Map<string, { stock: number; avgCost: number; lastSaleDate: string | null }>()
     
@@ -171,10 +171,10 @@ export function InventoryRiskAnalysisPage() {
 
     const sorted = Array.from(skuLoss.entries())
         .map(([skuId, val]) => ({ skuId, ...val }))
-        .sort((a, b) => b.value - a.value)
+        .sort((a: any, b: any) => b.value - a.value)
         .slice(0, 10) // Top 10
 
-    return sorted.map(item => {
+    return sorted.map((item: any) => {
         const sku = (state.skus || []).find(s => s.id === item.skuId)
         return {
             name: sku ? skuLabel(productsById, sku) : item.skuId,
@@ -192,7 +192,7 @@ export function InventoryRiskAnalysisPage() {
           if (!stat || stat.stock <= 0) return
           
           // Get max minStock across all locations or use default
-          const minStock = Math.max(...(state.skuSettings || []).filter(x => x.skuId === s.id).map(x => x.minStock), 0)
+          const minStock = Math.max(...(state.skuSettings || []).filter((x: any) => x.skuId === s.id).map(x => x.minStock), 0)
           if (minStock > 0 && stat.stock > minStock * 2) {
               result.push({
                   sku: s,
@@ -203,7 +203,7 @@ export function InventoryRiskAnalysisPage() {
               })
           }
       })
-      return result.sort((a, b) => b.value - a.value)
+      return result.sort((a: any, b: any) => b.value - a.value)
   }, [state.skus, skuStats, state.skuSettings])
 
   const totalDeadStockValue = deadStockData.reduce((acc, curr) => acc + curr.value, 0)
@@ -291,7 +291,7 @@ export function InventoryRiskAnalysisPage() {
                       </tr>
                   </thead>
                   <tbody>
-                      {overstockData.map((item, idx) => (
+                      {overstockData.map((item: any, idx: number) => (
                           <tr key={idx}>
                               <td>{skuLabel(productsById, item.sku)}</td>
                               <td>{item.stock}</td>
@@ -333,7 +333,7 @@ export function InventoryRiskAnalysisPage() {
                       </tr>
                   </thead>
                   <tbody>
-                      {deadStockData[2].skus.sort((a, b) => b.days - a.days).map((item, idx) => (
+                      {deadStockData[2].skus.sort((a: any, b: any) => b.days - a.days).map((item: any, idx: number) => (
                           <tr key={idx}>
                               <td>{skuLabel(productsById, item.sku)}</td>
                               <td>{item.days} ngày</td>

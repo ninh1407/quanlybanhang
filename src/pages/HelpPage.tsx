@@ -559,7 +559,7 @@ export function HelpPage() {
             <p style={{ margin: '0 0 24px 0', opacity: 0.8 }}>Vui lòng liên hệ bộ phận IT để được giải đáp</p>
             <div>
               <span style={styles.contactBtn}>0987.654.321</span>
-              <span style={styles.contactBtn}>support@dienmayxanh.com</span>
+              <span style={styles.contactBtn}>support@namphuong.vn</span>
             </div>
           </div>
 

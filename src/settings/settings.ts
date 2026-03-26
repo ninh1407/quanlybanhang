@@ -15,7 +15,7 @@ export type AppSettings = {
 const STORAGE_KEY = 'app_settings_v1'
 
 export const defaultSettings: AppSettings = {
-  companyName: 'Điện máy xanh',
+  companyName: 'Nam Phương',
   address: '',
   phone: '',
   taxCode: '',
@@ -66,4 +66,3 @@ export function loadSettings(): AppSettings {
 export function saveSettings(next: AppSettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
 }
-

@@ -1,5 +1,5 @@
-import { Order, Customer, User } from '../domain/types'
-import { formatNumber } from './money'
+import { Order, Customer, User } from '../../shared/types/domain'
+import { formatNumber } from '../../shared/lib/money'
 
 export function printOrder(
   order: Order, 

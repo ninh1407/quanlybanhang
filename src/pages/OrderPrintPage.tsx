@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useSettings } from '../settings/useSettings'
 import { useAppState } from '../state/Store'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 
 export function OrderPrintPage() {
   const { id } = useParams()
@@ -12,7 +12,7 @@ export function OrderPrintPage() {
   const order = useMemo(() => state.orders.find((o) => o.id === id), [id, state.orders])
   const customer = useMemo(() => (order?.customerId ? state.customers.find((c) => c.id === order.customerId) : null), [order, state.customers])
   
-  const productsById = useMemo(() => new Map(state.products.map(p => [p.id, p])), [state.products])
+  const productsById = useMemo(() => new Map(state.products.map((p: any) => [p.id, p])), [state.products])
   const skusById = useMemo(() => new Map(state.skus.map(s => [s.id, s])), [state.skus])
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function OrderPrintPage() {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 40 }}>
             <div>
-                <h1 style={{ margin: '0 0 8px 0', fontSize: 24, textTransform: 'uppercase' }}>{settings.companyName || 'CỬA HÀNG ĐIỆN MÁY XANH'}</h1>
+                <h1 style={{ margin: '0 0 8px 0', fontSize: 24, textTransform: 'uppercase' }}>{settings.companyName || 'CỬA HÀNG NAM PHƯƠNG'}</h1>
                 <div style={{ color: '#555', fontSize: 14, lineHeight: 1.5 }}>
                     <div>Địa chỉ: {settings.address || 'Chưa cập nhật'}</div>
                     <div>Điện thoại: {settings.phone || 'Chưa cập nhật'}</div>

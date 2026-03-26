@@ -12,11 +12,11 @@ import type {
   OrderType,
   ReconcileStatus,
   Sku,
-} from '../domain/types'
-import { canTransitionOrderStatus, getAllowedNextOrderStatuses, orderStatusLabels } from '../domain/orderWorkflow'
-import { formatDateTime, nowIso } from '../lib/date'
-import { newId } from '../lib/id'
-import { formatVnd } from '../lib/money'
+} from '../../shared/types/domain'
+import { canTransitionOrderStatus, getAllowedNextOrderStatuses, orderStatusLabels } from '../../shared/domain/orderWorkflow'
+import { formatDateTime, nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
+import { formatVnd } from '../../shared/lib/money'
 import { exportCsv, exportXlsx } from '../lib/export'
 import { validateAttachmentFiles } from '../lib/attachments'
 import { useListView } from '../ui-kit/listing/useListView'
@@ -116,7 +116,7 @@ function orderTotal(order: Order): number {
   if (order.subTotalOverride !== null) {
     itemTotal = order.subTotalOverride
   } else {
-    itemTotal = order.items.reduce((acc, it) => acc + it.qty * it.price, 0)
+    itemTotal = order.items.reduce((acc: any, it: any) => acc + it.qty * it.price, 0)
   }
   return itemTotal - (order.discountAmount || 0) + (order.shippingFee || 0) + (order.vatAmount || 0) + (order.otherFees || 0)
 }
@@ -466,7 +466,7 @@ export function OrdersPage() {
     if (!selectedOrderId) return []
     return state.auditLogs
       .filter((l) => l.entityType === 'order' && l.entityId === selectedOrderId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))
   }, [selectedOrderId, state.auditLogs])
 
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
@@ -476,7 +476,7 @@ export function OrdersPage() {
     return state.skus
       .filter((s) => s.active && activeProducts.has(s.productId))
       .slice()
-      .sort((a, b) => getSkuDisplayName(productsById, a).localeCompare(getSkuDisplayName(productsById, b)))
+      .sort((a: any, b: any) => getSkuDisplayName(productsById, a).localeCompare(getSkuDisplayName(productsById, b)))
   }, [productsById, state.products, state.skus])
   const customers = useMemo(() => state.customers, [state.customers])
   const customersById = useMemo(() => new Map(state.customers.map((c) => [c.id, c])), [state.customers])
@@ -485,13 +485,13 @@ export function OrdersPage() {
     [state.locations],
   )
   const locations = useMemo(
-    () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
+    () => state.locations.filter((l) => l.active).slice().sort((a: any, b: any) => a.code.localeCompare(b.code)),
     [state.locations],
   )
   const locationsById = useMemo(() => new Map(state.locations.map((l) => [l.id, l])), [state.locations])
   const usersById = useMemo(() => new Map(state.users.map((u) => [u.id, u])), [state.users])
   const orders = useMemo(
-    () => state.orders.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () => state.orders.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)),
     [state.orders],
   )
 
@@ -572,7 +572,7 @@ export function OrdersPage() {
       })
       .map(({ order, customer }) => ({ order, customer, total: orderTotal(order) }))
 
-    const sorted = filtered.sort((a, b) => {
+    const sorted = filtered.sort((a: any, b: any) => {
       const dir = list.state.sortDir === 'asc' ? 1 : -1
       switch (list.state.sortKey) {
         case 'code':
@@ -672,7 +672,7 @@ export function OrdersPage() {
   const discountPercent = discountPercentInput
   const subTotal = useMemo(() => {
     if (source !== 'pos' && type !== 'dropship') return Number(subTotalOverride) || 0
-    return orderItems.reduce((acc, it) => acc + it.qty * it.price, 0)
+    return orderItems.reduce((acc: any, it: any) => acc + it.qty * it.price, 0)
   }, [orderItems, source, subTotalOverride, type])
   const discountAmount = useMemo(() => {
     if (source !== 'pos' && type !== 'dropship') return 0
@@ -685,7 +685,7 @@ export function OrdersPage() {
   const total = useMemo(() => subTotal - discountAmount + (Number(shippingFee) || 0) + (Number(vatAmount) || 0) + (Number(otherFees) || 0), [discountAmount, shippingFee, subTotal, vatAmount, otherFees])
   const estimatedProfit = useMemo(() => {
     if (source !== 'pos' && type !== 'dropship') return 0
-    const costTotal = orderItems.reduce((acc, it) => {
+    const costTotal = orderItems.reduce((acc: any, it: any) => {
         const sku = skusById.get(it.skuId)
         return acc + (sku?.cost || 0) * it.qty
     }, 0)
@@ -703,7 +703,7 @@ export function OrdersPage() {
   }
 
   async function suggestWarehouse() {
-      const needed = items.filter(i => i.skuId).map(i => ({ skuId: i.skuId, qty: Number(i.qty) || 1 }))
+      const needed = items.filter(i => i.skuId).map((i: any) => ({ skuId: i.skuId, qty: Number(i.qty) || 1 }))
       if (!needed.length) {
           void dialogs.alert({ message: 'Vui lòng chọn ít nhất 1 sản phẩm để hệ thống kiểm tra tồn kho và gợi ý.' })
           return
@@ -754,7 +754,7 @@ export function OrdersPage() {
           const totalAvailable = new Map<string, number>()
           locations.forEach(loc => {
               if (!loc.active) return
-              needed.forEach(item => {
+              needed.forEach((item: any) => {
                   const key = getStockKey(item.skuId, loc.id)
                   const stock = stockMap.get(key) ?? 0
                   totalAvailable.set(item.skuId, (totalAvailable.get(item.skuId) ?? 0) + stock)

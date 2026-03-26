@@ -2,8 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import bcrypt from 'bcryptjs'
-import { createEmptyAppState } from '../src/state/seed'
-import type { AppState } from '../src/state/types'
+import { createEmptyAppState } from '../shared/state/seed'
+import type { AppState } from '../shared/types/app'
 import { PrismaClient } from '@prisma/client'
 
 const __filename = fileURLToPath(import.meta.url)

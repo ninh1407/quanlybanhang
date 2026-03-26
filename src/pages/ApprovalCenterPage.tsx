@@ -14,9 +14,9 @@ import {
   Check,
   Flag
 } from 'lucide-react'
-import { InventoryRequest, InventoryRequestStatus, InventoryRequestType, StockVoucher, StockTransaction } from '../domain/types'
-import { formatDateTime, nowIso } from '../lib/date'
-import { newId } from '../lib/id'
+import { InventoryRequest, InventoryRequestStatus, InventoryRequestType, StockVoucher, StockTransaction } from '../../shared/types/domain'
+import { formatDateTime, nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
 import { useDialogs } from '../ui-kit/Dialogs'
 
 function statusLabel(status: InventoryRequestStatus) {
@@ -191,7 +191,7 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
           action = 'approve_manager'
       } else if (request.status === 'pending_accountant') {
           // Check for High Value Transfer logic
-          const totalValue = request.items.reduce((sum, item) => sum + (item.qty * (item.unitCost || 0)), 0)
+          const totalValue = request.items.reduce((sum: any, item: any) => sum + (item.qty * (item.unitCost || 0)), 0)
           if (request.type === 'transfer' && totalValue > 200000000) {
               nextStatus = 'pending_ceo'
               action = 'approve_accountant' // Accountant approved, now waiting for CEO
@@ -239,7 +239,7 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
                   createdAt: nowIso(),
                   createdByUserId: user?.id || null,
                   finalizedAt: null,
-                  lines: request.items.map(i => ({
+                  lines: request.items.map((i: any) => ({
                       skuId: i.skuId,
                       qty: i.qty,
                       unitCost: i.unitCost || null,
@@ -254,7 +254,7 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
           } 
           // 2. Handle Adjust via StockTransaction
           else if (request.type === 'adjust') {
-              request.items.forEach(item => {
+              request.items.forEach((item: any) => {
                   const tx: StockTransaction = {
                       id: newId('stk'),
                       code: '',
@@ -377,7 +377,7 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
                         </tr>
                     </thead>
                     <tbody>
-                        {request.items.map((item, idx) => {
+                        {request.items.map((item: any, idx: number) => {
                              const sku = state.skus.find(s => s.id === item.skuId)
                              const product = state.products.find(p => p.id === sku?.productId)
                              return (
@@ -394,7 +394,7 @@ function RequestDetailModal({ request, onClose }: { request: InventoryRequest; o
 
                 <h4 style={{ marginBottom: 12 }}>Timeline xử lý</h4>
                 <div className="timeline" style={{ borderLeft: '2px solid var(--border-color)', paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {request.logs.map(log => {
+                    {request.logs.map((log: any) => {
                         const actor = state.users.find(u => u.id === log.actorId)
                         return (
                             <div key={log.id} style={{ position: 'relative' }}>
@@ -453,7 +453,7 @@ function CreateRequestModal({ onClose }: { onClose: () => void }) {
 
     const addItem = () => {
         if (qty <= 0) return
-        if (items.find(i => i.skuId === skuId)) return dialogs.alert({ message: 'Sản phẩm đã có trong danh sách' })
+        if (items.find((i: any) => i.skuId === skuId)) return dialogs.alert({ message: 'Sản phẩm đã có trong danh sách' })
         setItems([...items, { skuId, qty }])
         setQty(1)
     }

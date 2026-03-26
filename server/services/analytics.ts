@@ -1,5 +1,5 @@
 import { store } from '../store'
-import type { Order, StockTransaction, Sku, User } from '../../src/domain/types'
+import type { Order, StockTransaction, Sku, User } from '../../shared/types/domain'
 import { startOfMonth, endOfMonth, subMonths, format, isSameMonth } from 'date-fns'
 
 function calculateOrderTotal(o: Order): number {

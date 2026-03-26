@@ -3,7 +3,7 @@ import { useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { Pagination } from '../ui-kit/listing/Pagination'
 import { useListView } from '../ui-kit/listing/useListView'
-import { formatDateTime } from '../lib/date'
+import { formatDateTime } from '../../shared/lib/date'
 import { ChevronDown, ChevronRight, Activity, Clock, User } from 'lucide-react'
 
 function JsonDiff({ before, after }: { before?: any; after?: any }) {
@@ -66,7 +66,7 @@ export function AuditLogPage() {
   const logs = useMemo(() => {
     return state.auditLogs
       .slice()
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))
   }, [state.auditLogs])
 
   const paginatedLogs = logs.slice(

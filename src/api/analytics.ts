@@ -1,62 +1,71 @@
 import { fetchApi } from './client'
 
-export interface BusinessKPIs {
+export type BusinessKPIs = {
   revenue: number
+  costOfGoodsSold: number
+  expenses: number
   netProfit: number
-  inventoryValue: number
-  stockTurnover: number
   cashFlow: number
-  fulfillmentRate: number
+  inventoryValue: number
+  stockTurnover?: number
+  fulfillmentRate?: number
 }
 
-export interface InventoryKPIs {
-  daysOnHand: number
-  deadStockSkuCount: number
-  fastMovingSkuCount: number
-  slowMovingSkuCount: number
-}
-
-export interface RevenueHistory {
-  name: string
+export type RevenueHistory = {
+  date: string
   revenue: number
   profit: number
 }
 
-export interface TopProduct {
+export type TopProduct = {
+  skuId: string
+  skuCode: string
   name: string
+  qty: number
   value: number
 }
 
-export interface ChannelPerformance {
+export type InventoryKPIs = {
+  totalValue: number
+  lowStockCount: number
+  outOfStockCount: number
+  fastMovingSkuCount: number
+  slowMovingSkuCount: number
+  deadStockSkuCount: number
+  daysOnHand?: number
+}
+
+export type ChannelPerformance = {
   name: string
-  value: number
+  orderCount: number
+  revenue: number
   percent: number
 }
 
 export const AnalyticsApi = {
-  getBusinessKPIs: (from?: Date, to?: Date) => {
+  async getBusinessKPIs(from?: Date, to?: Date): Promise<BusinessKPIs> {
     const params = new URLSearchParams()
-    if (from) params.append('from', from.toISOString())
-    if (to) params.append('to', to.toISOString())
+    if (from) params.set('from', from.toISOString())
+    if (to) params.set('to', to.toISOString())
     return fetchApi<BusinessKPIs>(`/api/analytics/business?${params.toString()}`)
   },
 
-  getRevenueHistory: () => {
+  async getRevenueHistory(): Promise<RevenueHistory[]> {
     return fetchApi<RevenueHistory[]>('/api/analytics/history')
   },
 
-  getTopProducts: (limit: number = 5) => {
+  async getTopProducts(limit: number = 5): Promise<TopProduct[]> {
     return fetchApi<TopProduct[]>(`/api/analytics/top-products?limit=${limit}`)
   },
 
-  getInventoryKPIs: () => {
+  async getInventoryKPIs(): Promise<InventoryKPIs> {
     return fetchApi<InventoryKPIs>('/api/analytics/inventory')
   },
 
-  getChannelPerformance: (from?: Date, to?: Date) => {
+  async getChannelPerformance(from?: Date, to?: Date): Promise<ChannelPerformance[]> {
     const params = new URLSearchParams()
-    if (from) params.append('from', from.toISOString())
-    if (to) params.append('to', to.toISOString())
+    if (from) params.set('from', from.toISOString())
+    if (to) params.set('to', to.toISOString())
     return fetchApi<ChannelPerformance[]>(`/api/analytics/channels?${params.toString()}`)
   }
 }

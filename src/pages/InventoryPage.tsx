@@ -2,10 +2,16 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/auth'
 import { prevMonthRange, soldQtyBySku } from '../domain/analytics'
-import type { Location, Sku, StockTransaction, StockTxType, StockTransactionAttachment } from '../domain/types'
-import { formatDateTime, nowIso } from '../lib/date'
-import { newId } from '../lib/id'
-import { formatVnd } from '../lib/money'
+import type {
+  AppLocation,
+  Sku,
+  StockTransaction,
+  StockTxType,
+  StockTransactionAttachment,
+} from '../../shared/types/domain'
+import { formatDateTime, nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
+import { formatVnd } from '../../shared/lib/money'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { FilterBar } from '../ui-kit/FilterBar'
@@ -23,7 +29,7 @@ function skuLabel(productsById: Map<string, string>, sku: Sku): string {
   return `${productName}${attrs ? ` - ${attrs}` : ''} (${sku.skuCode})`
 }
 
-function locationLabel(loc: Location): string {
+function locationLabel(loc: AppLocation): string {
   return `${loc.code} - ${loc.name}`
 }
 
@@ -139,7 +145,7 @@ export function InventoryPage() {
 
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
   const locations = useMemo(
-    () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
+    () => state.locations.filter((l) => l.active).slice().sort((a: any, b: any) => a.code.localeCompare(b.code)),
     [state.locations],
   )
 
@@ -192,7 +198,7 @@ export function InventoryPage() {
       state.skus
         .filter((s) => s.kind === 'single')
         .slice()
-        .sort((a, b) => skuLabel(productsById, a).localeCompare(skuLabel(productsById, b))),
+        .sort((a: any, b: any) => skuLabel(productsById, a).localeCompare(skuLabel(productsById, b))),
     [productsById, state.skus],
   )
   const stockQtyBySkuId = useMemo(() => {
@@ -219,11 +225,12 @@ export function InventoryPage() {
 
   const skusById = useMemo(() => new Map(state.skus.map((s) => [s.id, s])), [state.skus])
   const txs = useMemo(
-    () => state.stockTransactions.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () => state.stockTransactions.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)),
     [state.stockTransactions],
   )
 
   const [skuId, setSkuId] = useState(skus[0]?.id ?? '')
+  // const [selectedLocation, setSelectedLocation] = useState<AppLocation | null>(null)
   const locationId = stockList.state.filters.locationId
   const [type, setType] = useState<StockTxType>('in')
   const [qty, setQty] = useState<number>(1)
@@ -249,7 +256,7 @@ export function InventoryPage() {
       if (arr) arr.push(t)
       else grouped.set(t.skuId, [t])
     })
-    grouped.forEach((arr) => arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt)))
+    grouped.forEach((arr) => arr.sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt)))
 
     const m = new Map<string, number>()
     state.skus.forEach((s) => {
@@ -288,7 +295,7 @@ export function InventoryPage() {
 
     const dir = stockList.state.sortDir === 'asc' ? 1 : -1
     const key = stockList.state.sortKey as StockListSortKey
-    rows.sort((a, b) => {
+    rows.sort((a: any, b: any) => {
       if (key === 'stock') return dir * (a.stock - b.stock)
       if (key === 'avgCost') return dir * (a.avgCost - b.avgCost)
       return dir * a.label.localeCompare(b.label)
@@ -324,14 +331,14 @@ export function InventoryPage() {
     const dir = historyList.state.sortDir === 'asc' ? 1 : -1
     switch (historyList.state.sortKey) {
       case 'qty':
-        base.sort((a, b) => dir * ((a.type === 'out' ? -a.qty : a.qty) - (b.type === 'out' ? -b.qty : b.qty)))
+        base.sort((a: any, b: any) => dir * ((a.type === 'out' ? -a.qty : a.qty) - (b.type === 'out' ? -b.qty : b.qty)))
         break
       case 'code':
-        base.sort((a, b) => dir * String(a.code).localeCompare(String(b.code)))
+        base.sort((a: any, b: any) => dir * String(a.code).localeCompare(String(b.code)))
         break
       case 'createdAt':
       default:
-        base.sort((a, b) => dir * String(a.createdAt).localeCompare(String(b.createdAt)))
+        base.sort((a: any, b: any) => dir * String(a.createdAt).localeCompare(String(b.createdAt)))
         break
     }
     return base

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { exportCsv, exportXlsx } from '../lib/export'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 import { useStore } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 
@@ -48,7 +48,7 @@ export function FinanceCashflowPage() {
   const { state } = useStore()
 
   const txs = useMemo(
-    () => state.financeTransactions.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () => state.financeTransactions.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)),
     [state.financeTransactions],
   )
 
@@ -98,7 +98,7 @@ export function FinanceCashflowPage() {
 
     return Array.from(cashflowByBucket.entries())
       .map(([k, v]) => ({ key: k, in: v.in, out: v.out, net: v.in - v.out }))
-      .sort((a, b) => a.key.localeCompare(b.key))
+      .sort((a: any, b: any) => a.key.localeCompare(b.key))
   }, [bucket, endDate, startDate, state.financeTransactions])
 
   const totals = useMemo(() => {

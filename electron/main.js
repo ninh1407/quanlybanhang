@@ -100,7 +100,7 @@ function createWindow() {
     minHeight: 720,
     show: true,
     titleBarStyle: 'default',
-    title: 'Điện Máy Xanh',
+    title: 'Nam Phương',
     icon: path.join(__dirname, '..', 'public', 'app-icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

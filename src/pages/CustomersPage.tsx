@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/auth'
-import type { Customer, Order, OrderStatus } from '../domain/types'
-import { formatDateTime, nowIso } from '../lib/date'
-import { newId } from '../lib/id'
-import { formatVnd } from '../lib/money'
+import type { Customer, Order, OrderStatus } from '../../shared/types/domain'
+import { formatDateTime, nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
+import { formatVnd } from '../../shared/lib/money'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { SmartTable, Column, SortConfig } from '../ui-kit/listing/SmartTable'
@@ -27,7 +27,7 @@ function sum(numbers: number[]): number {
 
 function orderSubTotal(order: Order): number {
   if (order.subTotalOverride != null) return Number(order.subTotalOverride) || 0
-  return order.items.reduce((acc, it) => acc + it.qty * it.price, 0)
+  return order.items.reduce((acc: any, it: any) => acc + it.qty * it.price, 0)
 }
 
 function orderTotal(order: Order): number {
@@ -74,7 +74,7 @@ export function CustomersPage() {
       arr.push(o)
       map.set(o.customerId, arr)
     })
-    map.forEach((arr, k) => map.set(k, arr.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))))
+    map.forEach((arr, k) => map.set(k, arr.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))))
     return map
   }, [state.orders])
 
@@ -137,7 +137,7 @@ export function CustomersPage() {
     }
 
     // Sort
-    list.sort((a, b) => {
+    list.sort((a: any, b: any) => {
       const valA = a[sortConfig.key as keyof typeof a]
       const valB = b[sortConfig.key as keyof typeof b]
       

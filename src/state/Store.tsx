@@ -1,15 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
 import { useDialogs } from '../ui-kit/Dialogs'
 import type {
   AuditLog,
-} from '../domain/types'
-import type { AppActionWithMeta as AppAction, AppState } from './types'
-import { createEmptyWarehouseState } from './seed'
-import { reducer as coreReducer, validateAction, createAuditLog, toAuditSnapshot } from './core'
+} from '../../shared/types/domain'
+import type { AppActionWithMeta as AppAction, AppState } from '../../shared/types/app'
+import { createEmptyWarehouseState } from '../../shared/state/seed'
+import { reducer as coreReducer, validateAction, createAuditLog, toAuditSnapshot } from '../../shared/state/core'
 import { getServerUrl } from '../config'
 
 type Store = {
@@ -220,8 +220,8 @@ export function StoreProvider(props: { children: ReactNode }) {
 
       // Validation
       const validation = validateAction(prev, action)
-      if (!validation.ok) {
-        void dialogs.alert({ message: validation.error })
+      if (validation.ok === false) {
+        void dialogs.alert({ message: (validation as any).error })
         return
       }
 

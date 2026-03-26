@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { File, Folder, Download, Trash2, Upload, FileText, Image as ImageIcon, Search } from 'lucide-react'
-import { formatDateTime } from '../lib/date'
+import { formatDateTime } from '../../shared/lib/date'
 import { useDialogs } from '../ui-kit/Dialogs'
 
 export function DocumentCenterPage() {

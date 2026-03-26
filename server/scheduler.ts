@@ -1,6 +1,6 @@
 
-import { AppState } from '../src/state/types'
-import { InventoryRequest } from '../src/domain/types'
+import { AppState } from '../shared/types/app'
+import { InventoryRequest } from '../shared/types/domain'
 
 export type Job = {
     id: string

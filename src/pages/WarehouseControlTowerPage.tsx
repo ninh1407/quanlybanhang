@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSettings } from '../settings/useSettings'
 import { useAppState } from '../state/Store'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { FilterBar } from '../ui-kit/FilterBar'
 import { EmptyState } from '../ui-kit/EmptyState'
@@ -26,7 +26,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import type { Location, Sku, StockTransaction, Order, StockCount } from '../domain/types'
+import type { AppLocation, Sku, StockTransaction, Order, StockCount } from '../../shared/types/domain'
 
 // Helper to calculate stock and value per location
 function calculateLocationStats(
@@ -47,7 +47,7 @@ function calculateLocationStats(
   ;(orders || []).forEach(o => {
       if (o.fulfillmentLocationId === locationId) {
           if (o.status === 'paid' || o.status === 'delivered') {
-            const orderTotal = o.subTotalOverride ?? (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)
+            const orderTotal = o.subTotalOverride ?? (o.items || []).reduce((s: any, i: any) => s + i.price * i.qty, 0)
             revenue += orderTotal - (Number(o.discountAmount) || 0)
           }
           if (['confirmed', 'paid', 'packed'].includes(o.status)) {
@@ -112,7 +112,7 @@ function WarehouseCard({
   rank,
   onClick 
 }: { 
-  location: Location
+  location: AppLocation
   stats: ReturnType<typeof calculateLocationStats>
   rank: number
   onClick: () => void
@@ -183,7 +183,7 @@ function WarehouseDetailModal({
     productsById,
     onViewInventory
 }: {
-    location: Location
+    location: AppLocation
     stats: ReturnType<typeof calculateLocationStats>
     onClose: () => void
     skus: Sku[]
@@ -194,9 +194,9 @@ function WarehouseDetailModal({
     const stockItems = skus.map(s => ({
         sku: s,
         qty: stats.stockBySku.get(s.id) ?? 0
-    })).filter(x => x.qty < 10 && x.qty > -100) // Filter relevant items
+    })).filter((x: any) => x.qty < 10 && x.qty > -100) // Filter relevant items
     
-    stockItems.sort((a, b) => a.qty - b.qty) // Lowest first
+    stockItems.sort((a: any, b: any) => a.qty - b.qty) // Lowest first
 
     return (
       <Modal
@@ -277,7 +277,7 @@ export function WarehouseControlTowerPage() {
   const { settings } = useSettings()
   const { locations, stockTransactions, skus, products, orders, stockCounts } = state
   
-  const productsById = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products])
+  const productsById = useMemo(() => new Map(products.map((p: any) => [p.id, p.name])), [products])
   
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -297,14 +297,14 @@ export function WarehouseControlTowerPage() {
       return locations
         .filter(l => l.active)
         .map(l => ({ id: l.id, val: locationStatsMap.get(l.id)?.revenue || 0 }))
-        .sort((a, b) => b.val - a.val)
+        .sort((a: any, b: any) => b.val - a.val)
         .map((x, i) => ({ id: x.id, rank: i + 1 }))
   }, [locations, locationStatsMap])
   
   const getRank = (id: string) => ranking.find(x => x.id === id)?.rank || 99
 
   const locationsByProvince = useMemo(() => {
-      const groups = new Map<string, Location[]>()
+      const groups = new Map<string, AppLocation[]>()
       const q = query.trim().toLowerCase()
       locations
         .filter(l => l.active)
@@ -319,8 +319,8 @@ export function WarehouseControlTowerPage() {
           list.push(l)
           groups.set(prov, list)
       })
-      Array.from(groups.values()).forEach((list) => list.sort((a, b) => getRank(a.id) - getRank(b.id)))
-      return new Map(Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0], 'vi')))
+      Array.from(groups.values()).forEach((list) => list.sort((a: any, b: any) => getRank(a.id) - getRank(b.id)))
+      return new Map(Array.from(groups.entries()).sort((a: any, b: any) => a[0].localeCompare(b[0], 'vi')))
   }, [locations, query, getRank])
 
   // 2. Aggregate Global Stats
@@ -347,7 +347,7 @@ export function WarehouseControlTowerPage() {
               revenue: stats?.revenue || 0,
               qty: stats?.totalQty || 0
           }
-      }).sort((a, b) => b.value - a.value)
+      }).sort((a: any, b: any) => b.value - a.value)
   }, [locations, locationStatsMap])
 
   const selectedLocation = selectedLocationId ? locations.find(l => l.id === selectedLocationId) : null

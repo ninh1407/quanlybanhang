@@ -1,4 +1,4 @@
-import type { Id, StockTransaction } from './types'
+import type { Id, StockTransaction } from '../../shared/types/domain'
 
 export function getStockQty(
   stockTransactions: StockTransaction[],

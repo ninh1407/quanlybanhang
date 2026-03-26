@@ -70,7 +70,7 @@ export function CommandPalette() {
         return pSkus.some(s => s.skuCode.toLowerCase().includes(lowerQuery))
     })
     .slice(0, 5)
-    .map(p => ({
+    .map((p: any) => ({
         id: p.id,
         name: p.name,
         path: `/products`, // Navigate to products list

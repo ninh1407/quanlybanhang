@@ -12,13 +12,13 @@ export function FinanceDebtsPage() {
   const canWrite = can('finance:write')
 
   const ordersReceivable = useMemo(() => {
-    return state.orders.filter((o) => isOrderReceivableStatus(o.status)).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return state.orders.filter((o) => isOrderReceivableStatus(o.status)).slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))
   }, [state.orders])
 
   function exportDebts(kind: 'csv' | 'xlsx') {
     const rows = state.debts
       .slice()
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt))
       .map((d) => ({
         'Mã': d.code,
         'Ngày tạo': d.createdAt,

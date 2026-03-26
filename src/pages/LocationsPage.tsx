@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/auth'
-import type { Location } from '../domain/types'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
+import type { AppLocation } from '../../shared/types/domain'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
 import { useStore } from '../state/Store'
 import { EmptyState } from '../ui-kit/EmptyState'
 import { PageHeader } from '../ui-kit/PageHeader'
@@ -16,7 +16,7 @@ function autoLocationCode(): string {
   return `LOC-${d}-${rnd}`
 }
 
-const emptyForm: Omit<Location, 'id' | 'createdAt'> = {
+const emptyForm: Omit<AppLocation, 'id' | 'createdAt'> = {
   code: '',
   name: '',
   province: '',
@@ -34,7 +34,7 @@ const VIETNAM_BOUNDS = {
 }
 
 // Map component with Google Maps Style (Dark Navy)
-function WarehouseMap({ locations }: { locations: Location[] }) {
+function WarehouseMap({ locations }: { locations: AppLocation[] }) {
     const [regionFilter, setRegionFilter] = useState<'all' | 'north' | 'central' | 'south'>('north')
 
     const pins = useMemo(() => {
@@ -58,7 +58,7 @@ function WarehouseMap({ locations }: { locations: Location[] }) {
                 
                 return { ...l, top, left, region }
             })
-            .filter(x => x !== null) as (Location & { top: number, left: number, region: 'north' | 'central' | 'south' })[]
+            .filter((x: any) => x !== null) as (AppLocation & { top: number, left: number, region: 'north' | 'central' | 'south' })[]
     }, [locations, regionFilter])
 
     return (
@@ -249,7 +249,7 @@ export function LocationsPage() {
   const [form, setForm] = useState(() => ({ ...emptyForm, code: autoLocationCode() }))
 
   const locations = useMemo(() => {
-    return state.locations.slice().sort((a, b) => a.code.localeCompare(b.code))
+    return state.locations.slice().sort((a: any, b: any) => a.code.localeCompare(b.code))
   }, [state.locations])
 
   function startCreate() {
@@ -257,7 +257,7 @@ export function LocationsPage() {
     setForm({ ...emptyForm, code: autoLocationCode(), address: '' })
   }
 
-  function startEdit(l: Location) {
+  function startEdit(l: AppLocation) {
     setEditingId(l.id)
     setForm({ 
         code: l.code, 
@@ -275,7 +275,7 @@ export function LocationsPage() {
     if (!canWrite) return
     if (!form.code.trim() || !form.name.trim()) return
     const existing = editingId ? state.locations.find((l) => l.id === editingId) : undefined
-    const location: Location = {
+    const location: AppLocation = {
       id: existing?.id ?? newId('loc'),
       createdAt: existing?.createdAt ?? nowIso(),
       code: form.code.trim().toUpperCase(),

@@ -2,9 +2,9 @@ import { ArrowDownCircle, ArrowUpCircle, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/auth'
-import type { StockVoucher, StockVoucherLine, StockVoucherStatus, StockVoucherType } from '../domain/types'
-import { nowIso } from '../lib/date'
-import { newId } from '../lib/id'
+import type { StockVoucher, StockVoucherLine, StockVoucherStatus, StockVoucherType } from '../../shared/types/domain'
+import { nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
 import { useAppDispatch, useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { Pagination } from '../ui-kit/listing/Pagination'
@@ -46,11 +46,11 @@ export function StockVouchersPage() {
   const dialogs = useDialogs()
 
   const locations = useMemo(
-    () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
+    () => state.locations.filter((l) => l.active).slice().sort((a: any, b: any) => a.code.localeCompare(b.code)),
     [state.locations],
   )
   const skus = useMemo(
-    () => state.skus.filter((s) => s.active && s.kind === 'single').slice().sort((a, b) => a.skuCode.localeCompare(b.skuCode)),
+    () => state.skus.filter((s) => s.active && s.kind === 'single').slice().sort((a: any, b: any) => a.skuCode.localeCompare(b.skuCode)),
     [state.skus],
   )
   const productsById = useMemo(() => new Map(state.products.map((p) => [p.id, p.name])), [state.products])
@@ -94,7 +94,7 @@ export function StockVouchersPage() {
         return hay.includes(needle)
       })
       .slice()
-      .sort((a, b) => {
+      .sort((a: any, b: any) => {
         const dir = list.state.sortDir === 'asc' ? 1 : -1
         if (list.state.sortKey === 'code') return dir * String(a.code).localeCompare(String(b.code))
         return dir * (toMs(String(a.createdAt)) - toMs(String(b.createdAt)))

@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useAppState, useAppDispatch } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { formatVnd } from '../lib/money'
-import { InventoryRequest, TransferOrder } from '../domain/types'
+import { formatVnd } from '../../shared/lib/money'
+import { InventoryRequest, TransferOrder } from '../../shared/types/domain'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { soldQtyBySku } from '../domain/analytics'
-import { newId } from '../lib/id'
-import { nowIso } from '../lib/date'
+import { newId } from '../../shared/lib/id'
+import { nowIso } from '../../shared/lib/date'
 import { useAuth } from '../auth/auth'
 import { Settings, ArrowRight, ShoppingCart, Truck, ShoppingBag } from 'lucide-react'
-import { SkuSettings } from '../domain/types'
+import { SkuSettings } from '../../shared/types/domain'
 
 export function ReplenishmentPage() {
   const state = useAppState()
@@ -138,12 +138,12 @@ export function ReplenishmentPage() {
                 effectiveSafetyStock
             }
         })
-        .filter(x => x.suggestedQty > 0)
-        .sort((a, b) => b.suggestedQty - a.suggestedQty)
+        .filter((x: any) => x.suggestedQty > 0)
+        .sort((a: any, b: any) => b.suggestedQty - a.suggestedQty)
   }, [state.skus, state.products, state.skuSettings, salesVelocity, stockMap, leadTimeDays, safetyStockDays, centralStockMap, selectedLocationId, centralLocationId])
 
   const createPurchaseRequest = async () => {
-      const items = suggestions.filter(x => x.type === 'purchase')
+      const items = suggestions.filter((x: any) => x.type === 'purchase')
       if (items.length === 0) return
 
       const confirmed = await dialogs.confirm({ 
@@ -180,7 +180,7 @@ export function ReplenishmentPage() {
   }
 
   const createTransferRequest = async () => {
-      const items = suggestions.filter(x => x.type === 'transfer')
+      const items = suggestions.filter((x: any) => x.type === 'transfer')
       if (items.length === 0) return
       
       if (!centralLocationId || selectedLocationId === 'all') return
@@ -222,8 +222,8 @@ export function ReplenishmentPage() {
       await dialogs.alert({ message: 'Đã tạo phiếu yêu cầu chuyển kho!' })
   }
 
-  const purchaseItems = suggestions.filter(x => x.type === 'purchase')
-  const transferItems = suggestions.filter(x => x.type === 'transfer')
+  const purchaseItems = suggestions.filter((x: any) => x.type === 'purchase')
+  const transferItems = suggestions.filter((x: any) => x.type === 'transfer')
 
   if (viewMode === 'settings') {
       return (

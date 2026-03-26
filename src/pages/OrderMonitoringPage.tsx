@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useAppState } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { Order } from '../domain/types'
+import { Order } from '../../shared/types/domain'
 import { 
     Clock, 
     MapPin,
@@ -88,7 +88,7 @@ export function OrderMonitoringPage() {
                         {(order.items || []).length} items
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-600)' }}>
-                        {(order.subTotalOverride || (order.items || []).reduce((s, i) => s + i.price * i.qty, 0)).toLocaleString()}
+                        {(order.subTotalOverride || (order.items || []).reduce((s: any, i: any) => s + i.price * i.qty, 0)).toLocaleString()}
                     </div>
                 </div>
             </div>

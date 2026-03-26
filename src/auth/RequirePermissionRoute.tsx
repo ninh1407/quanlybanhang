@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Permission } from '../domain/types'
+import type { Permission } from '../../shared/types/domain'
 import { useAuth } from './auth'
 import { AccessDeniedPage } from '../pages/AccessDeniedPage'
 

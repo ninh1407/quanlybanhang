@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useAuth } from '../auth/auth'
 import { useAppState } from '../state/Store'
-import { warehouseStorageKey } from '../state/seed'
+import { warehouseStorageKey } from '../../shared/state/seed'
 import { downloadBackupV1, restoreBackupFromFileV1 } from '../state/backup'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { useSettings } from '../settings/useSettings'
@@ -30,7 +30,7 @@ export function SettingsPage() {
   }, [activeLocation])
 
   const locations = useMemo(
-    () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
+    () => state.locations.filter((l) => l.active).slice().sort((a: any, b: any) => a.code.localeCompare(b.code)),
     [state.locations],
   )
 

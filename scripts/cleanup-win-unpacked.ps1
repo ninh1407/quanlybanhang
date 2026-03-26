@@ -23,7 +23,7 @@ function Stop-By-Name($names) {
 }
 
 Stop-By-PathLike '*\release_v3\win-unpacked\*'
-Stop-By-Name @('electron', 'Ứng dụng quản lý bán hàng')
+Stop-By-Name @('electron', 'NamPhuong')
 
 try {
   Remove-Item -Recurse -Force 'release_v3\win-unpacked' -ErrorAction SilentlyContinue

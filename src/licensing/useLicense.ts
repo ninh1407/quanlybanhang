@@ -146,7 +146,7 @@ export function useLicense() {
 
         const current = loadStoredLicense()
         // Only update state if different to avoid re-renders loop
-        setStored((prev) => {
+        setStored((prev: any) => {
           if (JSON.stringify(prev) === JSON.stringify(current)) return prev
           return current
         })

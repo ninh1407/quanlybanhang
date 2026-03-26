@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAppState, useAppDispatch } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { newId } from '../lib/id'
-import { nowIso, formatDateTime } from '../lib/date'
+import { newId } from '../../shared/lib/id'
+import { nowIso, formatDateTime } from '../../shared/lib/date'
 import { useAuth } from '../auth/auth'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { 
@@ -13,7 +13,7 @@ import {
   Truck,
   Trash2
 } from 'lucide-react'
-import type { TransferOrder, TransferOrderStatus, StockTransaction } from '../domain/types'
+import type { TransferOrder, TransferOrderStatus, StockTransaction } from '../../shared/types/domain'
 
 // Helper for status badge
 function StatusBadge({ status }: { status: TransferOrderStatus }) {
@@ -701,7 +701,7 @@ export function TransferOrderPage() {
                         <div style={{ marginTop: 24 }}>
                             <h4>Lịch sử hoạt động</h4>
                             <div className="timeline">
-                                {data.logs?.map(log => (
+                                {data.logs?.map((log: any) => (
                                     <div key={log.id} style={{ position: 'relative', paddingLeft: 20, borderLeft: '2px solid var(--border-color)', paddingBottom: 16 }}>
                                         <div style={{ position: 'absolute', left: -5, top: 0, width: 8, height: 8, borderRadius: '50%', background: 'var(--primary-500)' }} />
                                         <div style={{ fontSize: 13 }}>

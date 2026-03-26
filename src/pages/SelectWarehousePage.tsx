@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/auth'
-import { accessibleLocations, userCanAccessLocation } from '../domain/warehouseAccess'
+import { accessibleLocations, userCanAccessLocation } from '../../shared/domain/warehouseAccess'
 import { loadJson } from '../lib/persist'
-import type { Location as Warehouse } from '../domain/types'
-import type { WarehouseState } from '../state/types'
-import { createEmptyWarehouseState, warehouseStorageKey } from '../state/seed'
+import type { AppLocation as Warehouse } from '../../shared/types/domain'
+import type { WarehouseState } from '../../shared/types/app'
+import { createEmptyWarehouseState, warehouseStorageKey } from '../../shared/state/seed'
 import { useStore } from '../state/Store'
 import { useDialogs } from '../ui-kit/Dialogs'
 import { Store, MapPin, ArrowRight, Search, RefreshCw } from 'lucide-react'
@@ -26,13 +26,13 @@ export function SelectWarehousePage() {
   const dialogs = useDialogs()
 
   const warehouses = useMemo(() => {
-    return accessibleLocations(user, state.locations).slice().sort((a, b) => a.code.localeCompare(b.code))
+    return accessibleLocations(user, state.locations).slice().sort((a: any, b: any) => a.code.localeCompare(b.code))
   }, [state.locations, user])
 
   const [q, setQ] = useState('')
   const [selectedId, setSelectedId] = useState<string>(() => {
     const cur = state.currentLocationId
-    return cur && warehouses.some((w) => w.id === cur) ? cur : ''
+    return cur && warehouses.some((w: any) => w.id === cur) ? cur : ''
   })
 
   const filtered = useMemo(() => {

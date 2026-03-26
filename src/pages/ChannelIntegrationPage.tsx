@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useAppState, useAppDispatch } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
-import { newId } from '../lib/id'
-import { nowIso } from '../lib/date'
-import { ChannelConfig, ChannelType, SkuMapping, WarehouseRegionMapping, AllocationRule } from '../domain/types'
+import { newId } from '../../shared/lib/id'
+import { nowIso } from '../../shared/lib/date'
+import { ChannelConfig, ChannelType, SkuMapping, WarehouseRegionMapping, AllocationRule } from '../../shared/types/domain'
 import { Plus, Trash2, Edit } from 'lucide-react'
 
 export function ChannelIntegrationPage() {
@@ -311,10 +311,10 @@ export function ChannelIntegrationPage() {
                                   }}
                               />
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-                                  {newRegionMap.provinces?.map(p => (
+                                  {newRegionMap.provinces?.map((p: any) => (
                                       <span key={p} className="badge badge-gray" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                           {p}
-                                          <XIcon size={12} style={{ cursor: 'pointer' }} onClick={() => setNewRegionMap({...newRegionMap, provinces: newRegionMap.provinces?.filter(x => x !== p)})} />
+                                          <XIcon size={12} style={{ cursor: 'pointer' }} onClick={() => setNewRegionMap({...newRegionMap, provinces: newRegionMap.provinces?.filter((x: any) => x !== p)})} />
                                       </span>
                                   ))}
                               </div>
@@ -461,7 +461,7 @@ export function ChannelIntegrationPage() {
                           </tr>
                       </thead>
                       <tbody>
-                          {state.allocationRules.sort((a, b) => a.priority - b.priority).map(r => (
+                          {state.allocationRules.sort((a: any, b: any) => a.priority - b.priority).map(r => (
                               <tr key={r.id}>
                                   <td>{r.name}</td>
                                   <td>{r.type}</td>

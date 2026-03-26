@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react'
-import type { Product, Sku, StockTransaction } from '../domain/types'
+import type { Product, Sku, StockTransaction } from '../../shared/types/domain'
 import { useAppState } from '../state/Store'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 import { PageHeader } from '../ui-kit/PageHeader'
 
 function averageCostFromSortedTxs(txs: StockTransaction[]): number {
@@ -61,7 +61,7 @@ export function MaterialsPage() {
   const state = useAppState()
 
   const locations = useMemo(
-    () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
+    () => state.locations.filter((l) => l.active).slice().sort((a: any, b: any) => a.code.localeCompare(b.code)),
     [state.locations],
   )
   const [locationId, setLocationId] = useState(locations[0]?.id ?? '')
@@ -75,7 +75,7 @@ export function MaterialsPage() {
         return { sku: s, product: p }
       })
       .filter((x) => x.product && x.product.isMaterial)
-      .sort((a, b) => (a.product?.name ?? '').localeCompare(b.product?.name ?? ''))
+      .sort((a: any, b: any) => (a.product?.name ?? '').localeCompare(b.product?.name ?? ''))
   }, [productsById, state.skus])
 
   const stockQtyAtLocationBySkuId = useMemo(() => {
@@ -96,7 +96,7 @@ export function MaterialsPage() {
       if (arr) arr.push(t)
       else grouped.set(t.skuId, [t])
     })
-    grouped.forEach((arr) => arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt)))
+    grouped.forEach((arr) => arr.sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt)))
 
     const m = new Map<string, number>()
     state.skus.forEach((s) => {

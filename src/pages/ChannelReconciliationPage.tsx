@@ -3,7 +3,7 @@ import { PageHeader } from '../ui-kit/PageHeader'
 import { Upload, CheckCircle } from 'lucide-react'
 import { read, utils } from 'xlsx'
 import { useStore } from '../state/Store'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 
 type ReconciliationStatus = 'matched' | 'missing_in_system' | 'missing_in_file' | 'amount_mismatch'
 
@@ -89,7 +89,7 @@ export function ChannelReconciliationPage() {
             const fileAmount = fileMap.get(key)
 
             // System total calculation
-            const systemAmount = (order.items || []).reduce((s, i) => s + i.price * i.qty, 0) + (order.shippingFee || 0) - (order.discountAmount || 0) + (order.vatAmount || 0) + (order.otherFees || 0)
+            const systemAmount = (order.items || []).reduce((s: any, i: any) => s + i.price * i.qty, 0) + (order.shippingFee || 0) - (order.discountAmount || 0) + (order.vatAmount || 0) + (order.otherFees || 0)
 
             if (fileAmount !== undefined) {
                 // Found

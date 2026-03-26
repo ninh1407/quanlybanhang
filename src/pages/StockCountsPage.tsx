@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/auth'
 import { getStockQty } from '../domain/stock'
-import type { Location, Sku, StockCount, StockCountAttachmentType, StockTxType, StockTransaction } from '../domain/types'
-import { formatDateTime, nowIso } from '../lib/date'
-import { newId } from '../lib/id'
-import { formatVnd } from '../lib/money'
+import type { AppLocation, Sku, StockCount, StockCountAttachmentType, StockTxType, StockTransaction } from '../../shared/types/domain'
+import { formatDateTime, nowIso } from '../../shared/lib/date'
+import { newId } from '../../shared/lib/id'
+import { formatVnd } from '../../shared/lib/money'
 import { useStore } from '../state/Store'
 import { PageHeader } from '../ui-kit/PageHeader'
 import { validateAttachmentFiles } from '../lib/attachments'
@@ -12,7 +12,7 @@ import { useDialogs } from '../ui-kit/Dialogs'
 import { MoneyInput } from '../ui-kit/MoneyInput'
 import { differenceInDays, parseISO, subDays } from 'date-fns'
 
-function locationLabel(loc: Location): string {
+function locationLabel(loc: AppLocation): string {
   return `${loc.code} - ${loc.name}`
 }
 
@@ -74,16 +74,16 @@ export function StockCountsPage() {
       state.skus
         .filter((s) => s.kind === 'single' && s.active)
         .slice()
-        .sort((a, b) => skuLabel(productsById, a).localeCompare(skuLabel(productsById, b))),
+        .sort((a: any, b: any) => skuLabel(productsById, a).localeCompare(skuLabel(productsById, b))),
     [productsById, state.skus],
   )
   const locations = useMemo(
-    () => state.locations.filter((l) => l.active).slice().sort((a, b) => a.code.localeCompare(b.code)),
+    () => state.locations.filter((l) => l.active).slice().sort((a: any, b: any) => a.code.localeCompare(b.code)),
     [state.locations],
   )
 
   const counts = useMemo(
-    () => state.stockCounts.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () => state.stockCounts.slice().sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)),
     [state.stockCounts],
   )
 
@@ -122,7 +122,7 @@ export function StockCountsPage() {
       if (arr) arr.push(t)
       else groupedTxs.set(t.skuId, [t])
     })
-    groupedTxs.forEach((arr) => arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt)))
+    groupedTxs.forEach((arr) => arr.sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt)))
 
     const stats = new Map<string, { usageValue: number; avgCost: number; lastSaleDate: string | null; hasVariance: boolean }>()
     const now = new Date()
@@ -163,7 +163,7 @@ export function StockCountsPage() {
     })
 
     // Sort by usage value desc
-    skuUsageList.sort((a, b) => b.usageValue - a.usageValue)
+    skuUsageList.sort((a: any, b: any) => b.usageValue - a.usageValue)
     const totalUsage = skuUsageList.reduce((acc, i) => acc + i.usageValue, 0)
     
     let cum = 0
@@ -456,7 +456,7 @@ export function StockCountsPage() {
   }
 
   const selectedLocation = selected ? state.locations.find((l) => l.id === selected.locationId) ?? null : null
-  const staff = useMemo(() => state.users.slice().sort((a, b) => a.username.localeCompare(b.username)), [state.users])
+  const staff = useMemo(() => state.users.slice().sort((a: any, b: any) => a.username.localeCompare(b.username)), [state.users])
 
   return (
     <div className="page">
@@ -727,7 +727,7 @@ export function StockCountsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(selected.pendingItems || []).map((item, idx) => (
+                  {(selected.pendingItems || []).map((item: any, idx: number) => (
                     <tr key={idx}>
                       <td>{item.internalCode}</td>
                       <td>{item.batchCode}</td>

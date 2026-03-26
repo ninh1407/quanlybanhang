@@ -4,7 +4,7 @@ import { AnalyticsApi, BusinessKPIs, ChannelPerformance, RevenueHistory, TopProd
 import { startOfMonth, endOfMonth, subDays } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { DollarSign, TrendingUp, ShoppingCart, Activity, Calendar } from 'lucide-react'
-import { formatVnd } from '../lib/money'
+import { formatVnd } from '../../shared/lib/money'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
 
